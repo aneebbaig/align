@@ -1,0 +1,4 @@
+# Normalize line endings: store as LF in repo, checkout as-is on each OS
+* text=auto eol=lf
+*.sh text eol=lf
+graphify-out/graph.json merge=graphify-merge

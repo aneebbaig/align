@@ -1,0 +1,25 @@
+name: Leak guard
+
+# Fails if any AI-assistant reference or personal identifier is committed
+# to the public repo. Only guards the branch that ships publicly (main) and
+# pull requests into it - other branches may legitimately carry private notes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for forbidden strings
+        run: |
+          if grep -rIniE 'cla[u]de|anthrop[i]c|aneebbaig123|bbaig0425' . \
+               --exclude-dir=node_modules --exclude-dir=.git \
+               --exclude='*.lock' --exclude='pnpm-lock.yaml' \
+               --exclude='guard.yml' --exclude='.gitignore'; then
+            echo "::error::Forbidden term found (AI reference / personal data). Remove before merging."
+            exit 1
+          fi
+          echo "No forbidden terms found. ✓"

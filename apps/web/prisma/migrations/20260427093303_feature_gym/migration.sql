@@ -1,0 +1,1 @@
+-- Placeholder for orphaned gym migration (tables already exist in DB)

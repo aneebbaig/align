@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Quick add expense from home screen</string>
+    <string name="shortcut_add_short">Add Expense</string>
+    <string name="shortcut_add_long">Quick Add Expense</string>
+</resources>

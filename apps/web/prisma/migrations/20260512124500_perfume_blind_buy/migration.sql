@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "perfumes" ADD COLUMN IF NOT EXISTS "blindBuy" BOOLEAN NOT NULL DEFAULT false;

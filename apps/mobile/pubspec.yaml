@@ -1,0 +1,89 @@
+name: align
+description: Align personal finance manager — mobile client.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^3.1.0
+  riverpod_annotation: ^4.0.0
+
+  # Navigation
+  go_router: ^17.2.3
+
+  # HTTP client
+  dio: ^5.9.2
+
+  # Secure token storage (Android Keystore backed)
+  flutter_secure_storage: ^10.3.1
+
+  # Immutable data classes + JSON
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.9.0
+
+  # Home screen widget bridge
+  home_widget: ^0.9.2+1
+
+  # Toast notifications
+  toastification: ^3.0.3
+
+  # Number / date formatting
+  intl: ^0.20.3
+
+  # Debug logging
+  logger: ^2.7.0
+
+  # App version display
+  package_info_plus: ^9.0.1
+
+  # Network status
+  connectivity_plus: ^7.2.0
+
+  # Non-sensitive local settings (theme, etc.)
+  shared_preferences: ^2.5.5
+
+  # SVG icons
+  flutter_svg: ^2.3.0
+
+  # Opening project links in the browser
+  url_launcher: ^6.3.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+  # Code generation
+  build_runner: ^2.4.14
+  riverpod_generator: ^4.0.0
+  freezed: ^3.1.0
+  json_serializable: ^6.9.4
+  riverpod_lint: ^3.1.0
+  custom_lint: ^0.8.1
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/logo.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-Variable.ttf
+
+  assets:
+    - assets/fonts/
+    - assets/images/logo.svg
+    - assets/images/logo.png

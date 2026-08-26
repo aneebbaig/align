@@ -1,0 +1,1017 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id                     String    @id @default(cuid())
+  email                  String    @unique
+  name                   String
+  hashedPassword         String
+  failedLoginAttempts    Int       @default(0)
+  lockedUntil            DateTime?
+  // TOTP two-factor auth. totpSecret is AES-256-GCM encrypted at rest (see
+  // lib/crypto.ts) so a DB dump does not hand over usable seeds. Backup codes
+  // are bcrypt-hashed, single-use (removed from the array on consumption).
+  totpEnabled            Boolean   @default(false)
+  totpSecret             String?
+  totpBackupCodes        String[]  @default([])
+  role                   String    @default("ADMIN") // "SUPER_ADMIN" | "ADMIN"
+  dateFormat             String    @default("dd/MM/yyyy")
+  firstDayOfWeek         Int       @default(1)
+  // Open budget period: which (month, year) new transactions are filed under.
+  // Advanced manually via "Start new month" when salary lands. Null = use calendar month.
+  currentBudgetMonth     Int?
+  currentBudgetYear      Int?
+  emergencyFundMonths    Int       @default(6)
+  // Cash-flow / repayment planner config.
+  cashflowHorizonMonths  Int       @default(8) // rolling projection window
+  cashflowLeadTimeDays   Int       @default(3) // how far ahead to warn before a due date
+  notifyBudgetWarning    Boolean   @default(true)
+  notifyDoomSpending     Boolean   @default(true)
+  notifyLoanDue          Boolean   @default(true)
+  notifyDailyDigest      Boolean   @default(true)
+  notifyDigestTasks      Boolean   @default(true)
+  notifyDigestCalendar   Boolean   @default(true)
+  notifyDigestBudget     Boolean   @default(true)
+  notifyDigestFinancials Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  categories     Category[]
+  transactions   Transaction[]
+  budgets        Budget[]
+  plans          Plan[]
+  savingsPots    SavingsPot[]
+  investments    Investment[]
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
+  surprises      Surprise[]
+  loans          Loan[]
+  wantListItems  WantListItem[]
+  needListItems  NeedListItem[]
+  perfumes       Perfume[]
+  weddingPlans   WeddingPlan[]
+  projects       Project[]
+  tags           Tag[]
+
+  recurringIncomes RecurringIncome[]
+  loanSchedules    LoanSchedule[]
+  plannedExpenses  PlannedExpense[]
+  investmentPlan   InvestmentPlan?
+
+  emailVerified    Boolean     @default(false)
+  image            String?
+  twoFactorEnabled Boolean?    @default(false)
+  sessions         Session[]
+  accounts         Account[]
+  twofactors       TwoFactor[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String  @id @default(cuid())
+  name      String
+  icon      String
+  color     String
+  type      String // "EXPENSE" | "INCOME" | "BOTH"
+  isDefault Boolean @default(false)
+  isHidden  Boolean @default(false)
+  userId    String?
+
+  user             User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  budgetCategories BudgetCategory[]
+  plannedExpenses  PlannedExpense[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id                 String   @id @default(cuid())
+  amount             Int
+  type               String // "INCOME" | "EXPENSE"
+  categoryId         String
+  description        String
+  notes              String?
+  date               DateTime
+  // Budget period this transaction is filed under (the open period when it was logged).
+  // Decoupled from `date` so a late-month salary + its spending count toward next month's budget.
+  budgetMonth        Int
+  budgetYear         Int
+  isRecurring        Boolean  @default(false)
+  recurringFrequency String? // "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY"
+  tags               String   @default("")
+  // Flagged by the user as an impulse/regret purchase (EXPENSE only). Powers
+  // the regret-buy stats view - not enforced at the DB level for INCOME rows.
+  isRegretPurchase   Boolean  @default(false)
+  // Optional link to a plan item (to track actual spend against a plan)
+  planItemId         String?
+  // For income entered in a non-base currency: amount (above) is always the
+  // base-currency equivalent; these capture what was actually entered.
+  nativeCurrencyId   String? // null = entered directly in the base currency
+  nativeAmount       Int? // smallest unit of nativeCurrency (e.g. $200 → 20000 cents)
+  exchangeRateUsed   Float? // nativeCurrency.rateToBase snapshot at entry time
+  // Funding source for expense transactions
+  // "INCOME" | "SAVINGS_POT" — single source (backward compat)
+  // "SPLIT"                  — multi-source; details in TransactionFundingSource child rows
+  fundingSource      String   @default("INCOME")
+  fundingPotId       String?
+  fundingCurrencyId  String? // which pot-balance currency was debited — populated when fundingSource = "SAVINGS_POT"
+  fundingAmount      Int? // smallest unit of fundingCurrency deducted — populated when fundingSource = "SAVINGS_POT"
+  userId             String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  category                    Category                   @relation(fields: [categoryId], references: [id])
+  user                        User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planItem                    PlanItem?                  @relation(fields: [planItemId], references: [id], onDelete: SetNull)
+  fundingPot                  SavingsPot?                @relation("ExpenseFundingPot", fields: [fundingPotId], references: [id], onDelete: SetNull)
+  fundingSources              TransactionFundingSource[]
+  nativeCurrency              Currency?                  @relation("TransactionNativeCurrency", fields: [nativeCurrencyId], references: [id])
+  fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id])
+  loanPrincipalOf             Loan?
+  loanPaymentOf               LoanPayment?
+  plannedExpenseOf            PlannedExpense?
+  recurringIncomeOccurrenceOf RecurringIncomeOccurrence?
+  investmentContributionOf    InvestmentContribution?
+
+  @@index([userId])
+  @@index([date])
+  @@index([categoryId])
+  @@index([type])
+  @@index([planItemId])
+  @@index([fundingPotId])
+  @@index([userId, budgetMonth, budgetYear])
+  @@index([userId, isRegretPurchase])
+  @@map("transactions")
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  month       Int
+  year        Int
+  totalBudget Int
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetCategories   BudgetCategory[]
+  savingsAllocations BudgetSavingsAllocation[]
+
+  @@unique([month, year])
+  @@index([userId])
+  @@map("budgets")
+}
+
+model BudgetSavingsAllocation {
+  id       String @id @default(cuid())
+  budgetId String
+  potId    String
+  amount   Int // PKR paisas (planned monthly contribution)
+
+  budget Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  pot    SavingsPot @relation(fields: [potId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, potId])
+  @@map("budget_savings_allocations")
+}
+
+model BudgetCategory {
+  id              String @id @default(cuid())
+  budgetId        String
+  categoryId      String
+  allocatedAmount Int
+
+  budget   Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([budgetId, categoryId])
+  @@map("budget_categories")
+}
+
+// A Plan is something you're working toward buying/achieving. FIXED = a single
+// target cost; ITEMIZED = a checklist of items you buy over time and tick off.
+// Distinct from a Savings Pot (real money set aside) — a Plan tracks cost and
+// progress and reads your savings to answer "can I afford it?".
+model Plan {
+  id                 String    @id @default(cuid())
+  name               String
+  description        String?
+  icon               String    @default("CalendarDays")
+  coverColor         String    @default("#6366f1")
+  // FIXED (one target cost) | ITEMIZED (cost derived from item checklist)
+  planType           String    @default("ITEMIZED")
+  // Category — affects grouping options in the UI
+  type               String    @default("GENERAL") // "GENERAL" | "HOUSE_MOVE" | "TRIP" | "RENOVATION" | "CUSTOM" (weddings use the dedicated Wedding feature)
+  // Target cost. For ITEMIZED plans this is kept in sync with the sum of item costs.
+  estimatedTotalCost Int       @default(0)
+  targetDate         DateTime?
+  status             String    @default("PLANNING") // "PLANNING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+  completedAt        DateTime?
+  userId             String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items          PlanItem[]
+  calendarEvents CalendarEvent[]
+
+  @@index([userId])
+  @@map("plans")
+}
+
+model PlanItem {
+  id            String    @id @default(cuid())
+  planId        String
+  name          String
+  description   String?
+  estimatedCost Int       @default(0)
+  actualCost    Int?
+  status        String    @default("PENDING") // "PENDING" | "BOOKED" | "PAID" | "SKIPPED"
+  dueDate       DateTime?
+  notes         String?
+  // For grouping items within complex plans (e.g. phases)
+  eventGroup    String?
+  // Vendor/supplier name for this item
+  vendor        String?
+  // JSON array of vendor quotes: [{vendor, amount, notes}]
+  quotes        String?
+
+  plan         Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([planId])
+  @@map("plan_items")
+}
+
+model SavingsPot {
+  id           String   @id @default(cuid())
+  name         String
+  icon         String   @default("PiggyBank")
+  color        String   @default("#3b82f6")
+  targetAmount Int      @default(0)
+  // Optional deadline for a targeted pot (a pot with a target IS a savings goal —
+  // goals were merged into pots). Null = no deadline.
+  targetDate   DateTime?
+  type         String   @default("GENERAL") // "EMERGENCY" | "LIQUID" | "GENERAL" | "GOAL" | "CUSTOM"
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balances           SavingsPotBalance[]
+  history            SavingsPotEntry[]
+  budgetAllocations  BudgetSavingsAllocation[]
+  fundedTransactions Transaction[]              @relation("ExpenseFundingPot")
+  fundingSourceRows  TransactionFundingSource[] @relation("FundingSourcePot")
+
+  @@index([userId])
+  @@map("savings_pots")
+}
+
+// Per-currency running balance for a pot. A pot can hold any number of the
+// household's configured currencies at once (e.g. a PKR balance and a USD
+// balance in the same pot) instead of two fixed columns.
+model SavingsPotBalance {
+  id         String @id @default(cuid())
+  potId      String
+  currencyId String
+  amount     Int    @default(0) // smallest unit of currency
+
+  pot      SavingsPot @relation(fields: [potId], references: [id], onDelete: Cascade)
+  currency Currency   @relation(fields: [currencyId], references: [id])
+
+  @@unique([potId, currencyId])
+  @@index([potId])
+  @@map("savings_pot_balances")
+}
+
+// Funding source rows for split expenses (fundingSource = "SPLIT").
+// priority 1 = primary source (pays first), priority 2 = remainder source.
+// MAX_FUNDING_SOURCES = 2 is enforced in application logic, not here.
+
+model TransactionFundingSource {
+  id            String  @id @default(cuid())
+  transactionId String
+  priority      Int // 1 = primary, 2 = remainder
+  source        String // "INCOME" | "SAVINGS_POT"
+  potId         String? // FK when source = "SAVINGS_POT"
+  currencyId    String? // FK when source = "SAVINGS_POT" — which pot-balance currency
+  potAmount     Int? // amount deducted from pot in pot's native units
+  pkrAmount     Int // base-currency amount this source covers (portion of total expense)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  pot         SavingsPot? @relation("FundingSourcePot", fields: [potId], references: [id], onDelete: SetNull)
+  currency    Currency?   @relation(fields: [currencyId], references: [id])
+
+  @@index([transactionId])
+  @@index([potId])
+  @@map("transaction_funding_sources")
+}
+
+model SavingsPotEntry {
+  id          String   @id @default(cuid())
+  potId       String
+  amount      Int // signed, in currency's smallest unit: + add, - withdraw
+  currencyId  String
+  sourceType  String   @default("MANUAL") // "INCOME" | "POT_TRANSFER" | "MANUAL"
+  description String?
+  // Budget period this entry is filed under (open period at creation). Mirrors Transaction.
+  budgetMonth Int?
+  budgetYear  Int?
+  createdAt   DateTime @default(now())
+
+  pot      SavingsPot @relation(fields: [potId], references: [id], onDelete: Cascade)
+  currency Currency   @relation(fields: [currencyId], references: [id])
+
+  @@index([potId])
+  @@map("savings_pot_entries")
+}
+
+// Household-shared list of currencies. Exactly one should have isBase = true
+// (the reporting/aggregation currency — Transaction.amount, budgets, dashboard
+// totals are always in this currency). rateToBase = units of base currency
+// per 1 unit of this currency; the base currency itself always has rateToBase 1.
+model Currency {
+  id         String   @id @default(cuid())
+  code       String // e.g. "PKR", "USD", "EUR" — household-defined
+  symbol     String // e.g. "Rs", "$", "€"
+  rateToBase Float    @default(1)
+  isBase     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  potBalances           SavingsPotBalance[]
+  potEntries            SavingsPotEntry[]
+  fundingSources        TransactionFundingSource[]
+  nativeTransactions    Transaction[]              @relation("TransactionNativeCurrency")
+  fundingTransactions   Transaction[]              @relation("TransactionFundingCurrency")
+  weddingExpenseSource1 WeddingExpense[]           @relation("WeddingExpenseSource1Currency")
+  weddingExpenseSource2 WeddingExpense[]           @relation("WeddingExpenseSource2Currency")
+  recurringIncomes      RecurringIncome[]
+
+  @@unique([code])
+  @@map("currencies")
+}
+
+// A SIP-style recurring investment vehicle (e.g. "MZNPETF", "Meezan Gold Fund").
+// investedAmount/currentValue are cached totals: investedAmount is the sum of
+// all InvestmentContribution rows (kept in sync transactionally whenever a
+// contribution is logged/edited/deleted); currentValue is a manually-updated
+// mark-to-market figure since it can't be derived from contributions alone.
+model Investment {
+  id             String   @id @default(cuid())
+  name           String
+  type           String // "MUTUAL_FUND" | "STOCKS" | "GOLD" | "CRYPTO" | "FIXED_DEPOSIT" | "OTHER"
+  platform       String
+  investedAmount Int
+  currentValue   Int
+  units          Float?
+  purchaseDate   DateTime
+  lastUpdated    DateTime @default(now())
+  notes          String?
+  // Type-specific data: JSON object with fields per type
+  // MUTUAL_FUND: { fundHouse, nav, units, folioNumber }
+  // STOCKS: { ticker, shares, exchange, pricePerShare }
+  // GOLD: { weightGrams, purity, storageLocation }
+  // FIXED_DEPOSIT: { bank, interestRate, maturityDate }
+  customFields   String?
+  // Which slice of the InvestmentPlan split this SIP counts toward. Null =
+  // unassigned (still shows in "Invested Savings" but not matched to a target).
+  planCategoryId String?
+  userId         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user          User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planCategory  InvestmentPlanCategory?   @relation(fields: [planCategoryId], references: [id], onDelete: SetNull)
+  contributions InvestmentContribution[]
+
+  @@index([userId])
+  @@index([planCategoryId])
+  @@map("investments")
+}
+
+// Append-only log of top-ups into a SIP. "Log anytime, any amount" — this is
+// what lets Investment.investedAmount accumulate like a savings pot instead of
+// requiring a brand-new Investment row per month.
+model InvestmentContribution {
+  id           String   @id @default(cuid())
+  investmentId String
+  amount       Int // paisas
+  date         DateTime @default(now())
+  notes        String?
+  createdAt    DateTime @default(now())
+  // The ledger Transaction this contribution books (EXPENSE, "Investments"
+  // category). Nullable/SetNull like LoanPayment.transactionId - nulled out
+  // if that transaction is deleted directly from Expenses.
+  transactionId String? @unique
+
+  investment  Investment   @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([investmentId])
+  @@map("investment_contributions")
+}
+
+// Impulse purchase parking lot — add items here instead of buying immediately
+// After 48 hours, resurfaces the question "still want this?"
+
+model WantListItem {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  estimatedCost Int? // in paisas
+  url           String?
+  categoryHint  String? // optional expense category hint when converting to purchase
+  status        String    @default("WAITING") // "WAITING" | "BOUGHT" | "DISMISSED"
+  addedAt       DateTime  @default(now())
+  remindAt      DateTime // resurface date — set to 48h after addedAt by default
+  boughtAt      DateTime?
+  userId        String
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("want_list_items")
+}
+
+model NeedListItem {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  estimatedCost Int? // in paisas
+  url           String?
+  categoryHint  String?
+  priority      String    @default("MEDIUM") // "HIGH" | "MEDIUM" | "LOW"
+  status        String    @default("PENDING") // "PENDING" | "DONE" | "SKIPPED"
+  addedAt       DateTime  @default(now())
+  doneAt        DateTime?
+  userId        String
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("need_list_items")
+}
+
+model Task {
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  type           String // "DAILY" | "ONE_TIME"
+  priority       String    @default("MEDIUM") // "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+  status         String    @default("PENDING") // "PENDING" | "IN_PROGRESS" | "DONE" | "SKIPPED"
+  dueDate        DateTime?
+  dueTime        String?
+  recurrenceRule String?
+  category       String?
+  completedAt    DateTime?
+  order          Int       @default(0)
+  userId         String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendarEvents CalendarEvent[]
+
+  @@index([userId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("tasks")
+}
+
+model CalendarEvent {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  date            DateTime
+  startTime       String?
+  endTime         String?
+  type            String   @default("EVENT") // "EVENT" | "REMINDER" | "DEADLINE"
+  color           String?
+  isAllDay        Boolean  @default(true)
+  reminder        String   @default("NONE") // "NONE" | "AT_TIME" | "MIN_15" | "MIN_30" | "HOUR_1" | "DAY_1"
+  linkedTaskId    String?
+  linkedPlanId    String?
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedTask    Task?    @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+  linkedPlan    Plan?    @relation(fields: [linkedPlanId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([date])
+  @@map("calendar_events")
+}
+
+// PRIVACY CRITICAL: All queries MUST filter by session userId. Never return another user's data.
+
+model Surprise {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  forWhom         String
+  occasion        String?
+  targetDate      DateTime?
+  estimatedBudget Int       @default(0)
+  actualSpent     Int       @default(0)
+  status          String    @default("IDEA") // "IDEA" | "PLANNING" | "BUYING" | "READY" | "DELIVERED"
+  userId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items SurpriseItem[]
+
+  @@index([userId])
+  @@map("surprises")
+}
+
+// PRIVACY CRITICAL: All queries MUST filter by session userId. Never return another user's data.
+
+model SurpriseItem {
+  id            String  @id @default(cuid())
+  surpriseId    String
+  name          String
+  description   String?
+  estimatedCost Int     @default(0)
+  actualCost    Int?
+  status        String  @default("IDEA") // "IDEA" | "SHORTLISTED" | "BOUGHT" | "WRAPPED"
+  purchaseLink  String?
+  notes         String?
+
+  surprise Surprise @relation(fields: [surpriseId], references: [id], onDelete: Cascade)
+
+  @@index([surpriseId])
+  @@map("surprise_items")
+}
+
+model Perfume {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  category  String // "ORIGINAL" | "IMPRESSION" | "INSPIRED" | "TWIST" | "CLONE"
+  price     Int // in paisas
+  status    String   @default("UNDECIDED") // "WANT_TO_BUY" | "BOUGHT" | "UNDECIDED"
+  isLiked   Boolean  @default(false)
+  buyNext   Boolean  @default(false)
+  isSummer  Boolean  @default(false)
+  blindBuy  Boolean  @default(false)
+  occasion  String?
+  notes     String?
+  company   String?
+  basedOn   String?
+  quantity  Int? // in ml
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("perfumes")
+}
+
+model Loan {
+  id              String    @id @default(cuid())
+  personName      String // Who you gave/received from
+  description     String?
+  type            String // "GIVEN" (I lent money) | "RECEIVED" (I borrowed money)
+  principalAmount Int // Original amount in paisas
+  remainingAmount Int // Remaining balance in paisas
+  date            DateTime // When the loan started
+  dueDate         DateTime?
+  notes           String?
+  status          String    @default("ACTIVE") // "ACTIVE" | "PARTIALLY_PAID" | "PAID"
+  // The loan principal is normally recorded as a ledger Transaction (EXPENSE
+  // for GIVEN, INCOME for RECEIVED) - no pot involved. Deleting that
+  // transaction (from anywhere) cascades to delete this loan and its
+  // payments. Null when the loan was created with "skip transaction" - no
+  // principal entry in Expenses/Income, loan tracking only.
+  transactionId   String?   @unique
+  userId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  payments    LoanPayment[]
+  schedules   LoanSchedule[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("loans")
+}
+
+model LoanPayment {
+  id            String   @id @default(cuid())
+  loanId        String
+  amount        Int // Payment amount in paisas
+  date          DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+  // The ledger Transaction this payment created (null for the legacy
+  // "mark fully paid" shortcut, which doesn't book a transaction). Nulled out
+  // if that transaction is deleted directly from Expenses/Income.
+  transactionId String?  @unique
+
+  loan             Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  transaction      Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  fulfillsSchedule LoanSchedule?
+
+  @@index([loanId])
+  @@map("loan_payments")
+}
+
+// ─── Cash-flow / repayment planner ───────────────────────────────────────────
+// Feeds the deterministic scheduler in src/lib/cashflow. All amounts are paisas
+// (base currency). The scheduler itself is pure; these rows are its persisted
+// inputs, mapped to month-offsets by src/lib/cashflow/adapter.ts against today.
+
+// A forward-looking payment plan attached to a Loan. One loan can have many
+// rows (e.g. "20k now" + "60k in month 4" = two LUMP_SUM rows). Distinct from
+// LoanPayment, which records payments that ALREADY happened.
+model LoanSchedule {
+  id                 String    @id @default(cuid())
+  loanId             String
+  kind               String // "LUMP_SUM" | "FIXED_INSTALLMENT"
+  amount             Int // paisas: lump total, or per-installment amount
+  startDate          DateTime // first (or only) due date
+  endDate            DateTime? // FIXED_INSTALLMENT inclusive; null for LUMP_SUM
+  flexibility        String    @default("FIXED") // "FIXED" | "FLEXIBLE"
+  priority           Int       @default(0) // lower slides first when a month is tight
+  slideWindowMonths  Int       @default(0) // how far it may move (e.g. ±1)
+  interestRate       Float? // annual %, declining balance; null/0 = interest-free
+  userId             String // denormalized for scoped queries (mirrors app convention)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  // Set once a real LoanPayment has been recorded against this scheduled
+  // installment via "Record installment" - lets the UI show it as fulfilled
+  // instead of just a forecast row. Nulled out if that payment is deleted.
+  fulfilledPaymentId String?   @unique
+
+  loan             Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fulfilledPayment LoanPayment? @relation(fields: [fulfilledPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([loanId])
+  @@index([userId])
+  @@map("loan_schedules")
+}
+
+// Recurring income stream. Salary = fixed amount on dayOfMonth. Freelance =
+// guaranteed floor with no fixed date (variable=true, dayOfMonth null).
+// countsTowardFloor marks whether it's part of the conservative debt-service
+// baseline the planner flags against.
+model RecurringIncome {
+  id                String    @id @default(cuid())
+  label             String
+  kind              String // "SALARY" | "FREELANCE" | "OTHER"
+  amount            Int // paisas: salary = fixed, freelance = floor/minimum
+  variable          Boolean   @default(false)
+  countsTowardFloor Boolean   @default(true)
+  dayOfMonth        Int? // 1-31 anchor day for fixed income; null = no fixed date
+  startDate         DateTime  @default(now())
+  endDate           DateTime? // null = ongoing
+  currencyId        String? // null = base currency
+  active            Boolean   @default(true)
+  userId            String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency    Currency?                   @relation(fields: [currencyId], references: [id])
+  occurrences RecurringIncomeOccurrence[]
+
+  @@index([userId])
+  @@map("recurring_incomes")
+}
+
+// A known one-off future obligation that is not a loan (e.g. tuition, tax,
+// insurance renewal). Optional flexibility so it can be slid like a loan.
+model PlannedExpense {
+  id                String   @id @default(cuid())
+  name              String
+  amount            Int // paisas
+  dueDate           DateTime
+  flexibility       String   @default("FIXED") // "FIXED" | "FLEXIBLE"
+  priority          Int      @default(0)
+  slideWindowMonths Int      @default(0)
+  categoryId        String? // optional link to an expense Category
+  notes             String?
+  status            String   @default("PLANNED") // "PLANNED" | "PAID" | "SKIPPED"
+  userId            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  // Set once "Mark paid" has actually booked a real ledger Transaction -
+  // reverts to PLANNED if that transaction is deleted, so the row never
+  // silently claims to be paid without a real expense behind it.
+  transactionId     String?  @unique
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("planned_expenses")
+}
+
+// Tracks which (month, year) periods a RecurringIncome stream has already had
+// a real Transaction booked for via "Record this month" - prevents
+// double-booking the same period and lets the UI show recorded vs. pending.
+model RecurringIncomeOccurrence {
+  id                String   @id @default(cuid())
+  recurringIncomeId String
+  month             Int
+  year              Int
+  transactionId     String   @unique
+  createdAt         DateTime @default(now())
+
+  recurringIncome RecurringIncome @relation(fields: [recurringIncomeId], references: [id], onDelete: Cascade)
+  transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringIncomeId, month, year])
+  @@index([recurringIncomeId])
+  @@map("recurring_income_occurrences")
+}
+
+// Investment planning (Checkpoint 2). One plan per user; monthly target split
+// across editable categories. Extends the existing Investment module — planned
+// vs actual is computed by matching category.investmentType to Investment.type.
+model InvestmentPlan {
+  id              String   @id @default(cuid())
+  monthlyTarget   Int      @default(0) // paisas; explicit target
+  autoFromSurplus Boolean  @default(true) // suggest = income − obligations − unmet buffer
+  userId          String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories InvestmentPlanCategory[]
+
+  @@map("investment_plans")
+}
+
+model InvestmentPlanCategory {
+  id             String  @id @default(cuid())
+  planId         String
+  name           String // "Money-market buffer" | "Equity fund" | "Gold" | "Direct stocks"
+  investmentType String? // maps to Investment.type for planned-vs-actual
+  percentage     Int // 0-100; app enforces the split sums to 100
+  order          Int     @default(0)
+
+  plan        InvestmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  investments Investment[]
+
+  @@index([planId])
+  @@map("investment_plan_categories")
+}
+
+// ─── Wedding ───────────────────────────────────────────────────────────────
+
+model WeddingPlan {
+  id          String    @id @default(cuid())
+  userId      String
+  brideName   String
+  groomName   String
+  weddingDate DateTime?
+  totalBudget Int       @default(0) // paisas
+  haqMehr     Int? // paisas
+  haqMehrNote String? // e.g. "50 tola gold + Rs 500k cash"
+  notes       String?
+  status      String    @default("PLANNING") // PLANNING|IN_PROGRESS|DONE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events   WeddingEvent[]
+  vendors  WeddingVendor[]
+  expenses WeddingExpense[]
+
+  @@index([userId])
+  @@map("wedding_plans")
+}
+
+model WeddingEvent {
+  id               String    @id @default(cuid())
+  weddingPlanId    String
+  type             String // DHOLKI|MAYUN|MEHNDI|NIKKAH|BARAT|RUKHSATI|VALIMA|OTHER
+  name             String
+  date             DateTime?
+  venue            String?
+  guestCount       Int?
+  budgetAllocated  Int       @default(0) // paisas
+  notes            String?
+  status           String    @default("PLANNED") // PLANNED|CONFIRMED|DONE
+  responsibleParty String    @default("JOINT") // BRIDE|GROOM|JOINT
+  order            Int       @default(0)
+
+  weddingPlan WeddingPlan      @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
+  vendors     WeddingVendor[]
+  expenses    WeddingExpense[]
+
+  @@index([weddingPlanId])
+  @@map("wedding_events")
+}
+
+model WeddingVendor {
+  id            String   @id @default(cuid())
+  weddingPlanId String
+  eventId       String? // null = general (spans whole wedding), else FK to WeddingEvent
+  category      String // VENUE|CATERING|PHOTOGRAPHY|VIDEOGRAPHY|DECOR|MAKEUP|MEHNDI_ARTIST|MUSIC_DJ|TRANSPORT|OUTFITS_BRIDE|OUTFITS_GROOM|JEWELRY|INVITATION|DHOLAK|HORSE|OTHER
+  name          String
+  phone         String?
+  instagram     String?
+  quotedAmount  Int      @default(0) // paisas
+  finalAmount   Int? // paisas — negotiated/agreed
+  depositPaid   Int? // paisas
+  paymentStatus String   @default("UNPAID") // UNPAID|DEPOSIT_PAID|FULLY_PAID|CANCELLED
+  isSelected    Boolean  @default(false) // finalized vendor for this category+event
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  weddingPlan WeddingPlan   @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
+  event       WeddingEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([weddingPlanId])
+  @@index([eventId])
+  @@map("wedding_vendors")
+}
+
+model WeddingExpense {
+  id                String   @id @default(cuid())
+  weddingPlanId     String
+  eventId           String? // null = general expense (spans whole wedding)
+  name              String // e.g. "Bridal dress", "Fireworks", "Flower arrangement"
+  category          String   @default("MISC") // DRESS|JEWELRY|DECOR|FLOWERS|FIREWORKS|TRANSPORT|FOOD|ENTERTAINMENT|PRINTING|PROPS|MISC
+  // Up to two funding sources (priority order: source1 first, source2 for remainder)
+  source1CurrencyId String
+  source1Amount     Int      @default(0) // estimated — smallest unit of source1Currency
+  source1Paid       Int? // actual paid — smallest unit of source1Currency
+  source2CurrencyId String? // null if single source
+  source2Amount     Int? // estimated
+  source2Paid       Int? // actual paid
+  isPaid            Boolean  @default(false)
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  weddingPlan     WeddingPlan   @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
+  event           WeddingEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  source1Currency Currency      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id])
+  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id])
+
+  @@index([weddingPlanId])
+  @@index([eventId])
+  @@map("wedding_expenses")
+}
+
+// ─── Projects (Freelance / Client PM) ────────────────────────────────────────
+// Separate from personal Tasks. A Project owns many ProjectTasks, each with its
+// own status/priority/due date — unlike milestone tasks which are a JSON blob.
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  client      String? // freelance client name
+  color       String    @default("#6366F1")
+  status      String    @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETED | CANCELLED
+  dueDate     DateTime?
+  notes       String? // freeform project notes
+  links       String    @default("[]") // JSON array of {id, label, url}
+  userId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tasks ProjectTask[]
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model ProjectTask {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("TODO") // TODO | IN_PROGRESS | REVIEW | DONE
+  priority    String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  dueDate     DateTime?
+  order       Int       @default(0)
+  projectId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tags    ProjectTaskTag[]
+
+  @@index([projectId])
+  @@map("project_tasks")
+}
+
+// User-defined labels for kanban tasks (e.g. Urgent, Nice to have, Feature, Bug).
+// Deliberately dynamic/unbounded, unlike ProjectTask.priority which is a fixed enum.
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366f1")
+  userId    String
+  createdAt DateTime @default(now())
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks ProjectTaskTag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("tags")
+}
+
+model ProjectTaskTag {
+  taskId String
+  tagId  String
+
+  task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([tagId])
+  @@map("project_task_tags")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
+}

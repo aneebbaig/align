@@ -1,0 +1,30 @@
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+*.iml
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env (never commit real secrets; only *.example is tracked)
+.env
+.env.*
+!.env.example
+
+# Per-app build artifacts are ignored by each app's own .gitignore
+
+# fvm writes a machine-local SDK path here
+apps/mobile/.vscode/
+
+# Vercel project link - personal, never shared
+.vercel
+
+# Local-only notes - never committed
+docs/PRIVATE-SETUP.md
+.env*
+
+# Personal financial data / DB snapshots — never commit to this public repo
+backups/
+prompt.md

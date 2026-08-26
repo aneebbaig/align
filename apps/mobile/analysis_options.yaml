@@ -1,0 +1,35 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  plugins:
+    - custom_lint
+  errors:
+    invalid_annotation_target: ignore  # freezed generates these
+  exclude:
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+
+custom_lint:
+  rules:
+    - avoid_manual_providers_as_generated_provider_dependency
+    - avoid_public_notifier_properties
+    - missing_provider_scope
+    - provider_dependencies
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_final_fields: true
+    prefer_final_locals: true
+    avoid_print: true
+    use_super_parameters: true
+    prefer_single_quotes: true
+    # always_use_package_imports: true  # relative imports preferred within lib/

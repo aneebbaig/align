@@ -1,0 +1,58 @@
+# Run the full Align web app locally (contributors / self-hosting):
+#
+#   cp .env.docker.example .env
+#   # edit .env — set AUTH_SECRET / BETTER_AUTH_SECRET / TOTP_ENC_KEY
+#   docker compose up --build
+#
+# App:      http://localhost:3000
+# Postgres: localhost:5434  (user/pass/db: align / align / align_dev)
+#
+# The db service alone (without web) also backs local `next dev` — the app's
+# prisma.ts uses the plain pg driver for any non-Neon host, so this Postgres
+# works directly.
+
+services:
+  db:
+    image: postgres:17
+    container_name: align-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-align}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-align}
+      POSTGRES_DB: ${POSTGRES_DB:-align_dev}
+    ports:
+      - "5434:5432"
+    volumes:
+      - align-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-align} -d ${POSTGRES_DB:-align_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ./apps/web
+    container_name: align-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-align}:${POSTGRES_PASSWORD:-align}@db:5432/${POSTGRES_DB:-align_dev}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Align}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      TOTP_ENC_KEY: ${TOTP_ENC_KEY:?set TOTP_ENC_KEY in .env (openssl rand -base64 32)}
+      # First-run seed: categories + an admin user from the USER1_* values.
+      SEED_ON_START: ${SEED_ON_START:-true}
+      USER1_EMAIL: ${USER1_EMAIL:-admin@example.com}
+      USER1_PASSWORD: ${USER1_PASSWORD:-changeme123}
+      USER1_NAME: ${USER1_NAME:-Admin}
+    ports:
+      - "3000:3000"
+
+volumes:
+  align-db-data:

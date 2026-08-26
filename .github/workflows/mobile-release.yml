@@ -1,0 +1,168 @@
+name: Mobile · version + release APK
+
+# Tag-only, Conventional-Commits SemVer for Obtainium distribution. On a push to
+# main that touches the mobile app, analyse the commits since the last tag, bump
+# the version, push a vX.Y.Z tag, build a signed APK, and publish it as a
+# GitHub Release. Obtainium tracks this repo's Releases and installs the latest
+# APK. workflow_dispatch builds the current pubspec version on demand (used to
+# mint the first v1.0.0 release).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.47.1"
+
+jobs:
+  # ── Decide the version and (on push) create the tag ────────────────────────
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Auto-bump only once a baseline tag exists. The very first release
+      # (v1.0.0) is minted deliberately via workflow_dispatch — otherwise, with
+      # no tags, the bump action would scan all historical feat: commits and
+      # mint a stray version on the first push.
+      - name: Check for existing tags
+        id: tags
+        if: github.event_name == 'push'
+        run: |
+          if [ -n "$(git tag)" ]; then echo "exist=true" >> "$GITHUB_OUTPUT"; else echo "exist=false" >> "$GITHUB_OUTPUT"; fi
+
+      # Conventional-Commits bump (feat→minor, fix→patch, BREAKING→major).
+      # default_bump:false → no feat/fix since last tag means no release.
+      - name: Compute next tag
+        id: bump
+        if: github.event_name == 'push' && steps.tags.outputs.exist == 'true'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: main
+          tag_prefix: v
+          default_bump: false
+
+      # For manual runs, release the version already in pubspec.yaml and tag it
+      # if that tag doesn't exist yet (this is how the first v1.0.0 is minted).
+      - name: Resolve version
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$(grep -m1 '^version:' apps/mobile/pubspec.yaml | sed 's/version:[[:space:]]*//; s/+.*//')"
+            TAG="v$VERSION"
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists — building without re-tagging."
+            else
+              git tag "$TAG"
+              git push origin "$TAG"
+            fi
+          else
+            TAG="${{ steps.bump.outputs.new_tag }}"
+            VERSION="${{ steps.bump.outputs.new_version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved: version=$VERSION tag=$TAG"
+
+  # ── Build the signed APK and publish a GitHub Release ──────────────────────
+  build-release:
+    needs: version
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ env.FLUTTER_VERSION }}-${{ hashFiles('apps/mobile/pubspec.lock') }}
+          restore-keys: pub-${{ env.FLUTTER_VERSION }}-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run code generation
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=keystore.jks
+          EOF
+
+      # No server URL is baked into the APK - the app asks for one on first
+      # launch, so the same published build works for anyone self-hosting.
+      - name: Build signed APK
+        run: |
+          flutter build apk --release \
+            --no-pub \
+            --target-platform android-arm64 \
+            --build-name="${{ needs.version.outputs.version }}" \
+            --build-number=${{ github.run_number }} \
+            --split-debug-info=build/debug-symbols \
+            --obfuscate
+
+      # Guard: the launcher label must be "Align". Catches branding
+      # regressions in app_constants.dart / build.gradle.kts - already
+      # happened once, the APK just installed labeled "Coffer".
+      - name: Verify branding
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          AAPT="$(ls "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$AAPT" ]; then echo "::error::aapt not found"; exit 1; fi
+          LABEL="$("$AAPT" dump badging "$APK" | grep -oE "application-label:'[^']*'" | head -1 | cut -d"'" -f2)"
+          echo "APK launcher label: '$LABEL'"
+          if [ "$LABEL" != "Align" ]; then
+            echo "::error::APK label is '$LABEL', expected 'Align'."
+            exit 1
+          fi
+
+      # Publish the APK as a GitHub Release — this is what Obtainium tracks.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          files: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          name: "Align ${{ needs.version.outputs.tag }}"
+          generate_release_notes: true
+          make_latest: true
+          draft: false
