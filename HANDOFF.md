@@ -55,10 +55,10 @@ mobile-only push legitimately does not rebuild.
 
 ## What shipped this session
 
-1. **This repo stopped being a deployment target** (PR #33) - the hosting
+1. **This repo stopped being a deployment target** - the hosting
    integration was removed, along with the GitHub environments and deployment
    records it had created. The Deployments tab is empty and stays that way.
-2. **Runtime server URL in the Android app** (PR #34) - the pending item from
+2. **Runtime server URL in the Android app** - the pending item from
    the last handoff, now done:
    - `apps/mobile/lib/core/network/server_url.dart` holds the configured origin
      (`serverUrlProvider`), seeded in `main()` from secure storage before the
@@ -73,7 +73,7 @@ mobile-only push legitimately does not rebuild.
    - `--dart-define=API_BASE_URL` and the repo secret behind it are gone.
    - `usesCleartextTraffic="true"` in the manifest: self-hosters commonly run
      http on their own network. The setup screen warns when the URL is http.
-3. **Screenshots + a demo seed** (PR #35) - `pnpm seed:demo`
+3. **Screenshots + a demo seed** - `pnpm seed:demo`
    (`apps/web/prisma/seed-demo.ts`) builds a fictional household with six months
    of history; the six README screenshots are captured from it. It deletes every
    user first, so it refuses a non-local `DATABASE_URL` unless

@@ -1,6 +1,6 @@
 # Align - Android App
 
-Flutter Android companion app for the Align personal finance platform ([your-align-instance.com](https://your-align-instance.com)). Distributed via [Obtainium](https://github.com/ImranR98/Obtainium) from this repo's GitHub Releases - no Play Store. The APK has no server address baked in: it asks for one on first launch, so the same build works for any self-hosted instance.
+Flutter Android companion app for the Align personal finance platform. Distributed via [Obtainium](https://github.com/ImranR98/Obtainium) from this repo's GitHub Releases - no Play Store. The APK has no server address baked in: it asks for one on first launch, so the same build works for any self-hosted instance.
 
 ---
 
@@ -171,7 +171,7 @@ assets/
 ├── fonts/Outfit-Variable.ttf
 └── images/logo.svg, logo.png
 
-.github/workflows/release.yml      # CI: build + sign + release APK on git tag
+.github/workflows/mobile-release.yml  # CI: version bump + build + sign + publish APK
 ```
 
 ---
@@ -579,21 +579,24 @@ fvm flutter build apk --release \
 
 ## Release / Deployment
 
-No Play Store - distributed via **Obtainium** from this private GitHub repo.
+No Play Store - distributed via **Obtainium** from this repo's GitHub Releases.
 
-### Tag a release
+### Cutting a release
 
-```bash
-git tag v1.x.y && git push origin v1.x.y
-```
+Merge to `main` with a Conventional Commit prefix: `feat:` bumps the minor,
+`fix:` the patch, `BREAKING` the major. CI tags it, builds the signed APK, and
+publishes a GitHub Release; Obtainium picks it up and prompts the update.
+Anything else (`docs:`, `chore:`, `refactor:`) produces no release.
 
-CI builds the signed APK, creates a GitHub Release. Obtainium on the Pixel detects it and prompts update.
+The bump needs an existing tag to count from. With no tags at all, mint the
+first one by hand: Actions -> "Mobile · version + release APK" -> Run workflow,
+which builds whatever version `pubspec.yaml` currently declares.
 
-### Obtainium configuration (Pixel 7a)
+### Obtainium configuration
 
 - Source type: GitHub
-- Repo: `https://github.com/your-username/align-management-app`
-- Auth: Personal Access Token (from `gh auth token`) in source-specific settings
+- Repo: `https://github.com/aneebbaig/align`
+- Auth: none needed - the repo is public
 - APK filter: `app-release.apk`
 
 ### GitHub Secrets
@@ -609,7 +612,7 @@ CI builds the signed APK, creates a GitHub Release. Obtainium on the Pixel detec
 
 ## CI Pipeline
 
-File: `.github/workflows/mobile-release.yml` - triggers on `v*` tags only.
+File: `.github/workflows/mobile-release.yml` - triggers on pushes to `main` that touch `apps/mobile/**`, plus manual runs. It computes the next SemVer from Conventional Commits, tags it, then builds.
 
 ```
 Checkout
