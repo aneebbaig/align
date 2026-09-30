@@ -11,7 +11,8 @@ any hosting provider - no deployment integration, no environments, no deploy
 statuses. Anyone running the app deploys their own copy;
 [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md) is the guide.
 
-**Mobile**: v1.2.0 is the latest release (signed APK on GitHub Releases,
+**Mobile**: v1.0.0 is the latest release and the only tag - this repo's release
+history was restarted at 1.0.0 (signed APK on GitHub Releases,
 Obtainium-trackable). The APK no longer has a server URL compiled in: the app
 asks for one on first launch, validates it, and stores it. One published build
 now works for anybody self-hosting.
@@ -38,9 +39,10 @@ Release notes on `mobile-release.yml`:
 
 - The bump comes from Conventional Commits: `feat:` minor, `fix:` patch,
   `BREAKING` major. No `feat`/`fix` since the last tag means no release.
-- It needs a baseline tag to bump from. A fresh fork has none, so the first
-  release has to be minted once via `workflow_dispatch` (which builds whatever
-  version is in `pubspec.yaml`); the auto-bump takes over after that.
+- It needs a baseline tag to bump from. This repo has `v1.0.0`; a fresh fork
+  has none, so its first release has to be minted once via `workflow_dispatch`
+  (which builds whatever version is in `pubspec.yaml`); the auto-bump takes
+  over after that.
 - Signing comes from the `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`,
   and `KEY_ALIAS` secrets. **Losing the keystore means never being able to
   update the app** - back it up outside this repo.
@@ -98,11 +100,17 @@ mobile-only push legitimately does not rebuild.
 1. **`/api/cron/daily`** (the daily digest email) still is not wired to anything
    that calls it. It will never fire on its own; it needs a native Vercel Cron
    Job or an external pinger. Carried over from the last handoff, still open.
-2. **Existing installs need the server URL once.** Updating to v1.2.0 keeps app
-   data (same signing key), but the URL key was never written by older builds,
-   so the first launch after the update shows the setup screen. Expected, not a
-   bug.
-3. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
+2. **Existing installs need the server URL once.** Updating keeps app data
+   (same signing key), but the URL key was never written by builds from before
+   the runtime-URL change, so the first launch after the update shows the setup
+   screen. Expected, not a bug.
+3. **Phones still on 1.2.0 won't see updates yet.** The published version went
+   back to 1.0.0, and Obtainium only offers a higher version name. The Android
+   versionCode is the workflow run number, which also restarted with this repo,
+   so Android may refuse the install as a downgrade too. Those phones need a
+   reinstall (uninstall loses the stored server URL and login, nothing else)
+   or a version that climbs past 1.2.0.
+4. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
    hand from a `seed:demo` database. Any real UI change makes them wrong, and
    nothing checks that.
 

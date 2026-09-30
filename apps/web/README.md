@@ -1,6 +1,6 @@
 # Align - Personal Finance Manager
 
-A private finance app for two users. Tracks expenses, budgets, goals, savings, investments, loans, tasks, calendar, and a secret gift vault.
+A private finance app for a household of one or two users. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a calendar, and a secret gift vault.
 
 **Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · better-auth · Tailwind CSS v4
 
@@ -13,20 +13,19 @@ A private finance app for two users. Tracks expenses, budgets, goals, savings, i
 | **Dashboard** | Monthly summary, spending charts, budget progress, goals, today's tasks |
 | **Expenses & Income** | Full transaction management with categories, tags, recurring; every expense must declare a funding source |
 | **Budget** | Zero-based monthly budget with category allocations, savings plan, and email alerts |
-| **Goals** | Savings goals with progress tracking and item checklists |
-| **Savings** | PKR/USD savings pots (Emergency, Liquid, General); deposits require a declared source (income or pot transfer); spending from a pot creates an expense; USD/PKR rate auto-synced daily |
+| **Savings** | An Emergency Fund plus regular pots, each holding a balance per currency; a pot with a target amount (and optional deadline) is a savings goal; deposits require a declared source (income or pot transfer); spending from a pot creates an expense |
 | **Investments** | Portfolio tracker; a target-allocation plan (name + type + % per category), with money added to any category any time - every contribution books a real expense under the "Investments" category |
 | **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments, flexible/slidable); loan creation and repayment each book a real income/expense entry by default (optional "track only, no entry" toggle on both); marking a received loan paid auto-creates an expense from the chosen funding source |
 | **Cash-Flow Planner** | Forward month-by-month projection from loan schedules, recurring income (salary/freelance floor), and planned one-off expenses; dashboard summary card with upcoming-due alerts and shortfall warnings |
-| **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority; milestone tasks for personal multi-step goals |
-| **Projects** | Freelance/client project management - projects → sub-tasks with statuses, priorities, and due dates; separate from personal tasks |
-| **Planner** | Life event planning (weddings, trips, renovations) |
+| **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority |
+| **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
+| **Plans** | Life event planning (house moves, trips, renovations) with itemised checklists |
+| **Wedding** | Dedicated wedding planner - events, vendors, and expenses per event |
 | **Calendar** | Events, reminders, and deadlines |
-| **Gym & Fitness** | Workouts (PPL templates, session logging, PRs), nutrition profile, recipes with import, weekly meal planner, body metrics, gym expenses |
-| **Want List** | 48-hour impulse purchase cooling-off list |
-| **Need List** | Priority-grouped list of planned purchases with expense logging |
+| **Lists** | Needs (priority-grouped planned purchases with expense logging) and Wants (48-hour impulse-purchase cooling-off) on one page |
+| **Perfumes** | Perfume collection and buy-next shortlist |
 | **Vault** | 🔒 Secret surprise/gift planner - Super Admin only |
-| **Settings** | Categories, notifications, user management, data export |
+| **Settings** | Profile, security (password, TOTP two-factor), categories, currencies and rates, notifications, data export/reset, user management (Super Admin) |
 
 ---
 
@@ -44,14 +43,18 @@ Align enforces a strict zero-based budgeting model - money cannot enter or leave
 - Editing or deleting a pot-funded expense reverses the old pot movement before applying the new change.
 
 ### Savings Pots
-- Three pot types: **Emergency Fund**, **Liquid Savings**, **General/Goal pots**.
+- Pot types: the **Emergency Fund** and regular pots. A regular pot with a target amount (and optional deadline) is a **Goal** pot - goals were merged into pots.
+- Leftover money is never swept into a pot; it is always computed live from income − expenses − pot deposits.
 - Depositing into any pot requires declaring a source: **monthly income** or **transfer from another pot**.
 - Deposits from income are validated: available income = this month's income − income-funded expenses − existing income-funded pot deposits. Cannot deposit more than available.
 - Transfers between pots are atomic (deduct + credit in one transaction, both sides logged).
 - To spend from a pot, create an expense and select the pot as the funding source - there is no standalone "withdraw" action.
-- Pots hold both PKR and USD; PKR and USD balances are tracked independently.
+- A pot holds a separate balance for each of the household's currencies.
 - **Income deletion is blocked** if that month's income-funded expenses + income-funded pot deposits exceed the remaining income after deletion. PKR and USD are checked separately. Remove the allocations first, then delete the income.
-- USD/PKR exchange rate is **auto-synced daily** from `open.er-api.com` (free, no API key, ~30 calls/month). Can also be updated manually.
+
+### Currencies
+- Currencies are household-defined in **Settings → Currencies**. Exactly one is the base (PKR by default); every total, budget, and dashboard figure is in the base currency, and each other currency stores a rate to it. USD is set up by default.
+- The daily cron job (`/api/cron/daily`) refreshes the USD rate from `open.er-api.com` (free, no API key) - only when something schedules it (see [DEPLOYMENT.md](DEPLOYMENT.md#daily-cron-job)). Otherwise rates are updated by hand.
 
 ### Budget
 - Budget page shows **Ready to Assign** = this month's income − budget category allocations − planned savings allocations.

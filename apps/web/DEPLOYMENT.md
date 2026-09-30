@@ -98,7 +98,7 @@ git push origin main
 1. Go to [vercel.com](https://vercel.com), sign up with your GitHub account
 2. Click **Add New → Project**
 3. Find your repo → click **Import**
-4. Leave all settings as default
+4. Set **Root Directory** to `apps/web` (this is a monorepo). Leave the rest as default - Vercel runs the `vercel-build` script, which applies migrations before building
 5. **Stop before clicking Deploy** - add environment variables first
 
 ### Add environment variables
@@ -108,6 +108,7 @@ In your Vercel project → **Settings → Environment Variables**, add:
 | Variable | Value | Environments |
 |---|---|---|
 | `DATABASE_URL` | Your Neon **main branch** URL | All |
+| `DATABASE_URL_UNPOOLED` | The same URL without `-pooler` in the hostname - used for migrations | All |
 | `AUTH_SECRET` | Same secret you generated above | All |
 | `BETTER_AUTH_URL` | `https://your-domain.com` | Production |
 | `BETTER_AUTH_URL` | `https://your-project.vercel.app` | Preview |
@@ -138,6 +139,21 @@ After the first successful deploy, create your user accounts in the production d
 ```powershell
 $env:DATABASE_URL="postgresql://...your-main-branch-url..."; pnpm seed
 ```
+
+---
+
+## Daily cron job
+
+`/api/cron/daily` sends the daily digest email and refreshes the USD exchange rate. **Nothing calls it by default**, so neither happens until you schedule it. It needs `CRON_SECRET` set and expects `Authorization: Bearer <CRON_SECRET>`.
+
+- **Vercel Cron:** add a `crons` entry to `apps/web/vercel.json`, e.g. `{ "path": "/api/cron/daily", "schedule": "0 3 * * *" }`. Vercel sends the `CRON_SECRET` header automatically.
+- **Anything else** (cron on a server, a free uptime pinger that supports headers):
+
+  ```bash
+  curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/daily
+  ```
+
+Without it the app works fine; you just set currency rates by hand in Settings → Currencies and get no digest.
 
 ---
 

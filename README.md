@@ -17,13 +17,14 @@ Runs on the free tiers of Vercel and Neon, so hosting it costs nothing. Nobody s
 The core is a zero-based budget: income comes in, you assign all of it, and money can't leave a bucket without saying where it came from. Around that there's:
 
 - Expenses and income with categories, tags, and recurring entries
-- Savings pots in PKR and USD (emergency, liquid, general), with deposits that have to declare a source
-- Goals, investments, and loans (settling a loan logs the expense for you, with repayment schedules and a forward cash-flow projection)
-- Tasks (daily habits, one-offs, and checklists) and a Projects board for freelance/client work
-- A planner for big life events, a calendar, and want/need lists
-- A private gift planner that only the super admin can see
+- Savings pots that hold a balance per currency (PKR is the base, USD comes set up, add your own), with deposits that have to declare a source. A pot with a target and deadline is a savings goal
+- Investments and loans (settling a loan logs the expense for you, with repayment schedules and a forward cash-flow projection)
+- Tasks (daily habits and one-offs) and a Work board for freelance/client projects
+- Plans for big life events, a dedicated wedding planner, a calendar, and want/need lists
+- A perfume collection tracker, and a private gift planner that only the super admin can see
+- Optional TOTP two-factor login
 
-The exchange rate between PKR and USD syncs once a day. There are two roles: super admin (everything) and admin (everything except the vault and user management).
+Currencies and their rates live in Settings. The USD rate can sync itself once a day if you schedule the daily cron job (see [DEPLOYMENT.md](apps/web/DEPLOYMENT.md#daily-cron-job)); otherwise you set rates by hand. There are two roles: super admin (everything) and admin (everything except the vault and user management).
 
 ## What it looks like
 
@@ -93,9 +94,11 @@ fvm dart run build_runner build --delete-conflicting-outputs
 fvm flutter run
 ```
 
-On first launch the app asks for your server address - nothing is baked in at build time, so one APK works against any instance. Change it later in Settings.
+Install [fvm](https://fvm.app) first, then `fvm install stable` once. Every Flutter and Dart command goes through `fvm`.
 
-More in [apps/mobile/README.md](apps/mobile/README.md). Pass `--dart-define=APP_NAME=YourName` to rename it there too.
+On first launch the app asks for your server address - nothing is baked in at build time, so one APK works against any instance. Change it later in Settings. (`NEXT_PUBLIC_APP_NAME` only renames the web app; the Android app is always called "Align".)
+
+More in [apps/mobile/README.md](apps/mobile/README.md).
 
 Prefer not to build it yourself? Signed APKs are published on [GitHub Releases](../../releases) on every version bump - install one, point it at your own server on first launch, and let [Obtainium](https://github.com/ImranR98/Obtainium) track updates from this repo.
 

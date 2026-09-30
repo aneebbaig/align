@@ -9,7 +9,7 @@ Two apps, one backend. The Next.js web app owns the database and serves a REST A
                                                          PostgreSQL (Neon)
 ```
 
-The phone app has no database of its own. It stores one thing locally: the auth token, in the Android keystore.
+The phone app has no database of its own. It keeps the server address and the auth token in secure storage (Android keystore).
 
 ## The web app
 
@@ -31,10 +31,10 @@ This is the part to understand before changing anything financial. The whole app
 
 - Income only enters through the income page, and it raises that month's "ready to assign".
 - Every expense is funded from something real: monthly income or a savings pot. A pot-funded expense deducts from the pot and writes a ledger row in the same transaction. Editing or deleting one reverses the old movement first.
-- Pots hold PKR and USD separately. Putting money in requires a source (income, or a transfer from another pot), and it's checked against what income is actually left. Transfers move both sides in one transaction. There's no standalone withdraw; you spend from a pot by making an expense funded by it.
-- You can't delete income if doing so would leave that month's income-funded expenses and deposits underwater. PKR and USD are checked on their own.
+- Pots hold a separate balance per currency. Putting money in requires a source (income, or a transfer from another pot), and it's checked against what income is actually left. Transfers move both sides in one transaction. There's no standalone withdraw; you spend from a pot by making an expense funded by it.
+- You can't delete income if doing so would leave that month's income-funded expenses and deposits underwater.
 - All money is stored as integers in the smallest unit (paisas, the currency times 100). No floats.
-- The USD/PKR rate updates itself once a day from a free public endpoint, and you can set it by hand.
+- Currencies are household-defined (Settings → Currencies). One is the base (PKR by default) that every total is reported in; the rest carry a rate to it. `/api/cron/daily` refreshes the USD rate from a free public endpoint, but only if something schedules that route (see `apps/web/DEPLOYMENT.md`); otherwise rates are set by hand.
 
 Migrations are plain SQL under `prisma/migrations/`, reviewed by hand. Run `prisma migrate dev` locally; production runs `prisma migrate deploy` on deploy. The models are commented inline in `schema.prisma`.
 
