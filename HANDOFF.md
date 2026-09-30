@@ -105,7 +105,8 @@ Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`
 - **Add to loan** - lend/borrow more on an existing loan instead of a second
   one; both apps offer it when a new loan's person matches an open loan.
 - **Write off / Mark as forgiven** - part or all of what's left. An expense is
-  offered only for money lent "track only"; otherwise it was already counted.
+  offered only for money lent "track only" (loan and every top-up); otherwise
+  it was already counted.
   `WRITTEN_OFF` loans are closed and drop out of forecasts and reminders.
 - **Available** now shows on the web Expenses page; the Android Expenses and
   Income tabs got summary strips.

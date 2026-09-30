@@ -92,7 +92,8 @@ export async function writeOffLoanCore(
 
   const period = resolvePeriod(data, openPeriod);
   const date = toLocalDate(data.date);
-  const book = !!data.bookExpense && offersWriteOffExpense(loan);
+  const topUps = await prisma.loanPayment.findMany({ where: { loanId, kind: "TOP_UP" }, select: { kind: true, transactionId: true } });
+  const book = !!data.bookExpense && offersWriteOffExpense(loan, topUps);
 
   await prisma.$transaction(async (tx) => {
     let transactionId: string | null = null;

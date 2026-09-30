@@ -17,10 +17,15 @@ export function loanStatusFor(remaining: number, principal: number, hasWriteOff 
 }
 
 // A write-off only books an expense when that's the first time the loss hits
-// the budget: money you lent, where lending it booked nothing ("track only").
-// Otherwise the amount was already counted when the loan was created.
-export function offersWriteOffExpense(loan: { type: string; transactionId: string | null }): boolean {
-  return loan.type === "GIVEN" && loan.transactionId === null;
+// the budget: money you lent where neither the loan nor any "Add to loan"
+// booked an expense ("track only"). Otherwise part of it is already counted,
+// and booking again would count it twice.
+export function offersWriteOffExpense(
+  loan: { type: string; transactionId: string | null },
+  history: { kind: string; transactionId: string | null }[] = [],
+): boolean {
+  if (loan.type !== "GIVEN" || loan.transactionId !== null) return false;
+  return !history.some((h) => h.kind === "TOP_UP" && h.transactionId !== null);
 }
 
 export interface LoanBalance {

@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 
 interface LoanPayment {
-  id: string; kind: string; amount: number; date: Date; notes: string | null;
+  id: string; kind: string; amount: number; date: Date; notes: string | null; transactionId: string | null;
   transaction: { fundingSource: string; fundingPotId: string | null; budgetMonth: number; budgetYear: number } | null;
 }
 interface LoanSchedule {
@@ -96,7 +96,7 @@ export function LoansClient({
       amount: prefill?.amount ?? (kind === "WRITE_OFF" ? String(loan.remainingAmount / 100) : ""),
       date: prefill?.date ?? format(new Date(), "yyyy-MM-dd"),
       notes: "",
-      book: kind === "TOP_UP" ? true : offersWriteOffExpense(loan),
+      book: kind === "TOP_UP" ? true : offersWriteOffExpense(loan, loan.payments),
       fileUnderDate: false,
     });
   }
@@ -821,7 +821,7 @@ export function LoansClient({
                 <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
                 <Textarea rows={2} value={entryForm.notes} onChange={(e) => setEntryForm((f) => ({ ...f, notes: e.target.value }))} />
               </div>
-              {entryDialog.kind === "TOP_UP" || offersWriteOffExpense(entryDialog.loan) ? (
+              {entryDialog.kind === "TOP_UP" || offersWriteOffExpense(entryDialog.loan, entryDialog.loan.payments) ? (
                 <>
                   <div className="flex items-start gap-2">
                     <Checkbox id="bookLoanEntry" checked={entryForm.book} onCheckedChange={(c) => setEntryForm((f) => ({ ...f, book: !!c }))} className="mt-0.5" />

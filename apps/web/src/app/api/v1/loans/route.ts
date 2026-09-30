@@ -37,10 +37,17 @@ export async function GET(req: NextRequest) {
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
     });
 
+    // Loans with a booked "Add to loan" never offer a write-off expense (the
+    // payments list above is capped at 5, so look these up separately).
+    const bookedTopUps = await prisma.loanPayment.findMany({
+      where: { loan: { userId: auth.id }, kind: "TOP_UP", transactionId: { not: null } },
+      select: { loanId: true, kind: true, transactionId: true },
+    });
+
     return NextResponse.json({
       data: loans.map((l) => ({
         ...l,
-        offersWriteOffExpense: offersWriteOffExpense(l),
+        offersWriteOffExpense: offersWriteOffExpense(l, bookedTopUps.filter((t) => t.loanId === l.id)),
         date: l.date.toISOString(),
         dueDate: l.dueDate?.toISOString() ?? null,
         payments: l.payments.map((p) => ({

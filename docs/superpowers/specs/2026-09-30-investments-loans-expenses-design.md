@@ -80,7 +80,9 @@ in the route handler and the matching mobile datasource in the same change.
 - Top-up on a closed loan reopens it.
 - Deleting a top-up is refused if it would make principal < repaid + written off.
 - Write-off amount: 1 ≤ amount ≤ remaining; defaults to remaining.
-- `offersWriteOffExpense(loan)` = `loan.type === "GIVEN" && loan.transactionId === null`.
+- `offersWriteOffExpense(loan, history)` = `loan.type === "GIVEN" && loan.transactionId === null`
+  and no `TOP_UP` in its history booked a transaction (otherwise part of the
+  loss is already counted).
   Only then is "Record as expense" shown; otherwise the dialog says "Already
   counted when you created this loan. Nothing new is recorded."
 

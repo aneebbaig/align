@@ -26,6 +26,14 @@ describe("offersWriteOffExpense", () => {
     expect(offersWriteOffExpense({ type: "GIVEN", transactionId: "t1" })).toBe(false);
     expect(offersWriteOffExpense({ type: "RECEIVED", transactionId: null })).toBe(false);
   });
+
+  it("not when any top-up already booked an expense - that part is counted", () => {
+    const loan = { type: "GIVEN", transactionId: null };
+    expect(offersWriteOffExpense(loan, [{ kind: "TOP_UP", transactionId: "t9" }])).toBe(false);
+    expect(offersWriteOffExpense(loan, [{ kind: "TOP_UP", transactionId: null }])).toBe(true);
+    // Booked repayments don't matter - they're money coming back, not the loss.
+    expect(offersWriteOffExpense(loan, [{ kind: "PAYMENT", transactionId: "t1" }])).toBe(true);
+  });
 });
 
 describe("applyLoanEntry", () => {
