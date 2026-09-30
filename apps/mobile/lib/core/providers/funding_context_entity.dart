@@ -11,7 +11,9 @@ class FundingContextPot {
 }
 
 class FundingContextEntity {
-  const FundingContextEntity({required this.monthlyIncomeAvailablePaisas, required this.pots});
+  const FundingContextEntity({required this.monthlyIncomeAvailablePaisas, required this.pots, this.monthlyIncomePaisas = 0});
   final int monthlyIncomeAvailablePaisas;
+  // Total income filed under the period (for the Income tab summary).
+  final int monthlyIncomePaisas;
   final List<FundingContextPot> pots;
 }
