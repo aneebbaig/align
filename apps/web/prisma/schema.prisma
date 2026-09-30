@@ -135,8 +135,8 @@ model Transaction {
   planItem                    PlanItem?                  @relation(fields: [planItemId], references: [id], onDelete: SetNull)
   fundingPot                  SavingsPot?                @relation("ExpenseFundingPot", fields: [fundingPotId], references: [id], onDelete: SetNull)
   fundingSources              TransactionFundingSource[]
-  nativeCurrency              Currency?                  @relation("TransactionNativeCurrency", fields: [nativeCurrencyId], references: [id])
-  fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id])
+  nativeCurrency              Currency?                  @relation("TransactionNativeCurrency", fields: [nativeCurrencyId], references: [id], onDelete: Restrict)
+  fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id], onDelete: Restrict)
   loanPrincipalOf             Loan?
   loanPaymentOf               LoanPayment?
   plannedExpenseOf            PlannedExpense?
@@ -311,7 +311,7 @@ model TransactionFundingSource {
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   pot         SavingsPot? @relation("FundingSourcePot", fields: [potId], references: [id], onDelete: SetNull)
-  currency    Currency?   @relation(fields: [currencyId], references: [id])
+  currency    Currency?   @relation(fields: [currencyId], references: [id], onDelete: Restrict)
 
   @@index([transactionId])
   @@index([potId])
@@ -873,7 +873,7 @@ model WeddingExpense {
   weddingPlan     WeddingPlan   @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
   event           WeddingEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   source1Currency Currency      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id])
-  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id])
+  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id], onDelete: Restrict)
 
   @@index([weddingPlanId])
   @@index([eventId])
