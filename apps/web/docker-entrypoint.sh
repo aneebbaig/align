@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+# Refuse to start without the auth secrets (set them in apps/web/.env).
+for var in AUTH_SECRET BETTER_AUTH_SECRET; do
+  eval "val=\${$var:-}"
+  if [ -z "$val" ]; then
+    echo "✖ $var is not set - add it to apps/web/.env (openssl rand -base64 32)"
+    exit 1
+  fi
+done
+
 # Apply migrations, retrying while Postgres finishes coming up.
 echo "▶ Applying database migrations..."
 n=0

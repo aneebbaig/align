@@ -45,43 +45,18 @@ postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=req
 
 ---
 
-## Step 2 - Local dev setup
+## Step 2 - Run it locally first
 
-```bash
-# Copy the env template
-cp .env.example .env.local
-```
+Get it working on your machine before deploying: follow [docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md).
 
-Edit `.env.local` - replace the placeholder with your **dev branch** URL:
+To develop against your Neon **dev branch** instead of Docker, skip the `docker compose` step and put the dev branch URLs in `.env.local`:
 
 ```env
-DATABASE_URL="postgresql://...dev-branch-url..."
-
-AUTH_SECRET="paste-generated-secret-here"
-BETTER_AUTH_URL="http://localhost:3000"
-
-USER1_EMAIL="admin@example.com"
-USER1_PASSWORD="your-password"
-USER1_NAME="Admin"
-
-USER2_EMAIL="member@example.com"
-USER2_PASSWORD="spouse-password"
-USER2_NAME="Spouse Name"
+DATABASE_URL="postgresql://...dev-branch-pooler-url..."
+DATABASE_URL_UNPOOLED="postgresql://...dev-branch-url-without--pooler..."
 ```
 
-Generate `AUTH_SECRET` (run this once, paste the output):
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-Then create the tables and seed your users:
-```bash
-pnpm exec prisma migrate dev
-pnpm seed
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) - done.
+`prisma migrate dev` needs the direct (non-pooler) connection - if it hangs or errors, run it with `DATABASE_URL` set to the unpooled URL.
 
 ---
 

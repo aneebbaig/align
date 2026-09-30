@@ -46,8 +46,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-align}:${POSTGRES_PASSWORD:-align}@db:5432/${POSTGRES_DB:-align_dev}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Align}
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      # Required - checked by docker-entrypoint.sh when the web container starts
+      # (not here, so `docker compose up -d db` works without a .env).
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       # First-run seed: categories + an admin user from the USER1_* values.
       SEED_ON_START: ${SEED_ON_START:-true}

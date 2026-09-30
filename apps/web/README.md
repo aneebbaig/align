@@ -102,27 +102,7 @@ Use `bg-muted/50 rounded-lg` - never hardcoded colors or gradients.
 
 ## Local Development
 
-You need a Postgres database. The quickest local option is Docker: `docker compose up -d db` (from this folder) starts Postgres on `localhost:5434` - set `DATABASE_URL="postgresql://align:align@localhost:5434/align_dev"` in `.env.local` and skip the Neon notes below. Or use a free [Neon](https://neon.tech) account. Neon gives you a cloud PostgreSQL database with separate **branches** (like git) - use the `dev` branch locally and `main` for production. No local database installation needed.
-
-```bash
-# 1. Clone and install
-pnpm install
-
-# 2. Copy env template and fill in your Neon dev branch URL
-cp .env.example .env.local
-# Edit .env.local - paste DATABASE_URL from Neon → Connect → Prisma tab (dev branch)
-# Use the DIRECT (non-pooler) URL for migrations - remove "-pooler" from the hostname
-
-# 3. Create tables + seed users
-pnpm exec prisma migrate dev
-pnpm seed
-
-# 4. Run
-pnpm dev
-# → http://localhost:3000
-```
-
-> **Neon pooler vs direct URL**: `prisma migrate dev` requires a direct connection (non-pooler hostname - no `-pooler` in the URL). The pooler URL is fine for the running app (`DATABASE_URL` at runtime). For production migrations, use `DATABASE_URL_UNPOOLED` with `pnpm exec prisma migrate deploy`.
+See **[docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md)** - local Postgres in Docker (or a Neon branch), env, migrations, seed, demo data, and connecting the Android app.
 
 ---
 

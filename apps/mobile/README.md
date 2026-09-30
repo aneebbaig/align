@@ -11,9 +11,9 @@ Flutter Android companion app for the Align personal finance platform. Distribut
 3. [Project Structure](#project-structure)
 4. [Clean Architecture](#clean-architecture)
 5. [Key Patterns & Conventions](#key-patterns--conventions)
-6. [State Management - Riverpod](#state-management--riverpod)
-7. [Navigation - GoRouter](#navigation--gorouter)
-8. [HTTP Client - Dio](#http-client--dio)
+6. [State Management - Riverpod](#state-management---riverpod)
+7. [Navigation - GoRouter](#navigation---gorouter)
+8. [HTTP Client - Dio](#http-client---dio)
 9. [Design System](#design-system)
 10. [Icons](#icons)
 11. [Constants & Extensions](#constants--extensions)
@@ -554,25 +554,9 @@ On a cold start the link is parked in `pendingLink` and delivered once auth reso
 
 ## Running Locally
 
-### Prerequisites
-
-Install [fvm](https://fvm.app/documentation/getting-started/installation) (Homebrew, your distro's package, or `dart pub global activate fvm`), plus the Android SDK and JDK 17. Then, from `apps/mobile`:
-
-```bash
-fvm install stable
-fvm use stable
-```
-
-### Run on device
-
-```bash
-fvm flutter pub get
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter devices
-fvm flutter run -d <device-id>
-```
-
-On first launch the app asks for your server. On the Android emulator, `http://10.0.2.2:3000` reaches a `pnpm dev` server on your machine; on a real phone use your computer's LAN IP.
+Setup, codegen, and connecting to a local server (emulator, USB, or Wi-Fi) are in
+**[docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md#4-run-the-mobile-app-optional)**.
+Everything below is mobile-only extra detail.
 
 The app name is fixed as "Align" (`AppConstants.appName` and the `appName` manifest placeholder), and the release workflow checks it.
 

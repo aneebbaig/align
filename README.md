@@ -37,7 +37,7 @@ Currencies and their rates live in Settings. The USD rate can sync itself once a
 | ![Investments](docs/screenshots/investments.png) | ![Work](docs/screenshots/projects.png) |
 | **Investments** - SIPs with contributions and gain/loss per holding | **Work** - a board per project for freelance and client jobs |
 
-Screens above are the demo dataset, not real numbers - `pnpm seed:demo` builds it (see [CONTRIBUTING.md](CONTRIBUTING.md#demo-data)).
+Screens above are the demo dataset, not real numbers - `pnpm seed:demo` builds it (see [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md#optional-fill-it-with-demo-data)).
 
 ## How it's laid out
 
@@ -52,53 +52,19 @@ align/
 
 The web app owns the database and exposes the API the phone app uses. If you only want the web app, you never have to touch the mobile side.
 
-## Running the web app
+## Running it
 
-You need a Postgres database. A free [Neon](https://neon.tech) branch is the easiest
-hosted option; for a local one, `docker compose up -d db` in `apps/web` starts
-Postgres on `localhost:5434` (`postgresql://align:align@localhost:5434/align_dev`).
+**Locally:** [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) walks through the whole thing - a Postgres in Docker, the web app, and optionally the Android app pointed at it. The short version, from `apps/web`:
 
 ```bash
-cd apps/web
-cp .env.example .env.local     # fill in your database URL and secrets
-pnpm install
-pnpm exec prisma migrate dev   # creates the tables
-pnpm seed                      # creates your login(s)
-pnpm dev                       # http://localhost:3000
+docker compose up -d db && cp .env.example .env.local   # then fill in .env.local
+pnpm install && pnpm exec prisma generate && pnpm exec prisma migrate dev
+pnpm seed && pnpm dev                                    # http://localhost:3000
 ```
 
-Longer version in [apps/web/README.md](apps/web/README.md). Deploying to Vercel is in [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md).
+**On the internet:** [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md) deploys the web app to Vercel + Neon for free. The phone app then connects to that address.
 
-Want to call it something other than "Align"? Set `NEXT_PUBLIC_APP_NAME` and it changes everywhere in the UI.
-
-### Or with Docker
-
-Brings up Postgres and the web app together — no local Node or Postgres needed:
-
-```bash
-cd apps/web
-cp .env.docker.example .env    # then set the secrets it lists
-docker compose up --build      # http://localhost:3000
-```
-
-The database starts first, migrations run automatically, and (with
-`SEED_ON_START=true`) a first admin user is created from the `USER1_*` values in
-`apps/web/.env`. Postgres is exposed on `localhost:5434` if you want to poke at it.
-
-## Running the mobile app
-
-```bash
-cd apps/mobile
-fvm flutter pub get
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter run
-```
-
-Install [fvm](https://fvm.app) first, then `fvm install stable` once. Every Flutter and Dart command goes through `fvm`.
-
-On first launch the app asks for your server address - nothing is baked in at build time, so one APK works against any instance. Change it later in Settings. (`NEXT_PUBLIC_APP_NAME` only renames the web app; the Android app is always called "Align".)
-
-More in [apps/mobile/README.md](apps/mobile/README.md).
+Want to call it something other than "Align"? Set `NEXT_PUBLIC_APP_NAME` and it changes everywhere in the web UI (the Android app is always "Align").
 
 Prefer not to build it yourself? Signed APKs are published on [GitHub Releases](../../releases) on every version bump - install one, point it at your own server on first launch, and let [Obtainium](https://github.com/ImranR98/Obtainium) track updates from this repo.
 
@@ -108,8 +74,10 @@ Web is Next.js 16, React 19, Prisma 7, Postgres, better-auth (with TOTP two-fact
 
 ## More docs
 
+- [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) - running both apps on your machine.
+- [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md) - putting the web app online (Vercel + Neon).
 - [ARCHITECTURE.md](ARCHITECTURE.md) covers how the money rules work. Read it before you touch anything financial.
-- [CONTRIBUTING.md](CONTRIBUTING.md) has the dev setup and the house rules.
+- [CONTRIBUTING.md](CONTRIBUTING.md) has the checks and the house rules.
 - [SECURITY.md](SECURITY.md) is how to report something sensitive.
 - [HANDOFF.md](HANDOFF.md) - current project status, what's pending, notes for picking this back up.
 
