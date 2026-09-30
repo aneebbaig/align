@@ -408,6 +408,8 @@ model InvestmentContribution {
   id           String   @id @default(cuid())
   investmentId String
   amount       Int // paisas
+  // "DEPOSIT" (money in) | "WITHDRAWAL" (money out). amount is always positive.
+  type         String   @default("DEPOSIT")
   date         DateTime @default(now())
   notes        String?
   createdAt    DateTime @default(now())
