@@ -34,18 +34,18 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 | Screen | Purpose |
 |--------|---------|
 | Dashboard | Budget summary, income vs spend bar, cash-flow summary card (due this month, coming-up alerts), recent transactions |
-| Money → Expenses tab | Paginated list of current-period expenses, pull-to-refresh; "Planned Expenses" section up top |
-| Money → Income tab | Income transactions for current period; "Recurring Income" section up top |
+| Money → Expenses tab | Summary strip (Spent · Budget · Under/Over · Available), then planned expenses and the paginated current-period list |
+| Money → Income tab | Summary strip (Income this period · Available), recurring income, then the current-period list |
 | Quick Add (Expense) | `/quick-add` - amount, category, description, notes, date, budget-period override, fund-from (income or a pot); modal, outside ShellRoute |
 | Quick Add (Income) | `/quick-add-income` - income-category, amount, description, date, budget-period override |
 | Quick Add (Task) | `/quick-add-task` - title, priority, due date |
 | Quick Add (Loan) | `/quick-add-loan` - person name, GIVEN/RECEIVED, amount, dates, budget-period override |
 | Budget | Per-category budget allocations with progress bars |
 | Savings | Savings pots with targets and progress (read-only on mobile - pot CRUD is web-only) |
-| Loans | Active loans; "Repayment Plan" section per loan (schedules + add/delete); explicit "Record Payment" button - `RecordPaymentPage` pre-fills remaining balance, supports budget-period override and fund-from-pot for RECEIVED loans |
+| Loans | Active and closed loans; history of payments, top-ups, and write-offs; Record Payment, Lend/Borrow more, Write off / Mark as forgiven (`LoanEntryPage`); repayment plans |
 | Tasks | Daily / One-Time tabs; optimistic toggle |
 | Work (Projects) | Freelance/client project list; per-project task board grouped by status; Quick Add Project at `/quick-add-project` |
-| Investments | SIPs with contributions, value updates, and the target-allocation plan |
+| Investments | Add money, Withdraw, Update value; history marks deposits (+) and withdrawals (−) and whether each booked an entry |
 | Plans | Life-event plans with itemised checklists; mark items bought (books the expense) |
 | More | Links out to Budget, Loans, Savings, Investments, Plans, Settings |
 | Setup | `/setup` - "Connect to your server": URL entry validated against `/api/health` before it is saved. Shown on first launch, and from Settings to switch servers |
@@ -138,6 +138,7 @@ lib/
 │       ├── app_progress_bar.dart  # Thin progress bar (0.0-1.0)
 │       ├── app_section.dart       # Section header wrapper
 │       ├── app_skeleton.dart      # Loading placeholder shimmer
+│       ├── app_summary_strip.dart # Row of labelled figures (Expenses/Income tab summaries)
 │       ├── app_text_field.dart    # Styled text input
 │       ├── async_value_widget.dart # AsyncValue<T> → data/loading/error widget
 │       ├── book_transaction_field.dart # "Book a real entry" toggle (loans/investments)

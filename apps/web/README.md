@@ -14,8 +14,8 @@ A private finance app for a household of one or two users. Tracks expenses, budg
 | **Expenses & Income** | Full transaction management with categories, tags, recurring; every expense must declare a funding source |
 | **Budget** | Zero-based monthly budget with category allocations, savings plan, and email alerts |
 | **Savings** | An Emergency Fund plus regular pots, each holding a balance per currency; a pot with a target amount (and optional deadline) is a savings goal; deposits require a declared source (income or pot transfer); spending from a pot creates an expense |
-| **Investments** | Portfolio tracker; a target-allocation plan (name + type + % per category), with money added to any category any time - every contribution books a real expense under the "Investments" category |
-| **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments, flexible/slidable); loan creation and repayment each book a real income/expense entry by default (optional "track only, no entry" toggle on both); marking a received loan paid auto-creates an expense from the chosen funding source |
+| **Investments** | Portfolio tracker with a target-allocation plan; add money or withdraw any time, each optionally booked as an expense (from income) or income ("Investment Returns"); gain counts withdrawals; "Update value" only marks to market |
+| **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments); lend/borrow more on the same loan; write off or mark as forgiven (in part or in full); every entry can book an income/expense entry or be tracked only; starting a second loan with the same person offers to add to the first |
 | **Cash-Flow Planner** | Forward month-by-month projection from loan schedules, recurring income (salary/freelance floor), and planned one-off expenses; dashboard summary card with upcoming-due alerts and shortfall warnings |
 | **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority |
 | **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
@@ -41,6 +41,7 @@ Align enforces a strict zero-based budgeting model - money cannot enter or leave
 - Every expense must be funded from a real source: **monthly income** or a **savings pot**.
 - Pot-funded expenses atomically deduct from the pot and create a pot ledger entry.
 - Editing or deleting a pot-funded expense reverses the old pot movement before applying the new change.
+- The Expenses page shows This month, Budget, Under/Over, and Available (income left after income-funded expenses and pot deposits).
 
 ### Savings Pots
 - Pot types: the **Emergency Fund** and regular pots. A regular pot with a target amount (and optional deadline) is a **Goal** pot - goals were merged into pots.
@@ -51,6 +52,12 @@ Align enforces a strict zero-based budgeting model - money cannot enter or leave
 - To spend from a pot, create an expense and select the pot as the funding source - there is no standalone "withdraw" action.
 - A pot holds a separate balance for each of the household's currencies.
 - **Income deletion is blocked** if that month's income-funded expenses + income-funded pot deposits exceed the remaining income after deletion. PKR and USD are checked separately. Remove the allocations first, then delete the income.
+
+### Investments
+- **Invested** is the total put in; **current value** is what it's worth now. Adding money raises both; withdrawing lowers only the current value.
+- **Gain** = current value + withdrawn − invested, so taking profits out never shows a loss.
+- Adding money can book an expense (paid from monthly income, "Investments" category); withdrawing can book income ("Investment Returns"). Both are optional and follow the budget-period checkbox.
+- **Update value** only marks the investment to market - it records no money in or out.
 
 ### Currencies
 - Currencies are household-defined in **Settings → Currencies**. Exactly one is the base (PKR by default); every total, budget, and dashboard figure is in the base currency, and each other currency stores a rate to it. USD is set up by default.

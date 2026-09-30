@@ -95,6 +95,21 @@ mobile-only push legitimately does not rebuild.
    `pubspec.lock` silently downgrades the lockfile and produces analyzer errors
    in code you never touched.
 
+## Investments, loans, and expenses summary (latest)
+
+Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`.
+
+- **Investments** - adding money now raises current value too (it used to show
+  every top-up as a loss). New Withdraw action. Both can book an
+  expense/income entry or not. Gain counts withdrawals.
+- **Add to loan** - lend/borrow more on an existing loan instead of a second
+  one; both apps offer it when a new loan's person matches an open loan.
+- **Write off / Mark as forgiven** - part or all of what's left. An expense is
+  offered only for money lent "track only"; otherwise it was already counted.
+  `WRITTEN_OFF` loans are closed and drop out of forecasts and reminders.
+- **Available** now shows on the web Expenses page; the Android Expenses and
+  Income tabs got summary strips.
+
 ## Pending / not done
 
 1. **`/api/cron/daily`** (the daily digest email) still is not wired to anything
@@ -110,7 +125,10 @@ mobile-only push legitimately does not rebuild.
    so Android may refuse the install as a downgrade too. Those phones need a
    reinstall (uninstall loses the stored server URL and login, nothing else)
    or a version that climbs past 1.2.0.
-4. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
+4. **Existing investments need one "Update value".** Before the fix, top-ups
+   never raised the current value, so older investments understate what
+   they're worth until updated once.
+5. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
    hand from a `seed:demo` database. Any real UI change makes them wrong, and
    nothing checks that.
 
