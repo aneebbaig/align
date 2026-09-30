@@ -65,6 +65,9 @@ model User {
   loanSchedules    LoanSchedule[]
   plannedExpenses  PlannedExpense[]
   investmentPlan   InvestmentPlan?
+  plannerSettings  PlannerSettings?
+  plannerLines     PlannerLine[]
+  plannerGoals     PlannerGoal[]
 
   emailVerified    Boolean     @default(false)
   image            String?
@@ -1018,4 +1021,85 @@ model TwoFactor {
   @@index([secret])
   @@index([userId])
   @@map("twoFactor")
+}
+
+// ─── Planner ─────────────────────────────────────────────────────────────────
+// A standalone month-by-month plan. Stores only inputs; the table (net,
+// available cash) is computed on every read by src/lib/planner/compute.ts.
+// Never linked to real transactions. Month keys are year*12 + (month-1).
+
+model PlannerSettings {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  startMonthKey Int
+  months        Int      @default(24) // 1..120
+  startingCash  Int      @default(0) // paisas, may be negative
+  usdRate       Float // PKR per 1 USD - the planner's own rate
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("planner_settings")
+}
+
+model PlannerLine {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  direction String // "IN" | "OUT"
+  currency  String   @default("PKR") // "PKR" | "USD"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps     PlannerStep[]
+  overrides PlannerOverride[]
+
+  @@index([userId])
+  @@map("planner_lines")
+}
+
+// "From this month on, the line is this amount."
+model PlannerStep {
+  id       String @id @default(cuid())
+  lineId   String
+  monthKey Int
+  amount   Int // smallest unit of the line's currency, >= 0
+
+  line PlannerLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId, monthKey])
+  @@map("planner_steps")
+}
+
+// "In this month only, the line is this amount."
+model PlannerOverride {
+  id       String @id @default(cuid())
+  lineId   String
+  monthKey Int
+  amount   Int // smallest unit of the line's currency, >= 0
+
+  line PlannerLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId, monthKey])
+  @@map("planner_overrides")
+}
+
+model PlannerGoal {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  monthKey  Int
+  amount    Int // paisas, > 0
+  note      String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("planner_goals")
 }
