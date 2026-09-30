@@ -11,6 +11,7 @@ You need Node 20 or newer, [pnpm](https://pnpm.io) (the pinned version is in `ap
 ```bash
 cd apps/web
 cp .env.example .env.local     # fill in DATABASE_URL, AUTH_SECRET, etc.
+docker compose up -d db        # optional: local Postgres on :5434 instead of Neon
 pnpm install
 pnpm exec prisma migrate dev
 pnpm seed
@@ -97,6 +98,6 @@ produces no release.
 
 ## Sending a change
 
-Branch off `main`, make the change, run the checks above, and open a PR with the template. Keep it to one thing. Update the docs if you changed how something behaves, and don't commit secrets. Only `.env.example` is tracked; the real `.env` files are ignored.
+Branch off `main`, make the change, run the checks above, and open a PR with the template. Keep it to one thing. Update the docs if you changed how something behaves, and don't commit secrets. Only the templates (`apps/web/.env.example`, `apps/web/.env.docker.example`) are tracked; the real `.env` files are ignored.
 
 For anything security-related, don't open a public issue. See [SECURITY.md](SECURITY.md).

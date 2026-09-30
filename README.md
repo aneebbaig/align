@@ -43,7 +43,7 @@ Screens above are the demo dataset, not real numbers - `pnpm seed:demo` builds i
 ```
 align/
   apps/
-    web/      Next.js + Prisma + Postgres. The app, plus the REST API.
+    web/      Next.js + Prisma + Postgres. The app, the REST API, and the Docker setup.
     mobile/   Flutter Android client. Talks to /api/v1.
   docs/
   .github/    CI, split so web changes don't run the Flutter build.
@@ -53,7 +53,9 @@ The web app owns the database and exposes the API the phone app uses. If you onl
 
 ## Running the web app
 
-You need a free Postgres database. A [Neon](https://neon.tech) branch is the easiest.
+You need a Postgres database. A free [Neon](https://neon.tech) branch is the easiest
+hosted option; for a local one, `docker compose up -d db` in `apps/web` starts
+Postgres on `localhost:5434` (`postgresql://align:align@localhost:5434/align_dev`).
 
 ```bash
 cd apps/web
@@ -80,7 +82,7 @@ docker compose up --build      # http://localhost:3000
 
 The database starts first, migrations run automatically, and (with
 `SEED_ON_START=true`) a first admin user is created from the `USER1_*` values in
-your `.env`. Postgres is exposed on `localhost:5434` if you want to poke at it.
+`apps/web/.env`. Postgres is exposed on `localhost:5434` if you want to poke at it.
 
 ## Running the mobile app
 
@@ -99,7 +101,7 @@ Prefer not to build it yourself? Signed APKs are published on [GitHub Releases](
 
 ## Stack
 
-Web is Next.js 16, React 19, Prisma 7, Postgres, NextAuth v5, and Tailwind v4. Mobile is Flutter with Riverpod, GoRouter, and Dio, laid out in clean-architecture slices. Both host on free tiers.
+Web is Next.js 16, React 19, Prisma 7, Postgres, better-auth (with TOTP two-factor), and Tailwind v4. Mobile is Flutter with Riverpod, GoRouter, and Dio, laid out in clean-architecture slices. Both host on free tiers.
 
 ## More docs
 

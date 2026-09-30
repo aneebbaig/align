@@ -23,7 +23,7 @@ jobs:
       DATABASE_URL: "postgresql://user:pass@localhost:5432/db"
       DATABASE_URL_UNPOOLED: "postgresql://user:pass@localhost:5432/db"
       AUTH_SECRET: "ci-build-only-secret-ci-build-only-secret"
-      NEXTAUTH_URL: "http://localhost:3000"
+      BETTER_AUTH_URL: "http://localhost:3000"
     steps:
       - uses: actions/checkout@v4
 

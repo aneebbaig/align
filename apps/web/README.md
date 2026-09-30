@@ -2,7 +2,7 @@
 
 A private finance app for two users. Tracks expenses, budgets, goals, savings, investments, loans, tasks, calendar, and a secret gift vault.
 
-**Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · NextAuth v5 · Tailwind CSS v4
+**Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · better-auth · Tailwind CSS v4
 
 ---
 
@@ -99,7 +99,7 @@ Use `bg-muted/50 rounded-lg` - never hardcoded colors or gradients.
 
 ## Local Development
 
-You need a free [Neon](https://neon.tech) account. Neon gives you a cloud PostgreSQL database with separate **branches** (like git) - use the `dev` branch locally and `main` for production. No local database installation needed.
+You need a Postgres database. The quickest local option is Docker: `docker compose up -d db` (from this folder) starts Postgres on `localhost:5434` - set `DATABASE_URL="postgresql://align:align@localhost:5434/align_dev"` in `.env.local` and skip the Neon notes below. Or use a free [Neon](https://neon.tech) account. Neon gives you a cloud PostgreSQL database with separate **branches** (like git) - use the `dev` branch locally and `main` for production. No local database installation needed.
 
 ```bash
 # 1. Clone and install
@@ -111,7 +111,7 @@ cp .env.example .env.local
 # Use the DIRECT (non-pooler) URL for migrations - remove "-pooler" from the hostname
 
 # 3. Create tables + seed users
-pnpm exec prisma migrate dev --name init
+pnpm exec prisma migrate dev
 pnpm seed
 
 # 4. Run
@@ -136,7 +136,8 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** - Vercel + Neon, completely free, ~10 min
 | `DATABASE_URL` | Neon pooled connection URL - dev branch for local, main branch for production |
 | `DATABASE_URL_UNPOOLED` | Neon direct (non-pooler) URL - required for `prisma migrate deploy` on production |
 | `AUTH_SECRET` | Random secret: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
-| `NEXTAUTH_URL` | `http://localhost:3000` locally · `https://your-domain.com` in production |
+| `BETTER_AUTH_SECRET` | Optional - auth signing/encryption secret; falls back to `AUTH_SECRET`. Never change it once users have 2FA on |
+| `BETTER_AUTH_URL` | `http://localhost:3000` locally · `https://your-domain.com` in production |
 | `USER1_EMAIL` | Super Admin email |
 | `USER1_PASSWORD` | Super Admin password |
 | `USER2_EMAIL` | Admin email |

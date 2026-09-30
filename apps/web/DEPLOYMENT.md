@@ -58,7 +58,7 @@ Edit `.env.local` - replace the placeholder with your **dev branch** URL:
 DATABASE_URL="postgresql://...dev-branch-url..."
 
 AUTH_SECRET="paste-generated-secret-here"
-NEXTAUTH_URL="http://localhost:3000"
+BETTER_AUTH_URL="http://localhost:3000"
 
 USER1_EMAIL="admin@example.com"
 USER1_PASSWORD="your-password"
@@ -76,7 +76,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 Then create the tables and seed your users:
 ```bash
-pnpm exec prisma migrate dev --name init
+pnpm exec prisma migrate dev
 pnpm seed
 pnpm dev
 ```
@@ -109,8 +109,8 @@ In your Vercel project → **Settings → Environment Variables**, add:
 |---|---|---|
 | `DATABASE_URL` | Your Neon **main branch** URL | All |
 | `AUTH_SECRET` | Same secret you generated above | All |
-| `NEXTAUTH_URL` | `https://your-domain.com` | Production |
-| `NEXTAUTH_URL` | `https://your-project.vercel.app` | Preview |
+| `BETTER_AUTH_URL` | `https://your-domain.com` | Production |
+| `BETTER_AUTH_URL` | `https://your-project.vercel.app` | Preview |
 | `USER1_EMAIL` | `admin@example.com` | All |
 | `USER1_PASSWORD` | Your **strong** password (min 8 chars) | All |
 | `USER1_NAME` | `Admin` | All |

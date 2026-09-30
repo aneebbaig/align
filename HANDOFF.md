@@ -115,6 +115,13 @@ mobile-only push legitimately does not rebuild.
 - `pnpm seed` creates categories and logins only; `pnpm seed:demo` creates a full
   fictional household and is what the screenshots come from. The demo seed is
   destructive and refuses non-local databases.
+- Env templates are `apps/web/.env.example` (copy to `.env.local` for `pnpm dev`)
+  and `apps/web/.env.docker.example` (copy to `.env` for Docker). Docker lives
+  entirely in `apps/web` - the mobile app never needs it. `docker compose up -d
+  db` there gives a local Postgres on `localhost:5434`.
+- Auth is better-auth, not NextAuth. `NEXTAUTH_URL` and `TOTP_ENC_KEY` are read
+  nowhere and have been dropped; `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` are the
+  live ones. The `next-auth` package is still in `package.json` but unused.
 - The leak guard is the backstop for keeping personal identifiers and local notes
   out of the repo, but it only sees tracked file contents. Keep commit messages
   and branch names clean by hand.

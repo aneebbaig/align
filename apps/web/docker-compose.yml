@@ -49,7 +49,6 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       # First-run seed: categories + an admin user from the USER1_* values.
       SEED_ON_START: ${SEED_ON_START:-true}
       USER1_EMAIL: ${USER1_EMAIL:-admin@example.com}

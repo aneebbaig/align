@@ -21,7 +21,7 @@ Standard Next.js App Router. The parts worth knowing:
 - `src/lib/` holds the shared bits: `prisma`, the token/session helpers, `utils`, `constants`.
 - `prisma/` is the schema, migrations, and seed script.
 
-Auth works two ways for the two clients. The web pages use a cookie session (`getUserId`, `requireUser`). The API uses an `Authorization: Bearer` header. Both verify the same signed token.
+Auth is [better-auth](https://www.better-auth.com), configured in `src/lib/auth.ts`, and works two ways for the two clients. The web pages use a cookie session (`getUserId`, `requireUser`). The API uses an `Authorization: Bearer` header via better-auth's bearer plugin (`requireBearerAuth`). Both resolve to the same session. Optional TOTP two-factor comes from better-auth's `twoFactor` plugin, and its secrets are encrypted with `BETTER_AUTH_SECRET` (falling back to `AUTH_SECRET`). The `totp*` columns on `users` are left over from an older hand-rolled 2FA and are unused.
 
 Worth repeating from the contributing guide: route `params` are async here, so `await params` in every handler. When in doubt, mirror an existing route in `src/app/api/v1/`.
 
