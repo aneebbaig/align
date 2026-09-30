@@ -4,6 +4,7 @@ import { toLocalDate } from "@/lib/utils";
 import { creditPot, debitPot } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
 import { validateFundingSources } from "@/lib/expenses/funding";
+import { loanStatusFor } from "@/lib/loans/balance";
 
 // Shared by the "use server" web action (`actions/loans.ts`) and the v1
 // bearer-auth API routes (mobile) - kept out of actions/loans.ts since that
@@ -28,12 +29,6 @@ export async function reverseTransactionFunding(
     }
     await tx.transactionFundingSource.deleteMany({ where: { transactionId: transaction.id } });
   }
-}
-
-export function loanStatusFor(remainingAmount: number, principalAmount: number): string {
-  if (remainingAmount <= 0) return "PAID";
-  if (remainingAmount >= principalAmount) return "ACTIVE";
-  return "PARTIALLY_PAID";
 }
 
 export interface UpdateLoanPaymentInput {
