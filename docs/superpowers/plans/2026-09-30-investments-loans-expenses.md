@@ -3190,8 +3190,8 @@ and add `loan_entry_page.dart` and `app_summary_strip.dart` to the project-struc
 
 - [ ] **Step 6: Leak guard and links**
 
-Run from the repo root: `grep -rIniE 'cla[u]de|anthrop[i]c|aneebbaig123|bbaig0425' $(git diff --name-only HEAD) ; echo guard-ok`
-Expected: only `guard-ok` printed.
+Run the same `grep` as the "Scan for forbidden strings" step in `.github/workflows/guard.yml`, from the repo root, over the files changed on this branch.
+Expected: no matches.
 
 - [ ] **Step 7: Commit**
 
