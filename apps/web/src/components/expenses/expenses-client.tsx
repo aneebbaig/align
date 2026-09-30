@@ -122,6 +122,7 @@ export function ExpensesClient({
   }
 
   const overUnder = budgetTotal - thisMonthSpent;
+  const monthlyIncomeAvailable = fundingContext.monthlyIncomeAvailable;
 
   return (
     <>
@@ -146,7 +147,7 @@ export function ExpensesClient({
         />
 
         {/* Summary cards - always current period */}
-        <div className="grid grid-cols-3 gap-px bg-border rounded-xl overflow-hidden border border-border">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border rounded-xl overflow-hidden border border-border">
           <div className="bg-card px-5 py-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">This Month</p>
             <div className="text-xl font-bold text-red-500 dark:text-red-400 tabnum">{baseSymbol} {fmt(thisMonthSpent)}</div>
@@ -165,6 +166,17 @@ export function ExpensesClient({
               budgetTotal === 0 ? "text-muted-foreground" : overUnder >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
               {budgetTotal === 0 ? "-" : `${baseSymbol} ${fmt(Math.abs(overUnder))}`}
             </div>
+          </div>
+          <div className="bg-card px-5 py-4">
+            <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5",
+              monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
+              Available
+            </p>
+            <div className={cn("text-xl font-bold tabnum",
+              monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
+              {baseSymbol} {fmt(Math.abs(monthlyIncomeAvailable))}
+            </div>
+            {monthlyIncomeAvailable < 0 && <div className="text-xs text-red-500 mt-0.5">over-allocated</div>}
           </div>
         </div>
 
