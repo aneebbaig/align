@@ -73,7 +73,8 @@ Want to call it something other than "Align"? Set `NEXT_PUBLIC_APP_NAME` and it 
 Brings up Postgres and the web app together — no local Node or Postgres needed:
 
 ```bash
-cp .env.docker.example .env    # then set the three secrets it lists
+cd apps/web
+cp .env.docker.example .env    # then set the secrets it lists
 docker compose up --build      # http://localhost:3000
 ```
 

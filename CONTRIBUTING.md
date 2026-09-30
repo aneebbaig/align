@@ -37,8 +37,8 @@ PKR and USD, investments, loans with a repayment schedule, a planner, projects,
 and lists. It is what the README screenshots are taken from.
 
 ```bash
-docker compose up -d db     # or point at any local Postgres
 cd apps/web
+docker compose up -d db     # or point at any local Postgres
 DATABASE_URL=postgresql://align:align@localhost:5434/align_dev pnpm exec prisma migrate deploy
 DATABASE_URL=postgresql://align:align@localhost:5434/align_dev pnpm seed:demo
 ```
