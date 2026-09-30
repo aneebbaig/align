@@ -109,7 +109,7 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
       if (!mounted) return;
       ref.invalidate(loansProvider);
       ref.read(toastServiceProvider).success(context, _isTopUp ? 'Added to loan' : (_isGiven ? 'Written off' : 'Marked as forgiven'));
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);

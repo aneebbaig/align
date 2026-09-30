@@ -40,10 +40,7 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _nameFocus.requestFocus();
-      ref.read(loansProvider);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _nameFocus.requestFocus());
   }
 
   @override
@@ -134,11 +131,12 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
       );
       if (!mounted || addInstead == null) return;
       if (addInstead) {
-        await Navigator.of(context).push(MaterialPageRoute(
+        final added = await Navigator.of(context).push<bool>(MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => LoanEntryPage(loan: existing, mode: LoanEntryMode.topUp, prefillPaisas: paisas, prefillDate: _date),
         ));
-        if (mounted) _close();
+        // Cancelled on the entry page: stay here with what was typed.
+        if (mounted && added == true) _close();
         return;
       }
     }
@@ -175,6 +173,8 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the loans list loaded for the same-person check in _submit.
+    ref.watch(loansProvider);
     final creating = _loading;
     final dateLabel = DateFormat('d MMM y').format(_date);
     final isToday = _date.year == DateTime.now().year &&
