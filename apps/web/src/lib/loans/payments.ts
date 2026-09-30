@@ -4,7 +4,7 @@ import { toLocalDate } from "@/lib/utils";
 import { creditPot, debitPot } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
 import { validateFundingSources } from "@/lib/expenses/funding";
-import { loanStatusFor } from "@/lib/loans/balance";
+import { loanStatusFor, reverseLoanEntry, type LoanEntryKind } from "@/lib/loans/balance";
 
 // Shared by the "use server" web action (`actions/loans.ts`) and the v1
 // bearer-auth API routes (mobile) - kept out of actions/loans.ts since that
@@ -49,6 +49,9 @@ export async function updateLoanPaymentCore(userId: string, paymentId: string, d
     include: { loan: true, transaction: { include: { fundingSources: true } } },
   });
   if (!payment) return { error: "Payment not found" };
+  if (payment.kind !== "PAYMENT") {
+    return { error: "Only repayments can be edited - delete this entry and add it again instead." };
+  }
   if (!payment.transaction) {
     return { error: "This payment has no linked transaction to edit - delete and re-add it instead." };
   }
@@ -109,7 +112,10 @@ export async function updateLoanPaymentCore(userId: string, paymentId: string, d
 
     await tx.loan.update({
       where: { id: loan.id },
-      data: { remainingAmount: newRemaining, status: loanStatusFor(newRemaining, loan.principalAmount) },
+      data: {
+        remainingAmount: newRemaining,
+        status: loanStatusFor(newRemaining, loan.principalAmount, (await tx.loanPayment.count({ where: { loanId: loan.id, kind: "WRITE_OFF" } })) > 0),
+      },
     });
   });
 
@@ -124,7 +130,8 @@ export async function deleteLoanPaymentCore(userId: string, paymentId: string): 
   if (!payment) return { error: "Payment not found" };
 
   const { loan, transaction } = payment;
-  const newRemaining = Math.min(loan.principalAmount, loan.remainingAmount + payment.amount);
+  const next = reverseLoanEntry(loan, { kind: payment.kind as LoanEntryKind, amount: payment.amount });
+  if ("error" in next) return next;
 
   await prisma.$transaction(async (tx) => {
     if (transaction) {
@@ -134,9 +141,14 @@ export async function deleteLoanPaymentCore(userId: string, paymentId: string): 
     if (transaction) {
       await tx.transaction.delete({ where: { id: transaction.id } });
     }
+    const hasWriteOff = (await tx.loanPayment.count({ where: { loanId: loan.id, kind: "WRITE_OFF" } })) > 0;
     await tx.loan.update({
       where: { id: loan.id },
-      data: { remainingAmount: newRemaining, status: loanStatusFor(newRemaining, loan.principalAmount) },
+      data: {
+        principalAmount: next.principalAmount,
+        remainingAmount: next.remainingAmount,
+        status: loanStatusFor(next.remainingAmount, next.principalAmount, hasWriteOff),
+      },
     });
   });
 

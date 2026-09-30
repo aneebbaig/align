@@ -10,6 +10,8 @@ import { getBaseCurrency } from "@/lib/currency-helpers";
 import { getCurrentPeriod } from "@/lib/month";
 import { updateLoanPaymentCore, deleteLoanPaymentCore } from "@/lib/loans/payments";
 import { ensureCategory } from "@/lib/default-categories";
+import { addToLoanCore, writeOffLoanCore } from "@/lib/loans/entries";
+import { CLOSED_LOAN_STATUSES, isLoanClosed, loanStatusFor } from "@/lib/loans/balance";
 import { ActionResult } from "@/types";
 
 // Loans always operate in the household's base currency (out of scope for
@@ -18,7 +20,8 @@ import { ActionResult } from "@/types";
 export async function getLoans(filter?: "ACTIVE" | "PAID" | "ALL") {
   const userId = await getUserId();
   const where: Prisma.LoanWhereInput = { userId };
-  if (filter && filter !== "ALL") where.status = filter;
+  if (filter === "PAID") where.status = { in: CLOSED_LOAN_STATUSES };
+  else if (filter === "ACTIVE") where.status = { notIn: CLOSED_LOAN_STATUSES };
 
   return prisma.loan.findMany({
     where,
@@ -136,6 +139,7 @@ export async function recordPayment(loanId: string, data: {
 
     const loan = await prisma.loan.findFirst({ where: { id: loanId, userId } });
     if (!loan) return { success: false, error: "Loan not found" };
+    if (isLoanClosed(loan.status)) return { success: false, error: "This loan is already closed" };
 
     if (data.linkScheduleId) {
       const schedule = await prisma.loanSchedule.findFirst({ where: { id: data.linkScheduleId, loanId, userId } });
@@ -149,7 +153,8 @@ export async function recordPayment(loanId: string, data: {
     }
 
     const newRemaining = loan.remainingAmount - paymentAmount;
-    const newStatus = newRemaining === 0 ? "PAID" : "PARTIALLY_PAID";
+    const hasWriteOff = (await prisma.loanPayment.count({ where: { loanId, kind: "WRITE_OFF" } })) > 0;
+    const newStatus = loanStatusFor(newRemaining, loan.principalAmount, hasWriteOff);
 
     // RECEIVED loan (I borrowed): paying it back is an EXPENSE, may be funded
     // from income or a savings pot. GIVEN loan (I lent): getting repaid is
@@ -320,6 +325,7 @@ export async function markLoanPaid(loanId: string): Promise<ActionResult> {
     const userId = await getUserId();
     const loan = await prisma.loan.findFirst({ where: { id: loanId, userId } });
     if (!loan) return { success: false, error: "Not found" };
+    const hasWriteOff = (await prisma.loanPayment.count({ where: { loanId, kind: "WRITE_OFF" } })) > 0;
 
     await prisma.$transaction([
       prisma.loanPayment.create({
@@ -327,7 +333,7 @@ export async function markLoanPaid(loanId: string): Promise<ActionResult> {
       }),
       prisma.loan.update({
         where: { id: loanId },
-        data: { remainingAmount: 0, status: "PAID" },
+        data: { remainingAmount: 0, status: loanStatusFor(0, loan.principalAmount, hasWriteOff) },
       }),
     ]);
 
@@ -368,10 +374,67 @@ export async function deleteLoan(id: string): Promise<ActionResult> {
 
 export async function getLoanSummary() {
   const userId = await getUserId();
-  const loans = await prisma.loan.findMany({ where: { userId, status: { not: "PAID" } } });
+  const loans = await prisma.loan.findMany({ where: { userId, status: { notIn: CLOSED_LOAN_STATUSES } } });
 
   const totalGiven = loans.filter((l) => l.type === "GIVEN").reduce((s, l) => s + l.remainingAmount, 0);
   const totalReceived = loans.filter((l) => l.type === "RECEIVED").reduce((s, l) => s + l.remainingAmount, 0);
 
   return { totalGiven, totalReceived, netPosition: totalGiven - totalReceived };
+}
+
+function revalidateLoanPaths() {
+  revalidatePath("/loans");
+  revalidatePath("/expenses");
+  revalidatePath("/income");
+  revalidatePath("/dashboard");
+}
+
+async function openPeriodFor() {
+  const user = await getAuthenticatedUser({ currentBudgetMonth: true, currentBudgetYear: true });
+  return {
+    userId: user.id,
+    period: getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null),
+  };
+}
+
+// Lend or borrow more with the same person - raises the loan instead of a new one.
+export async function addToLoan(loanId: string, data: {
+  amount: number; // rupees
+  date: string;
+  notes?: string;
+  skipTransaction?: boolean;
+  budgetMonth?: number;
+  budgetYear?: number;
+}): Promise<ActionResult> {
+  try {
+    const { userId, period } = await openPeriodFor();
+    const result = await addToLoanCore(userId, loanId, { ...data, amountPaisas: toPaisas(data.amount) }, period);
+    if (result.error) return { success: false, error: result.error };
+    revalidateLoanPaths();
+    return { success: true };
+  } catch (e) {
+    console.error("[addToLoan]", e);
+    return { success: false, error: "Failed to add to loan" };
+  }
+}
+
+// Write off (lent) / mark as forgiven (borrowed) part or all of what's left.
+export async function writeOffLoan(loanId: string, data: {
+  amount: number; // rupees
+  date: string;
+  notes?: string;
+  bookExpense?: boolean;
+  budgetMonth?: number;
+  budgetYear?: number;
+}): Promise<ActionResult> {
+  try {
+    const { userId, period } = await openPeriodFor();
+    const result = await writeOffLoanCore(userId, loanId, { ...data, amountPaisas: toPaisas(data.amount) }, period);
+    if (result.error) return { success: false, error: result.error };
+    revalidateLoanPaths();
+    return { success: true };
+  } catch (e) {
+    console.error("[writeOffLoan]", e);
+    return { success: false, error: "Failed to write off loan" };
+  }
 }

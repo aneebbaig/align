@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getPotBalancesInBase } from "@/lib/currency-helpers";
+import { CLOSED_LOAN_STATUSES } from "@/lib/loans/balance";
 
 export interface FinancialPosition {
   accumulatedSavings: number;
@@ -18,7 +19,7 @@ export async function computeFinancialPosition(userId: string): Promise<Financia
     prisma.transaction.findMany({ where: { userId }, select: { amount: true, type: true } }),
     getPotBalancesInBase(userId),
     prisma.investment.findMany({ where: { userId }, select: { currentValue: true } }),
-    prisma.loan.findMany({ where: { userId, status: { not: "PAID" } }, select: { remainingAmount: true, type: true } }),
+    prisma.loan.findMany({ where: { userId, status: { notIn: CLOSED_LOAN_STATUSES } }, select: { remainingAmount: true, type: true } }),
   ]);
 
   const totalIncome = transactions.filter((t) => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
