@@ -45,43 +45,18 @@ postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=req
 
 ---
 
-## Step 2 - Local dev setup
+## Step 2 - Run it locally first
 
-```bash
-# Copy the env template
-cp .env.example .env.local
-```
+Get it working on your machine before deploying: follow [docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md).
 
-Edit `.env.local` - replace the placeholder with your **dev branch** URL:
+To develop against your Neon **dev branch** instead of Docker, skip the `docker compose` step and put the dev branch URLs in `.env.local`:
 
 ```env
-DATABASE_URL="postgresql://...dev-branch-url..."
-
-AUTH_SECRET="paste-generated-secret-here"
-NEXTAUTH_URL="http://localhost:3000"
-
-USER1_EMAIL="admin@example.com"
-USER1_PASSWORD="your-password"
-USER1_NAME="Admin"
-
-USER2_EMAIL="member@example.com"
-USER2_PASSWORD="spouse-password"
-USER2_NAME="Spouse Name"
+DATABASE_URL="postgresql://...dev-branch-pooler-url..."
+DATABASE_URL_UNPOOLED="postgresql://...dev-branch-url-without--pooler..."
 ```
 
-Generate `AUTH_SECRET` (run this once, paste the output):
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-Then create the tables and seed your users:
-```bash
-pnpm exec prisma migrate dev --name init
-pnpm seed
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) - done.
+`prisma migrate dev` needs the direct (non-pooler) connection - if it hangs or errors, run it with `DATABASE_URL` set to the unpooled URL.
 
 ---
 
@@ -98,7 +73,7 @@ git push origin main
 1. Go to [vercel.com](https://vercel.com), sign up with your GitHub account
 2. Click **Add New → Project**
 3. Find your repo → click **Import**
-4. Leave all settings as default
+4. Set **Root Directory** to `apps/web` (this is a monorepo). Leave the rest as default - Vercel runs the `vercel-build` script, which applies migrations before building
 5. **Stop before clicking Deploy** - add environment variables first
 
 ### Add environment variables
@@ -108,22 +83,20 @@ In your Vercel project → **Settings → Environment Variables**, add:
 | Variable | Value | Environments |
 |---|---|---|
 | `DATABASE_URL` | Your Neon **main branch** URL | All |
+| `DATABASE_URL_UNPOOLED` | The same URL without `-pooler` in the hostname - used for migrations | All |
 | `AUTH_SECRET` | Same secret you generated above | All |
-| `NEXTAUTH_URL` | `https://your-domain.com` | Production |
-| `NEXTAUTH_URL` | `https://your-project.vercel.app` | Preview |
+| `BETTER_AUTH_URL` | `https://your-domain.com` | Production |
+| `BETTER_AUTH_URL` | `https://your-project.vercel.app` | Preview |
 | `USER1_EMAIL` | `admin@example.com` | All |
 | `USER1_PASSWORD` | Your **strong** password (min 8 chars) | All |
 | `USER1_NAME` | `Admin` | All |
 | `USER2_EMAIL` | `member@example.com` | All |
 | `USER2_PASSWORD` | the second user.s **strong** password | All |
 | `USER2_NAME` | `Member` | All |
-| `TOTP_ENC_KEY` | Random 16+ char string - encrypts 2FA secrets at rest. Generate: `openssl rand -base64 32` | All |
 | `GMAIL_USER` | Your Gmail (optional - enables all email alerts) | All |
 | `GMAIL_APP_PASSWORD` | 16-char Google App Password (optional) | All |
 | `CRON_SECRET` | Random secret for the daily digest cron - generate same as AUTH_SECRET | All |
 | `NEXT_PUBLIC_APP_NAME` | Optional - override the app's display name. Defaults to "Align" | All |
-
-> **`TOTP_ENC_KEY` is required** if any user enables two-factor authentication (Settings → Security). Without it, enabling or verifying 2FA fails. Set it before your first deploy and never change it afterward, or existing 2FA secrets become undecryptable.
 
 > **Never leave `USER*_PASSWORD` unset.** The seed script generates a random password (printed once) when it is, but a weak or shared value on a public backend is the easiest way in — pick something strong.
 
@@ -141,6 +114,21 @@ After the first successful deploy, create your user accounts in the production d
 ```powershell
 $env:DATABASE_URL="postgresql://...your-main-branch-url..."; pnpm seed
 ```
+
+---
+
+## Daily cron job
+
+`/api/cron/daily` sends the daily digest email and refreshes the USD exchange rate. **Nothing calls it by default**, so neither happens until you schedule it. It needs `CRON_SECRET` set and expects `Authorization: Bearer <CRON_SECRET>`.
+
+- **Vercel Cron:** add a `crons` entry to `apps/web/vercel.json`, e.g. `{ "path": "/api/cron/daily", "schedule": "0 3 * * *" }`. Vercel sends the `CRON_SECRET` header automatically.
+- **Anything else** (cron on a server, a free uptime pinger that supports headers):
+
+  ```bash
+  curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/daily
+  ```
+
+Without it the app works fine; you just set currency rates by hand in Settings → Currencies and get no digest.
 
 ---
 

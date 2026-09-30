@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { AdapterInput } from "@/lib/cashflow/adapter";
+import { CLOSED_LOAN_STATUSES } from "@/lib/loans/balance";
 
 // Shared by both the "use server" actions (web) and the v1 bearer-auth API
 // routes (mobile) - kept out of cashflow.ts since that file is "use server"
@@ -7,7 +8,7 @@ import type { AdapterInput } from "@/lib/cashflow/adapter";
 export async function loadAdapterInput(userId: string): Promise<AdapterInput> {
   const [loanSchedules, recurringIncomes, plannedExpenses] = await Promise.all([
     prisma.loanSchedule.findMany({
-      where: { userId, loan: { status: { not: "PAID" } } },
+      where: { userId, loan: { status: { notIn: CLOSED_LOAN_STATUSES } } },
       include: { loan: { select: { personName: true } } },
     }),
     prisma.recurringIncome.findMany({ where: { userId, active: true } }),

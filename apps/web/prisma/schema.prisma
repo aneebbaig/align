@@ -16,9 +16,9 @@ model User {
   hashedPassword         String
   failedLoginAttempts    Int       @default(0)
   lockedUntil            DateTime?
-  // TOTP two-factor auth. totpSecret is AES-256-GCM encrypted at rest (see
-  // lib/crypto.ts) so a DB dump does not hand over usable seeds. Backup codes
-  // are bcrypt-hashed, single-use (removed from the array on consumption).
+  // Legacy, unused: the original hand-rolled TOTP 2FA. 2FA now runs on the
+  // better-auth twoFactor plugin (the TwoFactor model below), which encrypts
+  // with BETTER_AUTH_SECRET. Kept only so existing databases need no migration.
   totpEnabled            Boolean   @default(false)
   totpSecret             String?
   totpBackupCodes        String[]  @default([])
@@ -135,8 +135,8 @@ model Transaction {
   planItem                    PlanItem?                  @relation(fields: [planItemId], references: [id], onDelete: SetNull)
   fundingPot                  SavingsPot?                @relation("ExpenseFundingPot", fields: [fundingPotId], references: [id], onDelete: SetNull)
   fundingSources              TransactionFundingSource[]
-  nativeCurrency              Currency?                  @relation("TransactionNativeCurrency", fields: [nativeCurrencyId], references: [id])
-  fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id])
+  nativeCurrency              Currency?                  @relation("TransactionNativeCurrency", fields: [nativeCurrencyId], references: [id], onDelete: Restrict)
+  fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id], onDelete: Restrict)
   loanPrincipalOf             Loan?
   loanPaymentOf               LoanPayment?
   plannedExpenseOf            PlannedExpense?
@@ -311,7 +311,7 @@ model TransactionFundingSource {
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   pot         SavingsPot? @relation("FundingSourcePot", fields: [potId], references: [id], onDelete: SetNull)
-  currency    Currency?   @relation(fields: [currencyId], references: [id])
+  currency    Currency?   @relation(fields: [currencyId], references: [id], onDelete: Restrict)
 
   @@index([transactionId])
   @@index([potId])
@@ -408,6 +408,8 @@ model InvestmentContribution {
   id           String   @id @default(cuid())
   investmentId String
   amount       Int // paisas
+  // "DEPOSIT" (money in) | "WITHDRAWAL" (money out). amount is always positive.
+  type         String   @default("DEPOSIT")
   date         DateTime @default(now())
   notes        String?
   createdAt    DateTime @default(now())
@@ -592,12 +594,12 @@ model Loan {
   personName      String // Who you gave/received from
   description     String?
   type            String // "GIVEN" (I lent money) | "RECEIVED" (I borrowed money)
-  principalAmount Int // Original amount in paisas
+  principalAmount Int // Original amount + every "Add to loan", in paisas
   remainingAmount Int // Remaining balance in paisas
   date            DateTime // When the loan started
   dueDate         DateTime?
   notes           String?
-  status          String    @default("ACTIVE") // "ACTIVE" | "PARTIALLY_PAID" | "PAID"
+  status          String    @default("ACTIVE") // "ACTIVE" | "PARTIALLY_PAID" | "PAID" | "WRITTEN_OFF"
   // The loan principal is normally recorded as a ledger Transaction (EXPENSE
   // for GIVEN, INCOME for RECEIVED) - no pot involved. Deleting that
   // transaction (from anywhere) cascades to delete this loan and its
@@ -622,6 +624,8 @@ model LoanPayment {
   id            String   @id @default(cuid())
   loanId        String
   amount        Int // Payment amount in paisas
+  // "PAYMENT" (repaid) | "TOP_UP" (lent/borrowed more) | "WRITE_OFF" (forgiven)
+  kind          String   @default("PAYMENT")
   date          DateTime @default(now())
   notes         String?
   createdAt     DateTime @default(now())
@@ -873,7 +877,7 @@ model WeddingExpense {
   weddingPlan     WeddingPlan   @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
   event           WeddingEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   source1Currency Currency      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id])
-  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id])
+  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id], onDelete: Restrict)
 
   @@index([weddingPlanId])
   @@index([eventId])

@@ -13,6 +13,7 @@
 .env.production
 .env.development
 !.env.example
+!.env.docker.example
 
 # vercel
 .vercel
@@ -31,4 +32,3 @@ next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env*

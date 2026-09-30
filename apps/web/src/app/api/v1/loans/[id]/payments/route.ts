@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
+import { isLoanClosed, loanStatusFor } from "@/lib/loans/balance";
 import { getCurrentPeriod } from "@/lib/month";
 import { getBaseCurrency } from "@/lib/currency-helpers";
 import { debitPot } from "@/lib/pot-helpers";
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const loan = await prisma.loan.findFirst({ where: { id: loanId, userId: auth.id } });
     if (!loan) return NextResponse.json({ error: "Loan not found" }, { status: 404 });
-    if (loan.status === "PAID") return NextResponse.json({ error: "Loan already paid" }, { status: 422 });
+    if (isLoanClosed(loan.status)) return NextResponse.json({ error: "This loan is already closed" }, { status: 422 });
 
     const body = await req.json();
     const parsed = createPaymentSchema.safeParse(body);
@@ -84,7 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const newRemaining = loan.remainingAmount - amountPaisas;
-    const newStatus = newRemaining === 0 ? "PAID" : "PARTIALLY_PAID";
+    const hasWriteOff = (await prisma.loanPayment.count({ where: { loanId, kind: "WRITE_OFF" } })) > 0;
+    const newStatus = loanStatusFor(newRemaining, loan.principalAmount, hasWriteOff);
 
     const payment = await prisma.$transaction(async (tx) => {
       await tx.loan.update({

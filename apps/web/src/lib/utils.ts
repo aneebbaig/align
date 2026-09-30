@@ -5,8 +5,11 @@ export function toPaisas(amount: number): number {
   return Math.round(amount * 100);
 }
 
+// Local midnight of the date's calendar day. Accepts "yyyy-MM-dd" (web forms)
+// and ISO datetimes like "2026-09-30T14:23:11.123" (the mobile app) - only the
+// date part is used.
 export function toLocalDate(dateStr: string): Date {
-  return new Date(dateStr + "T00:00:00");
+  return new Date(dateStr.slice(0, 10) + "T00:00:00");
 }
 
 export function cn(...inputs: ClassValue[]) {

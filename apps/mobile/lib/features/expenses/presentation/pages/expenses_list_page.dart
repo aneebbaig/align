@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
+import '../../../../core/extensions/async_value_ext.dart';
+import '../../../../core/providers/funding_context_provider.dart';
+import '../../../../core/widgets/app_summary_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
 import '../../../../core/extensions/datetime_ext.dart';
 import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
@@ -69,7 +73,11 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
       body: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.card,
-        onRefresh: () => ref.refresh(expensesListProvider.future),
+        onRefresh: () {
+          ref.invalidate(budgetProvider);
+          ref.invalidate(fundingContextProvider);
+          return ref.refresh(expensesListProvider.future);
+        },
         child: CustomScrollView(
           controller: _scrollCtrl,
           slivers: [
@@ -84,7 +92,13 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: PlannedExpensesSection(),
+                child: Column(
+                  children: [
+                    _ExpensesSummary(),
+                    SizedBox(height: 12),
+                    PlannedExpensesSection(),
+                  ],
+                ),
               ),
             ),
             async.when(
@@ -202,4 +216,37 @@ class _ExpenseRow extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Spent · Budget · Under/Over · Available for the open period.
+class _ExpensesSummary extends ConsumerWidget {
+  const _ExpensesSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budget = ref.watch(budgetProvider).valueOrNull;
+    final funding = ref.watch(fundingContextProvider(null, null)).valueOrNull;
+    if (budget == null || funding == null) return const SizedBox.shrink();
+    final remaining = budget.remainingPaisas;
+    final available = funding.monthlyIncomeAvailablePaisas;
+    return AppSummaryStrip(items: [
+      AppSummaryItem(label: 'Spent', value: budget.totalSpentPaisas.formatPKR(), tone: AppSummaryTone.negative),
+      AppSummaryItem(
+        label: 'Budget',
+        value: budget.hasBudget ? budget.totalBudgetPaisas!.formatPKR() : '–',
+        tone: budget.hasBudget ? AppSummaryTone.neutral : AppSummaryTone.muted,
+      ),
+      AppSummaryItem(
+        label: remaining == null ? 'Remaining' : (remaining >= 0 ? 'Under' : 'Over'),
+        value: remaining == null ? '–' : remaining.abs().formatPKR(),
+        tone: remaining == null ? AppSummaryTone.muted : (remaining >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative),
+      ),
+      AppSummaryItem(
+        label: 'Available',
+        value: available.abs().formatPKR(),
+        tone: available >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative,
+        caption: available < 0 ? 'over-allocated' : null,
+      ),
+    ]);
+  }
 }

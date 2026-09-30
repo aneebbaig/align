@@ -11,9 +11,9 @@ Flutter Android companion app for the Align personal finance platform. Distribut
 3. [Project Structure](#project-structure)
 4. [Clean Architecture](#clean-architecture)
 5. [Key Patterns & Conventions](#key-patterns--conventions)
-6. [State Management - Riverpod](#state-management--riverpod)
-7. [Navigation - GoRouter](#navigation--gorouter)
-8. [HTTP Client - Dio](#http-client--dio)
+6. [State Management - Riverpod](#state-management---riverpod)
+7. [Navigation - GoRouter](#navigation---gorouter)
+8. [HTTP Client - Dio](#http-client---dio)
 9. [Design System](#design-system)
 10. [Icons](#icons)
 11. [Constants & Extensions](#constants--extensions)
@@ -34,22 +34,24 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 | Screen | Purpose |
 |--------|---------|
 | Dashboard | Budget summary, income vs spend bar, cash-flow summary card (due this month, coming-up alerts), recent transactions |
-| Money → Expenses tab | Paginated list of current-period expenses, pull-to-refresh; "Planned Expenses" section up top |
-| Money → Income tab | Income transactions for current period; "Recurring Income" section up top |
+| Money → Expenses tab | Summary strip (Spent · Budget · Under/Over · Available), then planned expenses and the paginated current-period list |
+| Money → Income tab | Summary strip (Income this period · Available), recurring income, then the current-period list |
 | Quick Add (Expense) | `/quick-add` - amount, category, description, notes, date, budget-period override, fund-from (income or a pot); modal, outside ShellRoute |
 | Quick Add (Income) | `/quick-add-income` - income-category, amount, description, date, budget-period override |
 | Quick Add (Task) | `/quick-add-task` - title, priority, due date |
 | Quick Add (Loan) | `/quick-add-loan` - person name, GIVEN/RECEIVED, amount, dates, budget-period override |
 | Budget | Per-category budget allocations with progress bars |
 | Savings | Savings pots with targets and progress (read-only on mobile - pot CRUD is web-only) |
-| Loans | Active loans; "Repayment Plan" section per loan (schedules + add/delete); explicit "Record Payment" button - `RecordPaymentPage` pre-fills remaining balance, supports budget-period override and fund-from-pot for RECEIVED loans |
-| Tasks | Daily / One-Time / Milestone tabs; optimistic toggle + item check; milestone inline checklist with "Add step" |
-| Projects | Freelance/client project list; per-project task board grouped by status |
-| More | Links out to Budget, Loans, Savings, Settings |
+| Loans | Active and closed loans; history of payments, top-ups, and write-offs; Record Payment, Lend/Borrow more, Write off / Mark as forgiven (`LoanEntryPage`); repayment plans |
+| Tasks | Daily / One-Time tabs; optimistic toggle |
+| Work (Projects) | Freelance/client project list; per-project task board grouped by status; Quick Add Project at `/quick-add-project` |
+| Investments | Add money, Withdraw, Update value; history marks deposits (+) and withdrawals (−) and whether each booked an entry |
+| Plans | Life-event plans with itemised checklists; mark items bought (books the expense) |
+| More | Links out to Budget, Loans, Savings, Investments, Plans, Settings |
 | Setup | `/setup` - "Connect to your server": URL entry validated against `/api/health` before it is saved. Shown on first launch, and from Settings to switch servers |
 | Settings | Server address (tap to change), app version (matches git tag), logout |
 
-**Home screen widget** (4-button, responsive): Expense · Tasks · Loans · Income shortcuts. Row layout at wide widths, 2×2 grid at narrow. Tapping deep-links to the corresponding page or quick-add modal.
+**Home screen widget** (4-button, responsive): Expense · Tasks · Loan · Projects shortcuts. Row layout at wide widths, 2×2 grid at narrow. Tapping deep-links to the corresponding page or quick-add modal.
 
 ---
 
@@ -57,8 +59,8 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Flutter | stable via FVM (3.47.1 at time of writing) | Cross-platform; `.fvmrc` tracks `stable`, CI pins the same exact version |
-| Dart | 3.13.1 | Null-safe, strong types |
+| Flutter | stable via FVM | Cross-platform; `.fvmrc` tracks `stable`. CI pins an exact version (`FLUTTER_VERSION` in the mobile workflows) - keep it in step with what `fvm` resolves |
+| Dart | bundled with Flutter (SDK constraint `^3.9.2`) | Null-safe, strong types |
 | State | Riverpod 3.x codegen | Compile-safe providers, no Provider/BLoC boilerplate |
 | Navigation | GoRouter 17.x | Deep link support, shell routes, redirect-based auth gate |
 | HTTP | Dio 5.x | Interceptors for auth injection + structured error handling |
@@ -81,7 +83,9 @@ lib/
 ├── app.dart                       # GoRouter definition + AlignApp MaterialApp
 ├── app.g.dart                     # Codegen output
 ├── shell/
-│   └── app_scaffold.dart          # Bottom-nav ShellRoute scaffold
+│   ├── app_scaffold.dart          # Bottom-nav ShellRoute scaffold (Home, Money, Tasks, Work, More)
+│   ├── money_page.dart            # Expenses / Income tabs
+│   └── more_page.dart             # Links to the screens without a tab
 │
 ├── core/                          # No feature logic - shared infrastructure
 │   ├── constants/
@@ -109,10 +113,14 @@ lib/
 │   │       ├── auth_interceptor.dart   # QueuedInterceptorsWrapper: inject token; 401 → logout
 │   │       └── log_interceptor.dart    # Coloured request/response logging (debug only)
 │   │
+│   ├── providers/                 # Shared funding-context provider (income/pot figures for a budget period)
+│   │
 │   ├── services/
 │   │   ├── connectivity_service.dart   # connectivity_plus wrapper
 │   │   ├── storage_service.dart        # flutter_secure_storage wrapper (read/write/delete)
 │   │   └── toast_service.dart          # success(ctx, msg) / error(ctx, msg) via toastification
+│   │
+│   ├── utils/                     # currency_utils.dart, date_utils.dart
 │   │
 │   ├── theme/
 │   │   ├── app_colors.dart        # Colour palette - single source of truth
@@ -130,9 +138,14 @@ lib/
 │       ├── app_progress_bar.dart  # Thin progress bar (0.0-1.0)
 │       ├── app_section.dart       # Section header wrapper
 │       ├── app_skeleton.dart      # Loading placeholder shimmer
+│       ├── app_summary_strip.dart # Row of labelled figures (Expenses/Income tab summaries)
 │       ├── app_text_field.dart    # Styled text input
 │       ├── async_value_widget.dart # AsyncValue<T> → data/loading/error widget
+│       ├── book_transaction_field.dart # "Book a real entry" toggle (loans/investments)
+│       ├── budget_period_field.dart    # "File under this date's budget" checkbox
 │       ├── error_view.dart
+│       ├── form_section.dart      # Form grouping + collapsible MoreOptions
+│       ├── funding_source_field.dart   # Fund-from picker (income or a savings pot)
 │       └── loading_overlay.dart
 │
 └── features/                      # One folder per vertical slice
@@ -143,7 +156,9 @@ lib/
     ├── expenses/
     ├── home_widget/               # Flutter side of Android widget (WidgetService)
     ├── income/
+    ├── investments/               # SIPs, contributions, allocation plan
     ├── loans/                     # Includes loan repayment schedules
+    ├── plans/                     # Life-event plans + item checklists
     ├── projects/                  # Freelance/client project + task board
     ├── savings/
     ├── server_setup/               # First-launch "connect to your server" screen
@@ -157,9 +172,11 @@ android/
 │   └── src/main/
 │       ├── AndroidManifest.xml    # INTERNET, ACCESS_NETWORK_STATE, deep link filter, widget receiver
 │       ├── kotlin/.../
+│       │   ├── MainActivity.kt
 │       │   └── QuickExpenseWidgetProvider.kt   # AppWidgetProvider Kotlin impl
 │       └── res/
-│           ├── layout/quick_expense_widget.xml
+│           ├── layout/quick_expense_widget.xml       # row layout (wide)
+│           ├── layout/quick_expense_widget_grid.xml  # 2×2 grid (narrow)
 │           ├── drawable/widget_background.xml
 │           ├── drawable/widget_chip_bg.xml
 │           ├── xml/quick_expense_widget_info.xml
@@ -171,7 +188,8 @@ assets/
 ├── fonts/Outfit-Variable.ttf
 └── images/logo.svg, logo.png
 
-.github/workflows/mobile-release.yml  # CI: version bump + build + sign + publish APK
+.github/workflows/mobile-ci.yml       # PR/push checks: pub get, codegen, analyze, test
+.github/workflows/mobile-release.yml  # version bump + build + sign + publish APK
 ```
 
 ---
@@ -339,10 +357,12 @@ Routes defined in `lib/app.dart`:
 | `/money` | MoneyPage | Bottom-nav tab; tabbed Expenses/Income (`ExpensesListPage`/`IncomeListPage`) |
 | `/tasks` | TasksPage | Bottom-nav tab |
 | `/projects`, `/projects/:id` | ProjectsPage, ProjectDetailPage | Bottom-nav tab |
-| `/more` | MorePage | Bottom-nav tab; links to Budget, Loans, Savings, Settings |
+| `/more` | MorePage | Bottom-nav tab; links to Budget, Loans, Savings, Investments, Plans, Settings |
 | `/budget` | BudgetPage | Pushed from More |
 | `/savings` | SavingsPage | Pushed from More |
 | `/loans` | LoansPage | Pushed from More |
+| `/investments` | InvestmentsPage | Pushed from More |
+| `/plans`, `/plans/:id` | PlansPage, PlanDetailPage | Pushed from More |
 | `/settings` | SettingsPage | Pushed from More |
 | `/quick-add` | QuickAddExpensePage | Top-level modal (outside ShellRoute, no bottom nav) |
 | `/quick-add-income` | QuickAddIncomePage | Top-level modal |
@@ -389,13 +409,15 @@ Single source of truth in `lib/core/theme/`.
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `background` | `#0A0A0A` | Page backgrounds |
-| `card` | `#141414` | Cards, inputs |
-| `border` | `#262626` | Borders, dividers |
-| `foreground` | `#FAFAFA` | Primary text |
-| `mutedForeground` | `#737373` | Secondary text, placeholders |
-| `primary` | `#F59E0B` | Amber - CTAs, highlights, active states |
-| `destructive` | `#EF4444` | Errors, delete actions |
+| `background` | `#040201` | Page backgrounds |
+| `card` | `#100B07` | Cards, inputs |
+| `border` | `#2A221D` | Borders, dividers |
+| `foreground` | `#F0EAE5` | Primary text |
+| `mutedForeground` | `#8C857F` | Secondary text, placeholders |
+| `primary` | `#DFBE92` | Warm sand - CTAs, highlights, active states |
+| `destructive` | `#DF202E` | Errors, delete actions |
+
+These are the main tokens; `app_colors.dart` has the full set.
 
 ### Typography (`AppTextStyles`)
 
@@ -441,7 +463,7 @@ The web app stores **Lucide icon names** as strings in the database (e.g. `"Uten
 // For in-app UI - maps to Material IconData
 category.icon.lucideIcon  // → Icons.restaurant
 
-// For Android widget RemoteViews - maps to emoji string
+// Emoji fallback, e.g. for icon boxes that take an emoji
 category.icon.toEmoji     // → "🍽"
 ```
 
@@ -472,28 +494,24 @@ Extensions are preferred over utility classes or standalone functions. They live
 | `CurrencyString` | `String` | `parsePaisas` |
 | `LucideIconEmoji` | `String` | `toEmoji` |
 | `LucideIconName` | `String` | `lucideIcon` |
-| `DateTimeExt` | `DateTime` | `toRelativeDay`, `isSameDay` |
+| `AppDateTime` | `DateTime` | `toRelativeDay`, `isSameDay` |
+| `AsyncValueX` | `AsyncValue<T>` | helpers used by `AsyncValueWidget` |
 
 ---
 
 ## Home Screen Widget
 
-Android 3×2 app widget - quick access without opening the app.
+Android app widget with four fixed shortcuts - Expense, Tasks, Loan, Projects - so you can jump in without opening the app first. Row layout when the widget is at least ~180dp wide, 2×2 grid when narrower (Android 12+ responsive `RemoteViews`).
 
 ### Flutter side (`lib/features/home_widget/widget_service.dart`)
 
-`WidgetService.update()` is called after every expense creation:
-1. Saves `today_spend` (formatted string) to `HomeWidgetPlugin` SharedPreferences
-2. Saves `cat_1_icon`, `cat_1_name` ... `cat_3_*` using the **emoji** value (not Lucide name)
-3. Calls `HomeWidget.updateWidget()` to trigger Android redraw
+`WidgetService.update()` is called after an expense is created. It saves `today_spend` to the `home_widget` shared preferences and calls `HomeWidget.updateWidget()`. The current layouts don't display `today_spend` (and it is always passed 0), so this is effectively just a redraw trigger.
 
 ### Kotlin side (`QuickExpenseWidgetProvider.kt`)
 
 - `onUpdate()` wraps `updateWidget()` in try/catch - prevents "can't load widget" error banner on crash
-- Reads SharedPreferences via `HomeWidgetPlugin.getData(context)`
-- Sets text on RemoteViews text views
-- Sets `PendingIntent` on each category card → deep link `align://quick-add?category=<name>`
-- Request codes use `.and(0x7FFFFFFF)` to ensure non-negative
+- Picks the grid or row layout by size
+- Sets a `PendingIntent` on each button → deep links `align://quick-add`, `align://tasks`, `align://loans`, `align://projects`
 
 ### Widget XML (`quick_expense_widget.xml`)
 
@@ -514,14 +532,16 @@ Custom URI scheme: `align://`
 
 | URI | Effect |
 |-----|--------|
-| `align://quick-add?category=<name>` | Opens Quick Add with category pre-selected |
+| `align://quick-add` | Opens Quick Add Expense |
+| `align://tasks` | Opens Tasks |
+| `align://loans` | Opens Loans |
+| `align://projects` | Opens Work (projects) |
 
 Registered in `AndroidManifest.xml` intent-filter with `android:scheme="align"` and `android:category.BROWSABLE`.
 
 GoRouter redirect strips the scheme and maps host → path:
 ```dart
-// align://quick-add?category=Food → /quick-add?category=Food
-// URI parser: scheme=align, host=quick-add, query=category=Food
+// align://quick-add → /quick-add  (host becomes the path, query is kept)
 if (state.uri.scheme == 'align') {
   final host = state.uri.host;
   final query = state.uri.hasQuery ? '?${state.uri.query}' : '';
@@ -529,30 +549,17 @@ if (state.uri.scheme == 'align') {
 }
 ```
 
-`QuickAddExpensePage` reads `state.uri.queryParameters['category']` to pre-select the category.
+On a cold start the link is parked in `pendingLink` and delivered once auth resolves (see Known Gotchas).
 
 ---
 
 ## Running Locally
 
-### Prerequisites
+Setup, codegen, and connecting to a local server (emulator, USB, or Wi-Fi) are in
+**[docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md#4-run-the-mobile-app-optional)**.
+Everything below is mobile-only extra detail.
 
-```bash
-brew install fvm
-fvm install stable
-fvm use stable
-```
-
-### Run on device
-
-```bash
-fvm flutter pub get
-fvm dart run build_runner build --delete-conflicting-outputs
-fvm flutter devices
-fvm flutter run -d <device-id>
-```
-
-Want a different display name (white-label this instance)? Add `--dart-define=APP_NAME=YourName` - defaults to "Align" if omitted.
+The app name is fixed as "Align" (`AppConstants.appName` and the `appName` manifest placeholder), and the release workflow checks it.
 
 ### Keystore setup (one-time, local release builds)
 
@@ -612,14 +619,16 @@ which builds whatever version `pubspec.yaml` currently declares.
 
 ## CI Pipeline
 
-File: `.github/workflows/mobile-release.yml` - triggers on pushes to `main` that touch `apps/mobile/**`, plus manual runs. It computes the next SemVer from Conventional Commits, tags it, then builds.
+`.github/workflows/mobile-ci.yml` runs on every PR/push touching `apps/mobile/**`: pub get, codegen, `flutter analyze`, `flutter test`.
+
+`.github/workflows/mobile-release.yml` triggers on pushes to `main` that touch `apps/mobile/**`, plus manual runs. It computes the next SemVer from Conventional Commits, tags it, then builds.
 
 ```
 Checkout
   ↓
 Java 17 (Temurin) + Gradle cache
   ↓
-Flutter 3.47.1 (pinned, cached - stable cache key)
+Flutter (pinned via FLUTTER_VERSION, cached)
   ↓
 Pub package cache restore (key: pubspec.lock hash)
   ↓
@@ -638,6 +647,10 @@ flutter build apk --release
   --target-platform android-arm64   ← arm64 only; saves ~40% AOT time
   --obfuscate
   --split-debug-info=build/debug-symbols
+  --build-name=<computed version>
+  --build-number=<workflow run number>   ← Android versionCode
+  ↓
+Verify branding (launcher label is still "Align")
   ↓
 Create GitHub Release + upload APK
 ```
@@ -680,6 +693,6 @@ Build time: ~5-8 min warm caches, ~12 min cold.
 | Extensions over utils | Logic on a type → extension on that type. Never static utility classes. |
 | Custom widgets always | Never use raw Flutter widgets (`Card`, `ElevatedButton`, etc.) in feature code. |
 | Keystore backup | `android/app/keystore.jks` must be backed up to Filen cloud. Losing it = can't update the app. |
-| Widget today_spend | Hardcoded to 0 on expense add. A background task would be needed for accurate real-time spend. |
+| Widget today_spend | Saved on expense add but always 0 and not shown by the current layouts. |
 | Optimistic UI flash | Don't remove optimistic state immediately on API success - the provider hasn't reloaded yet, causing a 1-frame revert. Keep optimistic entry until provider data lands with matching status; clean up via `addPostFrameCallback` in the `data()` callback. |
-| `pubspec.yaml` version | Must be bumped manually to match git tag before releasing, OR CI passes `--build-name` extracted from tag. Currently CI does both. |
+| `pubspec.yaml` version | Automatic releases take `--build-name` from the computed tag and ignore `pubspec.yaml`. A manual `workflow_dispatch` run builds (and tags, if new) the version in `pubspec.yaml`. |

@@ -38,10 +38,15 @@ export async function GET(req: NextRequest) {
     const year = parsed.data.year ?? period.year;
 
     const ctx = await getFundingContextForMonth(auth.id, month, year);
+    const income = await prisma.transaction.aggregate({
+      where: { userId: auth.id, type: "INCOME", budgetMonth: month, budgetYear: year },
+      _sum: { amount: true },
+    });
 
     return NextResponse.json({
       data: {
         monthlyIncomeAvailablePaisas: ctx.monthlyIncomeAvailable,
+        monthlyIncomePaisas: income._sum.amount ?? 0,
         pots: ctx.pots.map((p) => ({
           id: p.id,
           name: p.name,

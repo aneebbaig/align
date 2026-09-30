@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
   Plus, LineChart, RefreshCw, Trash2, ChevronDown, ChevronUp, Wallet, MoreHorizontal,
-  Landmark, TrendingUp, Gem, Bitcoin, PiggyBank, Layers,
+  Landmark, TrendingUp, Gem, Bitcoin, PiggyBank, Layers, Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
+import { getExpenseFundingContext } from "@/actions/expenses";
+import { BudgetPeriodOverride, monthYearFromDateStr } from "@/components/shared/budget-period-override";
+import { Checkbox } from "@/components/ui/checkbox";
+import { investmentGain, withdrawnTotal } from "@/lib/investment-math";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import {
   updateInvestment, deleteInvestment,
-  addInvestmentContribution, deleteInvestmentContribution,
+  addInvestmentContribution, deleteInvestmentContribution, withdrawFromInvestment,
   addMoneyToCategory, upsertInvestmentPlan,
   type InvestmentSuggestion,
 } from "@/actions/savings";
@@ -29,9 +33,11 @@ import { InvestmentPlanCard } from "@/components/investments/investment-plan-car
 
 interface Contribution {
   id: string;
+  type: string; // "DEPOSIT" | "WITHDRAWAL"
   amount: number;
   date: Date;
   notes: string | null;
+  transactionId: string | null;
 }
 
 interface Investment {
@@ -204,7 +210,13 @@ function CustomFieldsSummary({ type, raw, baseSymbol }: { type: string; raw: str
 }
 
 const BLANK_ADD_FORM = { name: "", type: "MUTUAL_FUND", percentage: "0" };
-const BLANK_CONTRIBUTION = { amount: "", date: format(new Date(), "yyyy-MM-dd"), notes: "" };
+const BLANK_CONTRIBUTION = {
+  amount: "",
+  date: format(new Date(), "yyyy-MM-dd"),
+  notes: "",
+  book: true,
+  fileUnderDate: false,
+};
 
 // One row in the "Invested Savings" list: either a plan category (funded or
 // not yet) or a legacy Investment with no category link at all.
@@ -217,11 +229,13 @@ export function InvestmentsClient({
   baseSymbol = "Rs",
   plan,
   suggestion,
+  currentPeriod,
 }: {
   investments: Investment[];
   baseSymbol?: string;
   plan: { monthlyTarget: number; autoFromSurplus: boolean; categories: PlanCategory[] } | null;
   suggestion: InvestmentSuggestion;
+  currentPeriod: { month: number; year: number };
 }) {
   const categories = plan?.categories ?? [];
   const categoryIds = new Set(categories.map((c) => c.id));
@@ -237,17 +251,39 @@ export function InvestmentsClient({
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(BLANK_ADD_FORM);
   const [editItem, setEditItem] = useState<Investment | null>(null);
-  const [contributeTarget, setContributeTarget] = useState<{ categoryId?: string; investmentId?: string; name: string } | null>(null);
+  const [contributeTarget, setContributeTarget] = useState<{
+    mode: "DEPOSIT" | "WITHDRAWAL";
+    categoryId?: string;
+    investmentId?: string;
+    name: string;
+    currentValue?: number;
+  } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [editFields, setEditFields] = useState<CustomFields>({});
   const [editForm, setEditForm] = useState({ currentValue: "", units: "", notes: "" });
   const [contributionForm, setContributionForm] = useState(BLANK_CONTRIBUTION);
+  const [availableIncome, setAvailableIncome] = useState<number | null>(null);
+  const targetPeriod = contributionForm.fileUnderDate && contributionForm.date
+    ? monthYearFromDateStr(contributionForm.date)
+    : currentPeriod;
+
+  useEffect(() => {
+    if (contributeTarget?.mode !== "DEPOSIT" || !contributionForm.book) return;
+    let cancelled = false;
+    getExpenseFundingContext(targetPeriod.month, targetPeriod.year)
+      .then((ctx) => { if (!cancelled) setAvailableIncome(ctx.monthlyIncomeAvailable); })
+      .catch(() => { if (!cancelled) setAvailableIncome(null); });
+    return () => { cancelled = true; };
+  }, [contributeTarget?.mode, contributionForm.book, targetPeriod.month, targetPeriod.year]);
 
   const totalInvested = investments.reduce((s, i) => s + i.investedAmount, 0);
   const totalCurrentValue = investments.reduce((s, i) => s + i.currentValue, 0);
-  const totalGain = totalCurrentValue - totalInvested;
+  const totalGain = investments.reduce(
+    (s, i) => s + investmentGain(i, withdrawnTotal(i.contributions)).gain,
+    0,
+  );
 
   async function handleAddInvestment() {
     if (!addForm.name.trim()) return;
@@ -288,24 +324,27 @@ export function InvestmentsClient({
   async function handleContribute() {
     if (!contributeTarget || !contributionForm.amount) return;
     setLoading(true);
-    const result = contributeTarget.investmentId
-      ? await addInvestmentContribution(contributeTarget.investmentId, {
-          amount: parseFloat(contributionForm.amount),
-          date: contributionForm.date,
-          notes: contributionForm.notes || undefined,
-        })
-      : await addMoneyToCategory(contributeTarget.categoryId as string, {
-          amount: parseFloat(contributionForm.amount),
-          date: contributionForm.date,
-          notes: contributionForm.notes || undefined,
-        });
+    const override = contributionForm.fileUnderDate ? monthYearFromDateStr(contributionForm.date) : null;
+    const payload = {
+      amount: parseFloat(contributionForm.amount),
+      date: contributionForm.date,
+      notes: contributionForm.notes || undefined,
+      skipTransaction: !contributionForm.book,
+      ...(override ? { budgetMonth: override.month, budgetYear: override.year } : {}),
+    };
+    const result = contributeTarget.mode === "WITHDRAWAL"
+      ? await withdrawFromInvestment(contributeTarget.investmentId as string, payload)
+      : contributeTarget.investmentId
+        ? await addInvestmentContribution(contributeTarget.investmentId, payload)
+        : await addMoneyToCategory(contributeTarget.categoryId as string, payload);
     if (result.success) {
-      toast.success("Contribution logged!");
+      toast.success(contributeTarget.mode === "WITHDRAWAL" ? "Withdrawal recorded" : "Money added");
       setContributeTarget(null);
       setContributionForm(BLANK_CONTRIBUTION);
     } else toast.error(result.error ?? "Failed");
     setLoading(false);
   }
+
 
   async function handleDeleteContribution(id: string) {
     const result = await deleteInvestmentContribution(id);
@@ -382,8 +421,9 @@ export function InvestmentsClient({
               const name = row.kind === "category" ? row.category.name : row.investment.name;
               const type = row.kind === "category" ? (row.category.investmentType ?? "OTHER") : row.investment.type;
               const rowKey = row.kind === "category" ? row.category.id : row.investment.id;
-              const gain = inv ? inv.currentValue - inv.investedAmount : 0;
-              const gainPct = inv && inv.investedAmount > 0 ? ((gain / inv.investedAmount) * 100).toFixed(1) : "0.0";
+              const withdrawn = inv ? withdrawnTotal(inv.contributions) : 0;
+              const { gain, gainPct: gainPctNum } = inv ? investmentGain(inv, withdrawn) : { gain: 0, gainPct: 0 };
+              const gainPct = gainPctNum.toFixed(1);
               const isExpanded = !!expanded[rowKey];
               const TypeIcon = TYPE_ICON[type] ?? Layers;
               const typeLabel = TYPES.find((t) => t.value === type)?.label ?? type;
@@ -403,7 +443,7 @@ export function InvestmentsClient({
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {inv
-                          ? <>{typeLabel} · {baseSymbol} {(inv.investedAmount / 100).toLocaleString()} in · {inv.contributions.length} contribution{inv.contributions.length !== 1 ? "s" : ""}</>
+                          ? <>{typeLabel} · {baseSymbol} {(inv.investedAmount / 100).toLocaleString()} invested{withdrawn > 0 && <> · {baseSymbol} {(withdrawn / 100).toLocaleString()} withdrawn</>}</>
                           : <>{typeLabel} · No money added yet</>}
                       </div>
                     </div>
@@ -430,8 +470,8 @@ export function InvestmentsClient({
                       onClick={() => {
                         setContributeTarget(
                           row.kind === "category"
-                            ? { categoryId: row.category.id, investmentId: inv?.id, name }
-                            : { investmentId: row.investment.id, name },
+                            ? { mode: "DEPOSIT", categoryId: row.category.id, investmentId: inv?.id, name }
+                            : { mode: "DEPOSIT", investmentId: row.investment.id, name },
                         );
                         setContributionForm(BLANK_CONTRIBUTION);
                       }}
@@ -439,6 +479,19 @@ export function InvestmentsClient({
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add money
                     </Button>
+                    {inv && inv.currentValue > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setContributeTarget({ mode: "WITHDRAWAL", investmentId: inv.id, name, currentValue: inv.currentValue });
+                          setContributionForm(BLANK_CONTRIBUTION);
+                        }}
+                      >
+                        <Minus className="h-3.5 w-3.5 mr-1" />
+                        Withdraw
+                      </Button>
+                    )}
                     {inv && inv.contributions.length > 0 && (
                       <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setExpanded((e) => ({ ...e, [rowKey]: !e[rowKey] }))}>
                         {isExpanded ? <ChevronUp className="h-3.5 w-3.5 mr-1" /> : <ChevronDown className="h-3.5 w-3.5 mr-1" />}
@@ -473,7 +526,14 @@ export function InvestmentsClient({
                         <div key={c.id} className="group/entry relative flex items-center justify-between gap-2 pl-4 py-1.5 text-xs">
                           <span className="absolute -left-[3.5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-muted-foreground/40" />
                           <div className="min-w-0 flex items-baseline gap-2">
-                            <span className="tabnum font-medium text-foreground">{baseSymbol} {(c.amount / 100).toLocaleString()}</span>
+                            <span className={cn("tabnum font-medium", c.type === "WITHDRAWAL" ? "text-red-500" : "text-foreground")}>
+                              {c.type === "WITHDRAWAL" ? "−" : "+"}{baseSymbol} {(c.amount / 100).toLocaleString()}
+                            </span>
+                            {c.transactionId && (
+                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                                {c.type === "WITHDRAWAL" ? "in Income" : "in Expenses"}
+                              </Badge>
+                            )}
                             {c.notes && <span className="text-muted-foreground truncate">{c.notes}</span>}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -481,7 +541,7 @@ export function InvestmentsClient({
                             <button
                               onClick={() => handleDeleteContribution(c.id)}
                               className="text-muted-foreground/50 opacity-0 transition-opacity hover:text-destructive group-hover/entry:opacity-100"
-                              aria-label="Delete contribution"
+                              aria-label="Delete entry"
                             >
                               <Trash2 className="h-3 w-3" />
                             </button>
@@ -534,16 +594,23 @@ export function InvestmentsClient({
         </DialogContent>
       </Dialog>
 
-      {/* Add money dialog — works whether or not the target already has money in it. */}
+      {/* Add money / withdraw dialog - one form, two directions. */}
       <Dialog open={!!contributeTarget} onOpenChange={(o) => { if (!o) { setContributeTarget(null); setContributionForm(BLANK_CONTRIBUTION); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add money — {contributeTarget?.name}</DialogTitle>
+            <DialogTitle>
+              {contributeTarget?.mode === "WITHDRAWAL" ? "Withdraw" : "Add money"} — {contributeTarget?.name}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Amount ({baseSymbol})</Label>
               <Input type="number" placeholder="0" value={contributionForm.amount} onChange={(e) => setContributionForm((f) => ({ ...f, amount: e.target.value }))} />
+              {contributeTarget?.mode === "WITHDRAWAL" && contributeTarget.currentValue != null && (
+                <p className="text-xs text-muted-foreground">
+                  Current value {baseSymbol} {(contributeTarget.currentValue / 100).toLocaleString()} - you can't take out more than that.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Date</Label>
@@ -553,8 +620,37 @@ export function InvestmentsClient({
               <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
               <Textarea rows={2} value={contributionForm.notes} onChange={(e) => setContributionForm((f) => ({ ...f, notes: e.target.value }))} />
             </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="bookInvestmentEntry"
+                checked={contributionForm.book}
+                onCheckedChange={(c) => setContributionForm((f) => ({ ...f, book: !!c }))}
+                className="mt-0.5"
+              />
+              <Label htmlFor="bookInvestmentEntry" className="cursor-pointer text-sm font-normal leading-snug">
+                Also record as {contributeTarget?.mode === "WITHDRAWAL" ? "income" : "an expense"}
+                <span className="block text-xs text-muted-foreground">
+                  Uncheck to only change the investment, with no entry in {contributeTarget?.mode === "WITHDRAWAL" ? "Income" : "Expenses"}
+                </span>
+              </Label>
+            </div>
+            {contributionForm.book && (
+              <>
+                <BudgetPeriodOverride
+                  date={contributionForm.date}
+                  checked={contributionForm.fileUnderDate}
+                  onChange={(v) => setContributionForm((f) => ({ ...f, fileUnderDate: v }))}
+                  affectsFunding={contributeTarget?.mode === "DEPOSIT"}
+                />
+                {contributeTarget?.mode === "DEPOSIT" && availableIncome != null && (
+                  <p className={cn("text-xs", availableIncome >= 0 ? "text-muted-foreground" : "text-red-500")}>
+                    Paid from income · {baseSymbol} {(availableIncome / 100).toLocaleString()} available
+                  </p>
+                )}
+              </>
+            )}
             <Button onClick={handleContribute} disabled={loading || !contributionForm.amount} className="w-full">
-              Add money
+              {contributeTarget?.mode === "WITHDRAWAL" ? "Withdraw" : "Add money"}
             </Button>
           </div>
         </DialogContent>
@@ -566,6 +662,9 @@ export function InvestmentsClient({
           <DialogHeader>
             <DialogTitle>Update value — {editItem?.name}</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Only changes what it's worth today. Doesn't record money in or out - use Add money or Withdraw for that.
+          </p>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

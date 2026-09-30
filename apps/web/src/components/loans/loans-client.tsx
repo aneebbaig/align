@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingUp, TrendingDown, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Trash2, Pencil } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Trash2, Pencil, PlusCircle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { createLoan, recordPayment, updateLoanPayment, deleteLoanPayment, deleteLoan } from "@/actions/loans";
+import { createLoan, recordPayment, updateLoanPayment, deleteLoanPayment, deleteLoan, addToLoan, writeOffLoan } from "@/actions/loans";
+import { isLoanClosed, normalizePersonName, offersWriteOffExpense } from "@/lib/loans/balance";
 import { createLoanSchedule, deleteLoanSchedule } from "@/actions/cashflow";
 import { getExpenseFundingContext } from "@/actions/expenses";
 import { Switch } from "@/components/ui/switch";
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 
 interface LoanPayment {
-  id: string; amount: number; date: Date; notes: string | null;
+  id: string; kind: string; amount: number; date: Date; notes: string | null; transactionId: string | null;
   transaction: { fundingSource: string; fundingPotId: string | null; budgetMonth: number; budgetYear: number } | null;
 }
 interface LoanSchedule {
@@ -39,7 +40,7 @@ interface LoanSchedule {
 interface Loan {
   id: string; personName: string; description: string | null; type: string;
   principalAmount: number; remainingAmount: number; date: Date; dueDate: Date | null;
-  notes: string | null; status: string; payments: LoanPayment[]; schedules: LoanSchedule[];
+  notes: string | null; status: string; transactionId: string | null; payments: LoanPayment[]; schedules: LoanSchedule[];
 }
 interface Summary { totalGiven: number; totalReceived: number; netPosition: number; }
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
@@ -60,6 +61,7 @@ const STATUS_BADGE: Record<string, string> = {
   ACTIVE: "bg-blue-100 text-blue-700",
   PARTIALLY_PAID: "bg-amber-100 text-amber-700",
   PAID: "bg-emerald-100 text-emerald-700",
+  WRITTEN_OFF: "bg-muted text-muted-foreground",
 };
 
 export function LoansClient({
@@ -85,6 +87,25 @@ export function LoansClient({
   const [bookCreateTransaction, setBookCreateTransaction] = useState(true);
   const [payForm, setPayForm] = useState({ amount: "", date: format(new Date(), "yyyy-MM-dd"), notes: "", fundingSource: "INCOME", fundingPotId: "" });
   const [bookPayTransaction, setBookPayTransaction] = useState(true);
+  const [entryDialog, setEntryDialog] = useState<{ loan: Loan; kind: "TOP_UP" | "WRITE_OFF" } | null>(null);
+  const [entryForm, setEntryForm] = useState({ amount: "", date: format(new Date(), "yyyy-MM-dd"), notes: "", book: true, fileUnderDate: false });
+
+  function openEntry(loan: Loan, kind: "TOP_UP" | "WRITE_OFF", prefill?: { amount?: string; date?: string }) {
+    setEntryDialog({ loan, kind });
+    setEntryForm({
+      amount: prefill?.amount ?? (kind === "WRITE_OFF" ? String(loan.remainingAmount / 100) : ""),
+      date: prefill?.date ?? format(new Date(), "yyyy-MM-dd"),
+      notes: "",
+      book: kind === "TOP_UP" ? true : offersWriteOffExpense(loan, loan.payments),
+      fileUnderDate: false,
+    });
+  }
+
+  // Same person + same direction + still open -> offer "Add to that loan instead".
+  const duplicateLoan = form.personName.trim()
+    ? loans.find((l) => !isLoanClosed(l.status) && l.type === form.type
+        && normalizePersonName(l.personName) === normalizePersonName(form.personName))
+    : undefined;
   const [useSplit, setUseSplit] = useState(false);
   const [splitRows, setSplitRows] = useState([{ value: "INCOME", pkrAmount: "" }, { value: "INCOME", pkrAmount: "" }]);
   const baseSymbol = fundingContext.currencies.find((c) => c.isBase)?.symbol ?? "Rs";
@@ -118,8 +139,8 @@ export function LoansClient({
     })),
   ];
 
-  const activeLoans = loans.filter((l) => l.status !== "PAID");
-  const paidLoans = loans.filter((l) => l.status === "PAID");
+  const activeLoans = loans.filter((l) => !isLoanClosed(l.status));
+  const closedLoans = loans.filter((l) => isLoanClosed(l.status));
 
   async function handleCreate() {
     if (!form.personName || !form.principalAmount) return;
@@ -141,6 +162,26 @@ export function LoansClient({
       setForm({ personName: "", description: "", type: "GIVEN", principalAmount: "", date: format(new Date(), "yyyy-MM-dd"), dueDate: "", notes: "" });
       setFileCreateUnderDateBudget(false);
       setBookCreateTransaction(true);
+    } else toast.error(result.error ?? "Failed");
+    setLoading(false);
+  }
+
+  async function handleEntry() {
+    if (!entryDialog || !entryForm.amount) return;
+    setLoading(true);
+    const override = entryForm.fileUnderDate ? monthYearFromDateStr(entryForm.date) : null;
+    const common = {
+      amount: parseFloat(entryForm.amount),
+      date: entryForm.date,
+      notes: entryForm.notes || undefined,
+      ...(override ? { budgetMonth: override.month, budgetYear: override.year } : {}),
+    };
+    const result = entryDialog.kind === "TOP_UP"
+      ? await addToLoan(entryDialog.loan.id, { ...common, skipTransaction: !entryForm.book })
+      : await writeOffLoan(entryDialog.loan.id, { ...common, bookExpense: entryForm.book });
+    if (result.success) {
+      toast.success(entryDialog.kind === "TOP_UP" ? "Added to loan" : entryDialog.loan.type === "GIVEN" ? "Written off" : "Marked as forgiven");
+      setEntryDialog(null);
     } else toast.error(result.error ?? "Failed");
     setLoading(false);
   }
@@ -344,7 +385,7 @@ export function LoansClient({
                   <div className="text-xs text-muted-foreground">Due: {format(new Date(loan.dueDate), "d MMM yyyy")}</div>
                 )}
               </div>
-              {loan.status !== "PAID" && (
+              {!isLoanClosed(loan.status) && (
                 <div className="mt-2">
                   <Progress value={pct} className="h-1.5" />
                   <span className="text-xs text-muted-foreground">{pct}% paid back</span>
@@ -352,7 +393,7 @@ export function LoansClient({
               )}
             </div>
             <div className="flex flex-col gap-1 items-end shrink-0">
-              {loan.status !== "PAID" && (
+              {!isLoanClosed(loan.status) && (
                 <>
                   <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setPayOpen(loan.id)}>
                     Record Payment
@@ -360,8 +401,14 @@ export function LoansClient({
                   <Button size="sm" variant="ghost" className="text-xs h-7 text-emerald-600" onClick={() => handleMarkPaid(loan)}>
                     <CheckCircle className="h-3.5 w-3.5 mr-1" />Mark Paid
                   </Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => openEntry(loan, "WRITE_OFF")}>
+                    <Ban className="h-3.5 w-3.5 mr-1" />{isGiven ? "Write off" : "Mark as forgiven"}
+                  </Button>
                 </>
               )}
+              <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => openEntry(loan, "TOP_UP")}>
+                <PlusCircle className="h-3.5 w-3.5 mr-1" />{isGiven ? "Lend more" : "Borrow more"}
+              </Button>
               <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setExpanded(isExpanded ? null : loan.id)}>
                 {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 History
@@ -380,7 +427,7 @@ export function LoansClient({
         {isExpanded && (
           <div className="border-t border-border bg-muted/30 px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payment History</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">History</span>
             </div>
             {loan.payments.length === 0 ? (
               <p className="text-xs text-muted-foreground">No payments recorded yet</p>
@@ -393,8 +440,11 @@ export function LoansClient({
                       {p.notes && <span className="text-muted-foreground text-xs ml-2">· {p.notes}</span>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-medium text-emerald-600">+{baseSymbol} {(p.amount / 100).toLocaleString()}</span>
-                      {p.transaction && (
+                      <span className={cn("font-medium",
+                        p.kind === "TOP_UP" ? "text-amber-600" : p.kind === "WRITE_OFF" ? "text-muted-foreground" : "text-emerald-600")}>
+                        {p.kind === "TOP_UP" ? "Added +" : p.kind === "WRITE_OFF" ? (isGiven ? "Written off " : "Forgiven ") : "+"}{baseSymbol} {(p.amount / 100).toLocaleString()}
+                      </span>
+                      {p.transaction && p.kind === "PAYMENT" && (
                         <button onClick={() => openEditPayment(loan.id, p)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5" title="Edit payment">
                           <Pencil className="h-3 w-3" />
                         </button>
@@ -412,7 +462,7 @@ export function LoansClient({
               {loan.notes && <span>{loan.notes}</span>}
             </div>
 
-            {loan.status !== "PAID" && (
+            {!isLoanClosed(loan.status) && (
               <div className="mt-3 pt-3 border-t border-border">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -498,7 +548,7 @@ export function LoansClient({
       <Tabs defaultValue="active">
         <TabsList>
           <TabsTrigger value="active">Active ({activeLoans.length})</TabsTrigger>
-          <TabsTrigger value="paid">Paid ({paidLoans.length})</TabsTrigger>
+          <TabsTrigger value="closed">Closed ({closedLoans.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="mt-4 space-y-3">
@@ -509,11 +559,11 @@ export function LoansClient({
           )}
         </TabsContent>
 
-        <TabsContent value="paid" className="mt-4 space-y-3">
-          {paidLoans.length === 0 ? (
-            <EmptyState icon={CheckCircle} title="No paid loans" description="Fully paid loans will appear here." />
+        <TabsContent value="closed" className="mt-4 space-y-3">
+          {closedLoans.length === 0 ? (
+            <EmptyState icon={CheckCircle} title="No closed loans" description="Paid and written-off loans will appear here." />
           ) : (
-            paidLoans.map((loan) => <LoanCard key={loan.id} loan={loan} />)
+            closedLoans.map((loan) => <LoanCard key={loan.id} loan={loan} />)
           )}
         </TabsContent>
       </Tabs>
@@ -540,6 +590,23 @@ export function LoansClient({
                 <Label>Person Name</Label>
                 <Input value={form.personName} onChange={(e) => setForm((p) => ({ ...p, personName: e.target.value }))} placeholder="e.g. Ahmed, Uncle Tariq" />
               </div>
+              {duplicateLoan && (
+                <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs">
+                  You already have an open loan {duplicateLoan.type === "GIVEN" ? "to" : "from"} {duplicateLoan.personName}
+                  {" "}({baseSymbol} {(duplicateLoan.remainingAmount / 100).toLocaleString()} left).
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 ml-1 text-xs"
+                    onClick={() => {
+                      setCreateOpen(false);
+                      openEntry(duplicateLoan, "TOP_UP", { amount: form.principalAmount, date: form.date });
+                    }}
+                  >
+                    Add to that loan instead
+                  </Button>
+                </div>
+              )}
               <div>
                 <Label>Description (optional)</Label>
                 <Input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="What was it for?" />
@@ -724,6 +791,61 @@ export function LoansClient({
         description="This removes the loan and its linked transaction from your ledger, plus all payment history. This cannot be undone."
         onConfirm={handleDelete}
       />
+
+      {/* Add to loan / write off */}
+      <Dialog open={!!entryDialog} onOpenChange={(o) => !o && setEntryDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {entryDialog?.kind === "TOP_UP"
+                ? `${entryDialog.loan.type === "GIVEN" ? "Lend more to" : "Borrow more from"} ${entryDialog.loan.personName}`
+                : `${entryDialog?.loan.type === "GIVEN" ? "Write off" : "Mark as forgiven"} - ${entryDialog?.loan.personName}`}
+            </DialogTitle>
+          </DialogHeader>
+          {entryDialog && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Amount ({baseSymbol})</Label>
+                <Input type="number" value={entryForm.amount} onChange={(e) => setEntryForm((f) => ({ ...f, amount: e.target.value }))} />
+                {entryDialog.kind === "WRITE_OFF" && (
+                  <p className="text-xs text-muted-foreground">
+                    {baseSymbol} {(entryDialog.loan.remainingAmount / 100).toLocaleString()} left - lower it to write off only part.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Date</Label>
+                <Input type="date" value={entryForm.date} onChange={(e) => setEntryForm((f) => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
+                <Textarea rows={2} value={entryForm.notes} onChange={(e) => setEntryForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+              {entryDialog.kind === "TOP_UP" || offersWriteOffExpense(entryDialog.loan, entryDialog.loan.payments) ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <Checkbox id="bookLoanEntry" checked={entryForm.book} onCheckedChange={(c) => setEntryForm((f) => ({ ...f, book: !!c }))} className="mt-0.5" />
+                    <Label htmlFor="bookLoanEntry" className="cursor-pointer text-sm font-normal leading-snug">
+                      Also record as {entryDialog.kind === "WRITE_OFF" || entryDialog.loan.type === "GIVEN" ? "an expense" : "income"}
+                      <span className="block text-xs text-muted-foreground">Uncheck to track this without an entry in Expenses/Income</span>
+                    </Label>
+                  </div>
+                  {entryForm.book && (
+                    <BudgetPeriodOverride date={entryForm.date} checked={entryForm.fileUnderDate} onChange={(v) => setEntryForm((f) => ({ ...f, fileUnderDate: v }))} />
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Already counted when you created this loan. Nothing new is recorded in Expenses or Income.
+                </p>
+              )}
+              <Button className="w-full" onClick={handleEntry} disabled={loading || !entryForm.amount}>
+                {entryDialog.kind === "TOP_UP" ? "Add to loan" : entryDialog.loan.type === "GIVEN" ? "Write off" : "Mark as forgiven"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add repayment schedule dialog */}
       <Dialog open={!!scheduleOpen} onOpenChange={(o) => !o && setScheduleOpen(null)}>

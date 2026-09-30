@@ -36,30 +36,6 @@ class InvestmentsDatasource {
     }
   }
 
-  // Adds money to a plan category directly - lazily creates the category's
-  // linked Investment on first use (name/type inherited from the category),
-  // so there's no separate "new SIP" creation step: add the investment to
-  // the plan first (savePlan), then add money into it any time.
-  Future<void> addMoneyToCategory({
-    required String planCategoryId,
-    required int amountPaisas,
-    required DateTime date,
-    String? notes,
-  }) async {
-    try {
-      await _dio.post(
-        ApiConstants.investmentPlanCategoryContributions(planCategoryId),
-        data: {
-          'amountPaisas': amountPaisas,
-          'date': date.toIso8601String(),
-          if (notes != null && notes.isNotEmpty) 'notes': notes,
-        },
-      );
-    } catch (e) {
-      throw ErrorHandler.handle(e);
-    }
-  }
-
   Future<void> updateValue({
     required String id,
     int? currentValuePaisas,
@@ -85,17 +61,53 @@ class InvestmentsDatasource {
     }
   }
 
+  Future<void> addMoneyToCategory({
+    required String planCategoryId,
+    required int amountPaisas,
+    required DateTime date,
+    String? notes,
+    bool skipTransaction = false,
+    int? budgetMonth,
+    int? budgetYear,
+  }) async {
+    try {
+      await _dio.post(
+        ApiConstants.investmentPlanCategoryContributions(planCategoryId),
+        data: {
+          'amountPaisas': amountPaisas,
+          'date': date.toIso8601String(),
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+          if (skipTransaction) 'skipTransaction': true,
+          if (budgetMonth != null) 'budgetMonth': budgetMonth,
+          if (budgetYear != null) 'budgetYear': budgetYear,
+        },
+      );
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
+  // type: DEPOSIT (add money) or WITHDRAWAL (take money out). The optional
+  // Expenses/Income entry is on unless skipTransaction is true.
   Future<void> logContribution({
     required String investmentId,
     required int amountPaisas,
     required DateTime date,
     String? notes,
+    String type = 'DEPOSIT',
+    bool skipTransaction = false,
+    int? budgetMonth,
+    int? budgetYear,
   }) async {
     try {
       await _dio.post(ApiConstants.investmentContributions(investmentId), data: {
         'amountPaisas': amountPaisas,
         'date': date.toIso8601String(),
+        'type': type,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (skipTransaction) 'skipTransaction': true,
+        if (budgetMonth != null) 'budgetMonth': budgetMonth,
+        if (budgetYear != null) 'budgetYear': budgetYear,
       });
     } catch (e) {
       throw ErrorHandler.handle(e);
@@ -150,6 +162,8 @@ class InvestmentsDatasource {
         purchaseDate: DateTime.parse(m['purchaseDate'] as String),
         notes: m['notes'] as String?,
         planCategoryId: m['planCategoryId'] as String?,
+        withdrawnPaisas: m['withdrawnAmountPaisas'] as int? ?? 0,
+        gainFromServerPaisas: m['gainPaisas'] as int?,
         contributions: (m['contributions'] as List<dynamic>)
             .map((c) => _parseContribution(c as Map<String, dynamic>))
             .toList(),
@@ -160,6 +174,8 @@ class InvestmentsDatasource {
         id: m['id'] as String,
         amountPaisas: m['amountPaisas'] as int,
         date: DateTime.parse(m['date'] as String),
+        type: m['type'] as String? ?? 'DEPOSIT',
+        hasTransaction: m['hasTransaction'] as bool? ?? false,
         notes: m['notes'] as String?,
       );
 

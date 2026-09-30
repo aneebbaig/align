@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
+import '../../../../core/providers/funding_context_provider.dart';
+import '../../../../core/widgets/book_transaction_field.dart';
+import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -42,6 +45,9 @@ Future<void> _sheet(BuildContext context, Widget child) => showModalBottomSheet<
 
 void showLogContributionSheet(BuildContext context, WidgetRef ref, InvestmentEntity inv) =>
     _sheet(context, _AddMoneySheet(name: inv.name, investment: inv));
+
+void showWithdrawSheet(BuildContext context, WidgetRef ref, InvestmentEntity inv) =>
+    _sheet(context, _AddMoneySheet(name: inv.name, investment: inv, isWithdrawal: true));
 
 // Add money to a plan category that has no linked Investment yet - the
 // datasource lazily creates one on the server. This is how "add to plan,
@@ -165,10 +171,11 @@ Widget _dateButton(BuildContext context, DateTime date, VoidCallback onTap) => G
 // the server via addMoneyToCategory).
 
 class _AddMoneySheet extends ConsumerStatefulWidget {
-  const _AddMoneySheet({required this.name, this.investment, this.category});
+  const _AddMoneySheet({required this.name, this.investment, this.category, this.isWithdrawal = false});
   final String name;
   final InvestmentEntity? investment;
   final PlanCategoryEntity? category;
+  final bool isWithdrawal;
   @override
   ConsumerState<_AddMoneySheet> createState() => _AddMoneySheetState();
 }
@@ -178,6 +185,15 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   final _notes = TextEditingController();
   DateTime _date = DateTime.now();
   bool _loading = false;
+  bool _book = true;
+  bool _fileUnderDate = false;
+
+  bool get _valid {
+    final p = _toPaisas(_amount.text);
+    if (p == null) return false;
+    if (widget.isWithdrawal) return p <= widget.investment!.currentValuePaisas;
+    return true;
+  }
 
   @override
   void dispose() {
@@ -193,12 +209,18 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     try {
       HapticFeedback.mediumImpact();
       final ds = ref.read(investmentsDatasourceProvider);
+      final month = _book && _fileUnderDate ? _date.month : null;
+      final year = _book && _fileUnderDate ? _date.year : null;
       if (widget.investment != null) {
         await ds.logContribution(
           investmentId: widget.investment!.id,
           amountPaisas: paisas,
           date: _date,
           notes: _notes.text.trim(),
+          type: widget.isWithdrawal ? 'WITHDRAWAL' : 'DEPOSIT',
+          skipTransaction: !_book,
+          budgetMonth: month,
+          budgetYear: year,
         );
       } else {
         await ds.addMoneyToCategory(
@@ -206,11 +228,14 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
           amountPaisas: paisas,
           date: _date,
           notes: _notes.text.trim(),
+          skipTransaction: !_book,
+          budgetMonth: month,
+          budgetYear: year,
         );
       }
       ref.invalidate(investmentsProvider);
       if (mounted) {
-        ref.read(toastServiceProvider).success(context, 'Money added');
+        ref.read(toastServiceProvider).success(context, widget.isWithdrawal ? 'Withdrawal recorded' : 'Money added');
         Navigator.pop(context);
       }
     } catch (e) {
@@ -230,16 +255,21 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SheetHeader(
-            title: 'Add money — ${widget.name}',
+            title: '${widget.isWithdrawal ? 'Withdraw' : 'Add money'} — ${widget.name}',
             onSubmit: _submit,
-            canSubmit: _toPaisas(_amount.text) != null,
+            canSubmit: _valid,
             loading: _loading,
-            submitLabel: 'Add',
+            submitLabel: widget.isWithdrawal ? 'Withdraw' : 'Add',
           ),
           const SizedBox(height: 16),
           _Field(controller: _amount, hint: '0', prefix: 'Rs ', autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: () => setState(() {})),
+          if (widget.isWithdrawal) ...[
+            const SizedBox(height: 6),
+            Text('Current value ${widget.investment!.currentValuePaisas.formatPKR()} - you can\'t take out more',
+                style: AppTextStyles.bodySmall),
+          ],
           const SizedBox(height: 12),
           _dateButton(context, _date, () async {
             final p = await _pickDate(context, _date);
@@ -247,8 +277,49 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
           }),
           const SizedBox(height: 12),
           _Field(controller: _notes, hint: 'Notes (optional)'),
+          const SizedBox(height: 8),
+          BookTransactionField(
+            label: widget.isWithdrawal ? 'income' : 'an expense',
+            checked: _book,
+            onChanged: (v) => setState(() => _book = v),
+          ),
+          if (_book) ...[
+            BudgetPeriodField(
+              date: _date,
+              checked: _fileUnderDate,
+              onChanged: (v) => setState(() => _fileUnderDate = v),
+            ),
+            if (!widget.isWithdrawal) _AvailableIncome(
+              month: _fileUnderDate ? _date.month : null,
+              year: _fileUnderDate ? _date.year : null,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+// "Paid from income · Rs X available" for whichever period the entry targets.
+class _AvailableIncome extends ConsumerWidget {
+  const _AvailableIncome({this.month, this.year});
+  final int? month;
+  final int? year;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ctx = ref.watch(fundingContextProvider(month, year));
+    return ctx.maybeWhen(
+      data: (c) => Padding(
+        padding: const EdgeInsets.only(left: 12, top: 4),
+        child: Text(
+          'Paid from income · ${c.monthlyIncomeAvailablePaisas.formatPKR()} available',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: c.monthlyIncomeAvailablePaisas >= 0 ? AppColors.mutedForeground : AppColors.destructive,
+          ),
+        ),
+      ),
+      orElse: () => const SizedBox.shrink(),
     );
   }
 }
@@ -307,7 +378,10 @@ class _UpdateValueSheetState extends ConsumerState<_UpdateValueSheet> {
             loading: _loading,
           ),
           const SizedBox(height: 8),
-          const Text('What it is worth now (mark-to-market)', style: AppTextStyles.bodySmall),
+          const Text(
+            "Only changes what it's worth today. Doesn't record money in or out - use Add money or Withdraw for that.",
+            style: AppTextStyles.bodySmall,
+          ),
           const SizedBox(height: 12),
           _Field(controller: _value, hint: '0', prefix: 'Rs ', autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -597,8 +671,13 @@ class _HistorySheet extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(c.amountPaisas.formatPKR(),
-                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            '${c.isWithdrawal ? '−' : '+'}${c.amountPaisas.formatPKR()}${c.hasTransaction ? (c.isWithdrawal ? ' · in Income' : ' · in Expenses') : ''}',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: c.isWithdrawal ? AppColors.destructive : AppColors.foreground,
+                            ),
+                          ),
                           Text(shortDate(c.date) + (c.notes != null && c.notes!.isNotEmpty ? ' · ${c.notes}' : ''),
                               style: AppTextStyles.bodySmall),
                         ],

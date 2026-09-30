@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/extensions/async_value_ext.dart';
 import '../../../../core/extensions/currency_ext.dart';
+import '../../../../core/providers/funding_context_provider.dart';
+import '../../../../core/widgets/app_summary_strip.dart';
 import '../../../../core/extensions/datetime_ext.dart';
 import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
@@ -69,7 +72,10 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
       body: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.card,
-        onRefresh: () => ref.refresh(incomeListProvider.future),
+        onRefresh: () {
+          ref.invalidate(fundingContextProvider);
+          return ref.refresh(incomeListProvider.future);
+        },
         child: CustomScrollView(
           controller: _scrollCtrl,
           slivers: [
@@ -84,7 +90,13 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: RecurringIncomeSection(),
+                child: Column(
+                  children: [
+                    _IncomeSummary(),
+                    SizedBox(height: 12),
+                    RecurringIncomeSection(),
+                  ],
+                ),
               ),
             ),
             async.when(
@@ -203,4 +215,25 @@ class _IncomeRow extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Income this period · Available.
+class _IncomeSummary extends ConsumerWidget {
+  const _IncomeSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final funding = ref.watch(fundingContextProvider(null, null)).valueOrNull;
+    if (funding == null) return const SizedBox.shrink();
+    final available = funding.monthlyIncomeAvailablePaisas;
+    return AppSummaryStrip(items: [
+      AppSummaryItem(label: 'Income this period', value: funding.monthlyIncomePaisas.formatPKR(), tone: AppSummaryTone.positive),
+      AppSummaryItem(
+        label: 'Available',
+        value: available.abs().formatPKR(),
+        tone: available >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative,
+        caption: available < 0 ? 'over-allocated' : null,
+      ),
+    ]);
+  }
 }

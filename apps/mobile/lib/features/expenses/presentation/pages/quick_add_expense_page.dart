@@ -20,6 +20,8 @@ import '../providers/categories_provider.dart';
 import '../providers/expenses_list_provider.dart';
 import '../providers/recent_categories_provider.dart';
 import '../widgets/category_chip_list.dart';
+import '../../../../core/providers/funding_context_provider.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
 
 class QuickAddExpensePage extends ConsumerStatefulWidget {
   const QuickAddExpensePage({super.key});
@@ -124,6 +126,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
 
       if (!mounted) return;
       ref.invalidate(expensesListProvider);
+      ref.invalidate(budgetProvider);
+      ref.invalidate(fundingContextProvider);
       await ref.read(recentCategoriesProvider.notifier).record(_selectedCategoryId!);
       unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
 

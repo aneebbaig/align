@@ -43,6 +43,7 @@ class FundingContextDatasource {
       }).toList();
       return FundingContextEntity(
         monthlyIncomeAvailablePaisas: d['monthlyIncomeAvailablePaisas'] as int,
+        monthlyIncomePaisas: d['monthlyIncomePaisas'] as int? ?? 0,
         pots: pots,
       );
     } catch (e) {

@@ -3,13 +3,20 @@ class ContributionEntity {
     required this.id,
     required this.amountPaisas,
     required this.date,
+    this.type = 'DEPOSIT',
+    this.hasTransaction = false,
     this.notes,
   });
 
   final String id;
   final int amountPaisas;
   final DateTime date;
+  final String type; // DEPOSIT | WITHDRAWAL
+  // True when this entry also booked an Expenses/Income transaction.
+  final bool hasTransaction;
   final String? notes;
+
+  bool get isWithdrawal => type == 'WITHDRAWAL';
 }
 
 class InvestmentEntity {
@@ -25,6 +32,8 @@ class InvestmentEntity {
     this.units,
     this.notes,
     this.planCategoryId,
+    this.withdrawnPaisas = 0,
+    this.gainFromServerPaisas,
   });
 
   final String id;
@@ -38,8 +47,11 @@ class InvestmentEntity {
   final double? units;
   final String? notes;
   final String? planCategoryId;
+  final int withdrawnPaisas;
+  final int? gainFromServerPaisas;
 
-  int get gainPaisas => currentValuePaisas - investedPaisas;
+  // Gain counts money already taken out: current + withdrawn - invested.
+  int get gainPaisas => gainFromServerPaisas ?? (currentValuePaisas + withdrawnPaisas - investedPaisas);
   double get gainPct =>
       investedPaisas > 0 ? (gainPaisas / investedPaisas) * 100 : 0;
 }

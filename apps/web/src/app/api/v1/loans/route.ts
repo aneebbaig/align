@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { getCurrentPeriod } from "@/lib/month";
 import { ensureCategory } from "@/lib/default-categories";
+import { offersWriteOffExpense } from "@/lib/loans/balance";
 
 export async function GET(req: NextRequest) {
   const auth = await requireBearerAuth(req);
@@ -23,8 +24,9 @@ export async function GET(req: NextRequest) {
         dueDate: true,
         status: true,
         notes: true,
+        transactionId: true,
         payments: {
-          select: { id: true, amount: true, date: true, notes: true, transactionId: true },
+          select: { id: true, kind: true, amount: true, date: true, notes: true, transactionId: true },
           orderBy: { date: "desc" },
           take: 5,
         },
@@ -35,9 +37,17 @@ export async function GET(req: NextRequest) {
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
     });
 
+    // Loans with a booked "Add to loan" never offer a write-off expense (the
+    // payments list above is capped at 5, so look these up separately).
+    const bookedTopUps = await prisma.loanPayment.findMany({
+      where: { loan: { userId: auth.id }, kind: "TOP_UP", transactionId: { not: null } },
+      select: { loanId: true, kind: true, transactionId: true },
+    });
+
     return NextResponse.json({
       data: loans.map((l) => ({
         ...l,
+        offersWriteOffExpense: offersWriteOffExpense(l, bookedTopUps.filter((t) => t.loanId === l.id)),
         date: l.date.toISOString(),
         dueDate: l.dueDate?.toISOString() ?? null,
         payments: l.payments.map((p) => ({

@@ -11,7 +11,8 @@ any hosting provider - no deployment integration, no environments, no deploy
 statuses. Anyone running the app deploys their own copy;
 [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md) is the guide.
 
-**Mobile**: v1.2.0 is the latest release (signed APK on GitHub Releases,
+**Mobile**: v1.0.0 is the latest release and the only tag - this repo's release
+history was restarted at 1.0.0 (signed APK on GitHub Releases,
 Obtainium-trackable). The APK no longer has a server URL compiled in: the app
 asks for one on first launch, validates it, and stores it. One published build
 now works for anybody self-hosting.
@@ -38,9 +39,10 @@ Release notes on `mobile-release.yml`:
 
 - The bump comes from Conventional Commits: `feat:` minor, `fix:` patch,
   `BREAKING` major. No `feat`/`fix` since the last tag means no release.
-- It needs a baseline tag to bump from. A fresh fork has none, so the first
-  release has to be minted once via `workflow_dispatch` (which builds whatever
-  version is in `pubspec.yaml`); the auto-bump takes over after that.
+- It needs a baseline tag to bump from. This repo has `v1.0.0`; a fresh fork
+  has none, so its first release has to be minted once via `workflow_dispatch`
+  (which builds whatever version is in `pubspec.yaml`); the auto-bump takes
+  over after that.
 - Signing comes from the `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`,
   and `KEY_ALIAS` secrets. **Losing the keystore means never being able to
   update the app** - back it up outside this repo.
@@ -93,16 +95,41 @@ mobile-only push legitimately does not rebuild.
    `pubspec.lock` silently downgrades the lockfile and produces analyzer errors
    in code you never touched.
 
+## Investments, loans, and expenses summary (latest)
+
+Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`.
+
+- **Investments** - adding money now raises current value too (it used to show
+  every top-up as a loss). New Withdraw action. Both can book an
+  expense/income entry or not. Gain counts withdrawals.
+- **Add to loan** - lend/borrow more on an existing loan instead of a second
+  one; both apps offer it when a new loan's person matches an open loan.
+- **Write off / Mark as forgiven** - part or all of what's left. An expense is
+  offered only for money lent "track only" (loan and every top-up); otherwise
+  it was already counted.
+  `WRITTEN_OFF` loans are closed and drop out of forecasts and reminders.
+- **Available** now shows on the web Expenses page; the Android Expenses and
+  Income tabs got summary strips.
+
 ## Pending / not done
 
 1. **`/api/cron/daily`** (the daily digest email) still is not wired to anything
    that calls it. It will never fire on its own; it needs a native Vercel Cron
    Job or an external pinger. Carried over from the last handoff, still open.
-2. **Existing installs need the server URL once.** Updating to v1.2.0 keeps app
-   data (same signing key), but the URL key was never written by older builds,
-   so the first launch after the update shows the setup screen. Expected, not a
-   bug.
-3. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
+2. **Existing installs need the server URL once.** Updating keeps app data
+   (same signing key), but the URL key was never written by builds from before
+   the runtime-URL change, so the first launch after the update shows the setup
+   screen. Expected, not a bug.
+3. **Phones still on 1.2.0 won't see updates yet.** The published version went
+   back to 1.0.0, and Obtainium only offers a higher version name. The Android
+   versionCode is the workflow run number, which also restarted with this repo,
+   so Android may refuse the install as a downgrade too. Those phones need a
+   reinstall (uninstall loses the stored server URL and login, nothing else)
+   or a version that climbs past 1.2.0.
+4. **Existing investments need one "Update value".** Before the fix, top-ups
+   never raised the current value, so older investments understate what
+   they're worth until updated once.
+5. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
    hand from a `seed:demo` database. Any real UI change makes them wrong, and
    nothing checks that.
 
@@ -115,6 +142,13 @@ mobile-only push legitimately does not rebuild.
 - `pnpm seed` creates categories and logins only; `pnpm seed:demo` creates a full
   fictional household and is what the screenshots come from. The demo seed is
   destructive and refuses non-local databases.
+- Env templates are `apps/web/.env.example` (copy to `.env.local` for `pnpm dev`)
+  and `apps/web/.env.docker.example` (copy to `.env` for Docker). Docker lives
+  entirely in `apps/web` - the mobile app never needs it. `docker compose up -d
+  db` there gives a local Postgres on `localhost:5434`.
+- Auth is better-auth, not NextAuth. `NEXTAUTH_URL` and `TOTP_ENC_KEY` are read
+  nowhere and have been dropped; `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` are the
+  live ones. The `next-auth` package is still in `package.json` but unused.
 - The leak guard is the backstop for keeping personal identifiers and local notes
   out of the repo, but it only sees tracked file contents. Keep commit messages
   and branch names clean by hand.

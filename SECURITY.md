@@ -18,6 +18,6 @@ Align is self-hosted: each deployment owns its database and secrets. Reports abo
 
 ## Hardening notes for self-hosters
 
-- Keep `AUTH_SECRET`, `CRON_SECRET`, and database credentials out of the repo - they belong in your host's environment variables, never in committed files. Only `.env.example` is tracked.
-- Use strong, unique passwords for the seeded users and rotate `AUTH_SECRET` if you suspect exposure.
+- Keep `AUTH_SECRET`, `BETTER_AUTH_SECRET`, `CRON_SECRET`, and database credentials out of the repo - they belong in your host's environment variables, never in committed files. Only the `.env.example` / `.env.docker.example` templates are tracked.
+- Use strong, unique passwords for the seeded users and rotate `AUTH_SECRET` / `BETTER_AUTH_SECRET` if you suspect exposure (this signs everyone out, and it also encrypts stored 2FA secrets, so users with 2FA on will need to set it up again).
 - Restrict who can reach the deployment; this app is designed for one or two trusted users, not public sign-up.

@@ -15,6 +15,7 @@ import '../../../expenses/presentation/providers/categories_provider.dart';
 import '../../../expenses/presentation/widgets/category_chip_list.dart';
 import '../../data/datasources/income_datasource.dart';
 import '../providers/income_list_provider.dart';
+import '../../../../core/providers/funding_context_provider.dart';
 
 class QuickAddIncomePage extends ConsumerStatefulWidget {
   const QuickAddIncomePage({super.key});
@@ -110,6 +111,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
 
       if (!mounted) return;
       ref.invalidate(incomeListProvider);
+      ref.invalidate(fundingContextProvider);
       ref.read(toastServiceProvider).success(context, 'Income added');
       HapticFeedback.lightImpact();
       _close();

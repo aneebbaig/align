@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, dailyDigestEmail } from "@/lib/email";
+import { CLOSED_LOAN_STATUSES } from "@/lib/loans/balance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ priority: "desc" }, { dueDate: "asc" }],
     }),
     prisma.loan.findMany({
-      where: { status: { not: "PAID" }, type: "GIVEN", dueDate: { gte: todayStart, lte: in7Days } },
+      where: { status: { notIn: CLOSED_LOAN_STATUSES }, type: "GIVEN", dueDate: { gte: todayStart, lte: in7Days } },
       orderBy: { dueDate: "asc" },
     }),
     prisma.transaction.findMany({

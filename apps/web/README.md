@@ -1,8 +1,8 @@
 # Align - Personal Finance Manager
 
-A private finance app for two users. Tracks expenses, budgets, goals, savings, investments, loans, tasks, calendar, and a secret gift vault.
+A private finance app for a household of one or two users. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a calendar, and a secret gift vault.
 
-**Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · NextAuth v5 · Tailwind CSS v4
+**Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · better-auth · Tailwind CSS v4
 
 ---
 
@@ -13,20 +13,19 @@ A private finance app for two users. Tracks expenses, budgets, goals, savings, i
 | **Dashboard** | Monthly summary, spending charts, budget progress, goals, today's tasks |
 | **Expenses & Income** | Full transaction management with categories, tags, recurring; every expense must declare a funding source |
 | **Budget** | Zero-based monthly budget with category allocations, savings plan, and email alerts |
-| **Goals** | Savings goals with progress tracking and item checklists |
-| **Savings** | PKR/USD savings pots (Emergency, Liquid, General); deposits require a declared source (income or pot transfer); spending from a pot creates an expense; USD/PKR rate auto-synced daily |
-| **Investments** | Portfolio tracker; a target-allocation plan (name + type + % per category), with money added to any category any time - every contribution books a real expense under the "Investments" category |
-| **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments, flexible/slidable); loan creation and repayment each book a real income/expense entry by default (optional "track only, no entry" toggle on both); marking a received loan paid auto-creates an expense from the chosen funding source |
+| **Savings** | An Emergency Fund plus regular pots, each holding a balance per currency; a pot with a target amount (and optional deadline) is a savings goal; deposits require a declared source (income or pot transfer); spending from a pot creates an expense |
+| **Investments** | Portfolio tracker with a target-allocation plan; add money or withdraw any time, each optionally booked as an expense (from income) or income ("Investment Returns"); gain counts withdrawals; "Update value" only marks to market |
+| **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments); lend/borrow more on the same loan; write off or mark as forgiven (in part or in full); every entry can book an income/expense entry or be tracked only; starting a second loan with the same person offers to add to the first |
 | **Cash-Flow Planner** | Forward month-by-month projection from loan schedules, recurring income (salary/freelance floor), and planned one-off expenses; dashboard summary card with upcoming-due alerts and shortfall warnings |
-| **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority; milestone tasks for personal multi-step goals |
-| **Projects** | Freelance/client project management - projects → sub-tasks with statuses, priorities, and due dates; separate from personal tasks |
-| **Planner** | Life event planning (weddings, trips, renovations) |
+| **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority |
+| **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
+| **Plans** | Life event planning (house moves, trips, renovations) with itemised checklists |
+| **Wedding** | Dedicated wedding planner - events, vendors, and expenses per event |
 | **Calendar** | Events, reminders, and deadlines |
-| **Gym & Fitness** | Workouts (PPL templates, session logging, PRs), nutrition profile, recipes with import, weekly meal planner, body metrics, gym expenses |
-| **Want List** | 48-hour impulse purchase cooling-off list |
-| **Need List** | Priority-grouped list of planned purchases with expense logging |
+| **Lists** | Needs (priority-grouped planned purchases with expense logging) and Wants (48-hour impulse-purchase cooling-off) on one page |
+| **Perfumes** | Perfume collection and buy-next shortlist |
 | **Vault** | 🔒 Secret surprise/gift planner - Super Admin only |
-| **Settings** | Categories, notifications, user management, data export |
+| **Settings** | Profile, security (password, TOTP two-factor), categories, currencies and rates, notifications, data export/reset, user management (Super Admin) |
 
 ---
 
@@ -42,16 +41,27 @@ Align enforces a strict zero-based budgeting model - money cannot enter or leave
 - Every expense must be funded from a real source: **monthly income** or a **savings pot**.
 - Pot-funded expenses atomically deduct from the pot and create a pot ledger entry.
 - Editing or deleting a pot-funded expense reverses the old pot movement before applying the new change.
+- The Expenses page shows This month, Budget, Under/Over, and Available (income left after income-funded expenses and pot deposits).
 
 ### Savings Pots
-- Three pot types: **Emergency Fund**, **Liquid Savings**, **General/Goal pots**.
+- Pot types: the **Emergency Fund** and regular pots. A regular pot with a target amount (and optional deadline) is a **Goal** pot - goals were merged into pots.
+- Leftover money is never swept into a pot; it is always computed live from income − expenses − pot deposits.
 - Depositing into any pot requires declaring a source: **monthly income** or **transfer from another pot**.
 - Deposits from income are validated: available income = this month's income − income-funded expenses − existing income-funded pot deposits. Cannot deposit more than available.
 - Transfers between pots are atomic (deduct + credit in one transaction, both sides logged).
 - To spend from a pot, create an expense and select the pot as the funding source - there is no standalone "withdraw" action.
-- Pots hold both PKR and USD; PKR and USD balances are tracked independently.
+- A pot holds a separate balance for each of the household's currencies.
 - **Income deletion is blocked** if that month's income-funded expenses + income-funded pot deposits exceed the remaining income after deletion. PKR and USD are checked separately. Remove the allocations first, then delete the income.
-- USD/PKR exchange rate is **auto-synced daily** from `open.er-api.com` (free, no API key, ~30 calls/month). Can also be updated manually.
+
+### Investments
+- **Invested** is the total put in; **current value** is what it's worth now. Adding money raises both; withdrawing lowers only the current value.
+- **Gain** = current value + withdrawn − invested, so taking profits out never shows a loss.
+- Adding money can book an expense (paid from monthly income, "Investments" category); withdrawing can book income ("Investment Returns"). Both are optional and follow the budget-period checkbox.
+- **Update value** only marks the investment to market - it records no money in or out.
+
+### Currencies
+- Currencies are household-defined in **Settings → Currencies**. Exactly one is the base (PKR by default); every total, budget, and dashboard figure is in the base currency, and each other currency stores a rate to it. USD is set up by default.
+- The daily cron job (`/api/cron/daily`) refreshes the USD rate from `open.er-api.com` (free, no API key) - only when something schedules it (see [DEPLOYMENT.md](DEPLOYMENT.md#daily-cron-job)). Otherwise rates are updated by hand.
 
 ### Budget
 - Budget page shows **Ready to Assign** = this month's income − budget category allocations − planned savings allocations.
@@ -99,27 +109,7 @@ Use `bg-muted/50 rounded-lg` - never hardcoded colors or gradients.
 
 ## Local Development
 
-You need a free [Neon](https://neon.tech) account. Neon gives you a cloud PostgreSQL database with separate **branches** (like git) - use the `dev` branch locally and `main` for production. No local database installation needed.
-
-```bash
-# 1. Clone and install
-pnpm install
-
-# 2. Copy env template and fill in your Neon dev branch URL
-cp .env.example .env.local
-# Edit .env.local - paste DATABASE_URL from Neon → Connect → Prisma tab (dev branch)
-# Use the DIRECT (non-pooler) URL for migrations - remove "-pooler" from the hostname
-
-# 3. Create tables + seed users
-pnpm exec prisma migrate dev --name init
-pnpm seed
-
-# 4. Run
-pnpm dev
-# → http://localhost:3000
-```
-
-> **Neon pooler vs direct URL**: `prisma migrate dev` requires a direct connection (non-pooler hostname - no `-pooler` in the URL). The pooler URL is fine for the running app (`DATABASE_URL` at runtime). For production migrations, use `DATABASE_URL_UNPOOLED` with `pnpm exec prisma migrate deploy`.
+See **[docs/LOCAL_DEVELOPMENT.md](../../docs/LOCAL_DEVELOPMENT.md)** - local Postgres in Docker (or a Neon branch), env, migrations, seed, demo data, and connecting the Android app.
 
 ---
 
@@ -136,7 +126,8 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** - Vercel + Neon, completely free, ~10 min
 | `DATABASE_URL` | Neon pooled connection URL - dev branch for local, main branch for production |
 | `DATABASE_URL_UNPOOLED` | Neon direct (non-pooler) URL - required for `prisma migrate deploy` on production |
 | `AUTH_SECRET` | Random secret: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
-| `NEXTAUTH_URL` | `http://localhost:3000` locally · `https://your-domain.com` in production |
+| `BETTER_AUTH_SECRET` | Optional - auth signing/encryption secret; falls back to `AUTH_SECRET`. Never change it once users have 2FA on |
+| `BETTER_AUTH_URL` | `http://localhost:3000` locally · `https://your-domain.com` in production |
 | `USER1_EMAIL` | Super Admin email |
 | `USER1_PASSWORD` | Super Admin password |
 | `USER2_EMAIL` | Admin email |

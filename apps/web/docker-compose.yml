@@ -1,7 +1,8 @@
-# Run the full Align web app locally (contributors / self-hosting):
+# Run the full Align web app locally (contributors / self-hosting).
+# From apps/web:
 #
 #   cp .env.docker.example .env
-#   # edit .env — set AUTH_SECRET / BETTER_AUTH_SECRET / TOTP_ENC_KEY
+#   # edit .env — set AUTH_SECRET / BETTER_AUTH_SECRET
 #   docker compose up --build
 #
 # App:      http://localhost:3000
@@ -10,6 +11,10 @@
 # The db service alone (without web) also backs local `next dev` — the app's
 # prisma.ts uses the plain pg driver for any non-Neon host, so this Postgres
 # works directly.
+
+# Fixed project name so the container and volume names don't depend on the
+# directory compose is run from.
+name: align
 
 services:
   db:
@@ -32,7 +37,7 @@ services:
 
   web:
     build:
-      context: ./apps/web
+      context: .
     container_name: align-web
     restart: unless-stopped
     depends_on:
@@ -41,11 +46,11 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-align}:${POSTGRES_PASSWORD:-align}@db:5432/${POSTGRES_DB:-align_dev}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Align}
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      # Required - checked by docker-entrypoint.sh when the web container starts
+      # (not here, so `docker compose up -d db` works without a .env).
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      TOTP_ENC_KEY: ${TOTP_ENC_KEY:?set TOTP_ENC_KEY in .env (openssl rand -base64 32)}
       # First-run seed: categories + an admin user from the USER1_* values.
       SEED_ON_START: ${SEED_ON_START:-true}
       USER1_EMAIL: ${USER1_EMAIL:-admin@example.com}

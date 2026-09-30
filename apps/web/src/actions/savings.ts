@@ -10,7 +10,11 @@ import { creditPot, debitPot } from "@/lib/pot-helpers";
 import { getCurrencies, getPotBalancesInBase } from "@/lib/currency-helpers";
 import { getCashflowProjection } from "@/actions/cashflow";
 import { computeInvestmentSuggestion } from "@/lib/cashflow/investment-suggestion";
-import { bookContributionTransaction, deleteContribution, deleteContributionTransactionsFor } from "@/lib/investment-contributions";
+import {
+  bookContributionTransaction, deleteContribution, deleteContributionTransactionsFor,
+  recordInvestmentMovement, ensureCategoryInvestment, InvestmentMovementError,
+} from "@/lib/investment-contributions";
+import type { ContributionType } from "@/lib/investment-math";
 import { ActionResult } from "@/types";
 
 export interface CurrencyAvailability {
@@ -325,41 +329,70 @@ export async function createInvestment(data: {
   }
 }
 
-// Logs a top-up against an existing SIP, any amount, any time - and keeps
-// Investment.investedAmount (the cached total) in sync in the same transaction.
-export async function addInvestmentContribution(
-  investmentId: string,
-  data: { amount: number; date: string; notes?: string },
+interface MoveInput {
+  amount: number; // rupees
+  date: string;
+  notes?: string;
+  // When true, no Expenses/Income entry is booked - the investment's numbers still change.
+  skipTransaction?: boolean;
+  // Optional budget-period override. When omitted, the user's open period is used.
+  budgetMonth?: number;
+  budgetYear?: number;
+}
+
+function revalidateInvestmentPaths() {
+  revalidatePath("/savings");
+  revalidatePath("/investments");
+  revalidatePath("/expenses");
+  revalidatePath("/income");
+  revalidatePath("/dashboard");
+}
+
+// Shared by add-money, withdraw and add-money-to-category: resolves the period,
+// then applies the movement through recordInvestmentMovement in one transaction.
+async function moveInvestmentMoney(
+  type: ContributionType,
+  target: { investmentId: string } | { planCategoryId: string },
+  data: MoveInput,
 ): Promise<ActionResult> {
   try {
     const user = await getAuthenticatedUser({ currentBudgetMonth: true, currentBudgetYear: true });
-    const userId = user.id;
-    const period = getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null);
-    const amountPaisas = toPaisas(data.amount);
-    const date = new Date(data.date);
+    const period = (data.budgetMonth && data.budgetYear)
+      ? { month: data.budgetMonth, year: data.budgetYear }
+      : getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null);
     await prisma.$transaction(async (tx) => {
-      const investment = await tx.investment.findFirst({ where: { id: investmentId, userId }, select: { id: true, name: true } });
-      if (!investment) throw new Error("Investment not found");
-      const transactionId = await bookContributionTransaction(tx, {
-        userId, investmentName: investment.name, amount: amountPaisas, date, notes: data.notes, period,
-      });
-      await tx.investmentContribution.create({
-        data: { investmentId, amount: amountPaisas, date, notes: data.notes, transactionId },
-      });
-      await tx.investment.update({
-        where: { id: investmentId },
-        data: { investedAmount: { increment: amountPaisas }, lastUpdated: new Date() },
+      const investmentId = "investmentId" in target
+        ? target.investmentId
+        : await ensureCategoryInvestment(tx, user.id, target.planCategoryId);
+      if (!investmentId) throw new InvestmentMovementError("Plan category not found");
+      await recordInvestmentMovement(tx, {
+        userId: user.id,
+        investmentId,
+        type,
+        amount: toPaisas(data.amount),
+        date: new Date(data.date),
+        notes: data.notes,
+        period,
+        book: !data.skipTransaction,
       });
     });
-    revalidatePath("/savings");
-    revalidatePath("/investments");
-    revalidatePath("/expenses");
-    revalidatePath("/dashboard");
+    revalidateInvestmentPaths();
     return { success: true };
   } catch (e) {
-    console.error("[addInvestmentContribution]", e);
-    return { success: false, error: "Failed to log contribution" };
+    if (e instanceof InvestmentMovementError) return { success: false, error: e.message };
+    console.error(`[moveInvestmentMoney:${type}]`, e);
+    return { success: false, error: type === "DEPOSIT" ? "Failed to add money" : "Failed to withdraw" };
   }
+}
+
+// Logs a top-up against an existing investment, any amount, any time.
+export async function addInvestmentContribution(investmentId: string, data: MoveInput): Promise<ActionResult> {
+  return moveInvestmentMoney("DEPOSIT", { investmentId }, data);
+}
+
+// Takes money out of an investment - lowers its current value.
+export async function withdrawFromInvestment(investmentId: string, data: MoveInput): Promise<ActionResult> {
+  return moveInvestmentMoney("WITHDRAWAL", { investmentId }, data);
 }
 
 export async function deleteInvestmentContribution(id: string): Promise<ActionResult> {
@@ -368,15 +401,12 @@ export async function deleteInvestmentContribution(id: string): Promise<ActionRe
     await prisma.$transaction(async (tx) => {
       const contribution = await tx.investmentContribution.findFirst({
         where: { id, investment: { userId } },
-        select: { id: true, investmentId: true, amount: true, transactionId: true },
+        select: { id: true, investmentId: true, type: true, amount: true, transactionId: true },
       });
       if (!contribution) return;
       await deleteContribution(tx, contribution);
     });
-    revalidatePath("/savings");
-    revalidatePath("/investments");
-    revalidatePath("/expenses");
-    revalidatePath("/dashboard");
+    revalidateInvestmentPaths();
     return { success: true };
   } catch (e) {
     console.error("[deleteInvestmentContribution]", e);
@@ -583,73 +613,8 @@ export async function upsertInvestmentPlan(data: {
 // Adds money to a plan category directly - lazily creates the category's
 // linked Investment on first use (name/type inherited from the category) so
 // "add to plan, then add money" needs no separate SIP-creation form.
-export async function addMoneyToCategory(
-  planCategoryId: string,
-  data: { amount: number; date: string; notes?: string },
-): Promise<ActionResult> {
-  try {
-    const user = await getAuthenticatedUser({ currentBudgetMonth: true, currentBudgetYear: true });
-    const userId = user.id;
-    const period = getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null);
-    const amountPaisas = toPaisas(data.amount);
-    const date = new Date(data.date);
-    await prisma.$transaction(async (tx) => {
-      const category = await tx.investmentPlanCategory.findFirst({
-        where: { id: planCategoryId, plan: { userId } },
-        select: { id: true, name: true, investmentType: true },
-      });
-      if (!category) throw new Error("Plan category not found");
-
-      const investment = await tx.investment.findFirst({
-        where: { planCategoryId: category.id, userId },
-        select: { id: true, name: true },
-      });
-
-      if (!investment) {
-        // First money into this category - mirrors createInvestment: current
-        // value defaults to the invested amount, then tracks separately via
-        // "Update value" (mark-to-market) from here on.
-        const created = await tx.investment.create({
-          data: {
-            name: category.name,
-            type: category.investmentType ?? "OTHER",
-            platform: "",
-            investedAmount: amountPaisas,
-            currentValue: amountPaisas,
-            purchaseDate: date,
-            planCategoryId: category.id,
-            userId,
-          },
-          select: { id: true },
-        });
-        const transactionId = await bookContributionTransaction(tx, {
-          userId, investmentName: category.name, amount: amountPaisas, date, notes: data.notes ?? "Initial contribution", period,
-        });
-        await tx.investmentContribution.create({
-          data: { investmentId: created.id, amount: amountPaisas, date, notes: data.notes ?? "Initial contribution", transactionId },
-        });
-        return;
-      }
-
-      const transactionId = await bookContributionTransaction(tx, {
-        userId, investmentName: investment.name, amount: amountPaisas, date, notes: data.notes, period,
-      });
-      await tx.investmentContribution.create({
-        data: { investmentId: investment.id, amount: amountPaisas, date, notes: data.notes, transactionId },
-      });
-      await tx.investment.update({
-        where: { id: investment.id },
-        data: { investedAmount: { increment: amountPaisas }, lastUpdated: new Date() },
-      });
-    });
-    revalidatePath("/investments");
-    revalidatePath("/expenses");
-    revalidatePath("/dashboard");
-    return { success: true };
-  } catch (e) {
-    console.error("[addMoneyToCategory]", e);
-    return { success: false, error: e instanceof Error ? e.message : "Failed to add money" };
-  }
+export async function addMoneyToCategory(planCategoryId: string, data: MoveInput): Promise<ActionResult> {
+  return moveInvestmentMoney("DEPOSIT", { planCategoryId }, data);
 }
 
 export async function deleteInvestmentPlan(): Promise<ActionResult> {
@@ -741,7 +706,7 @@ export async function getInvestmentSuggestion(): Promise<InvestmentSuggestion> {
   // explicit link tells them apart.
   const periodContributions = categoryIds.length > 0
     ? await prisma.investmentContribution.findMany({
-        where: { date: { gte: start, lte: end }, investment: { userId, planCategoryId: { in: categoryIds } } },
+        where: { type: "DEPOSIT", date: { gte: start, lte: end }, investment: { userId, planCategoryId: { in: categoryIds } } },
         select: { amount: true, investment: { select: { planCategoryId: true } } },
       })
     : [];
