@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { getCurrentPeriod, getCalendarMonthRange } from "@/lib/month";
 import { bookContributionTransaction } from "@/lib/investment-contributions";
+import { investmentGain, withdrawnTotal } from "@/lib/investment-math";
 
 // Mobile investments = SIP vehicles (Investment) each with a contribution
 // ledger, plus the target-allocation plan. Amounts are paisas (base currency),
@@ -11,9 +12,11 @@ import { bookContributionTransaction } from "@/lib/investment-contributions";
 
 interface ContributionRow {
   id: string;
+  type: string;
   amount: number;
   date: Date;
   notes: string | null;
+  transactionId: string | null;
 }
 interface InvestmentRow {
   id: string;
@@ -31,6 +34,8 @@ interface InvestmentRow {
 }
 
 function serializeInvestment(i: InvestmentRow) {
+  const withdrawn = withdrawnTotal(i.contributions);
+  const { gain } = investmentGain(i, withdrawn);
   return {
     id: i.id,
     name: i.name,
@@ -38,6 +43,8 @@ function serializeInvestment(i: InvestmentRow) {
     platform: i.platform,
     investedAmountPaisas: i.investedAmount,
     currentValuePaisas: i.currentValue,
+    withdrawnAmountPaisas: withdrawn,
+    gainPaisas: gain,
     units: i.units,
     purchaseDate: i.purchaseDate.toISOString(),
     notes: i.notes,
@@ -45,9 +52,11 @@ function serializeInvestment(i: InvestmentRow) {
     planCategoryId: i.planCategoryId,
     contributions: i.contributions.map((c) => ({
       id: c.id,
+      type: c.type,
       amountPaisas: c.amount,
       date: c.date.toISOString(),
       notes: c.notes,
+      hasTransaction: c.transactionId != null,
     })),
   };
 }
@@ -73,8 +82,10 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const totalInvested = investments.reduce((s, i) => s + i.investedAmount, 0);
-    const totalCurrentValue = investments.reduce((s, i) => s + i.currentValue, 0);
+    const serialized = investments.map(serializeInvestment);
+    const totalInvested = serialized.reduce((s, i) => s + i.investedAmountPaisas, 0);
+    const totalCurrentValue = serialized.reduce((s, i) => s + i.currentValuePaisas, 0);
+    const totalGain = serialized.reduce((s, i) => s + i.gainPaisas, 0);
 
     // Per-category planned (from monthly target × %) vs actual (contributions
     // this calendar month for SIPs linked to that category).
@@ -83,6 +94,7 @@ export async function GET(req: NextRequest) {
     const periodContributions = plan && plan.categories.length > 0
       ? await prisma.investmentContribution.findMany({
           where: {
+            type: "DEPOSIT",
             date: { gte: start, lte: end },
             investment: { userId: auth.id, planCategoryId: { in: plan.categories.map((c) => c.id) } },
           },
@@ -113,10 +125,10 @@ export async function GET(req: NextRequest) {
         summary: {
           totalInvestedPaisas: totalInvested,
           totalCurrentValuePaisas: totalCurrentValue,
-          totalGainPaisas: totalCurrentValue - totalInvested,
+          totalGainPaisas: totalGain,
         },
         plan: planPayload,
-        investments: investments.map(serializeInvestment),
+        investments: serialized,
       },
     });
   } catch {

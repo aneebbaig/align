@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { getCurrentPeriod } from "@/lib/month";
-import { bookContributionTransaction } from "@/lib/investment-contributions";
+import { ensureCategoryInvestment, recordInvestmentMovement, InvestmentMovementError } from "@/lib/investment-contributions";
 
 // Add money to a plan category directly - lazily creates the category's
 // linked Investment on first use (name/type inherited from the category), so
@@ -13,6 +13,9 @@ const createSchema = z.object({
   amountPaisas: z.number().int().positive(),
   date: z.string().min(1),
   notes: z.string().max(1000).optional(),
+  skipTransaction: z.boolean().optional(),
+  budgetMonth: z.number().int().min(1).max(12).optional(),
+  budgetYear: z.number().int().min(2000).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,62 +35,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { currentBudgetMonth: true, currentBudgetYear: true },
     });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-    const period = getCurrentPeriod(user.currentBudgetMonth, user.currentBudgetYear);
-    const date = new Date(d.date);
+    const period = (d.budgetMonth && d.budgetYear)
+      ? { month: d.budgetMonth, year: d.budgetYear }
+      : getCurrentPeriod(user.currentBudgetMonth, user.currentBudgetYear);
 
     const result = await prisma.$transaction(async (tx) => {
-      const category = await tx.investmentPlanCategory.findFirst({
-        where: { id, plan: { userId: auth.id } },
-        select: { id: true, name: true, investmentType: true },
+      const investmentId = await ensureCategoryInvestment(tx, auth.id, id);
+      if (!investmentId) return null;
+      const contributionId = await recordInvestmentMovement(tx, {
+        userId: auth.id,
+        investmentId,
+        type: "DEPOSIT",
+        amount: d.amountPaisas,
+        date: new Date(d.date),
+        notes: d.notes,
+        period,
+        book: !d.skipTransaction,
       });
-      if (!category) return null;
-
-      const investment = await tx.investment.findFirst({
-        where: { planCategoryId: category.id, userId: auth.id },
-        select: { id: true, name: true },
-      });
-
-      if (!investment) {
-        const created = await tx.investment.create({
-          data: {
-            name: category.name,
-            type: category.investmentType ?? "OTHER",
-            platform: "",
-            investedAmount: d.amountPaisas,
-            currentValue: d.amountPaisas,
-            purchaseDate: date,
-            planCategoryId: category.id,
-            userId: auth.id,
-          },
-          select: { id: true },
-        });
-        const transactionId = await bookContributionTransaction(tx, {
-          userId: auth.id, investmentName: category.name, amount: d.amountPaisas, date, notes: d.notes ?? "Initial contribution", period,
-        });
-        const c = await tx.investmentContribution.create({
-          data: { investmentId: created.id, amount: d.amountPaisas, date, notes: d.notes ?? "Initial contribution", transactionId },
-          select: { id: true },
-        });
-        return { investmentId: created.id, contributionId: c.id };
-      }
-
-      const transactionId = await bookContributionTransaction(tx, {
-        userId: auth.id, investmentName: investment.name, amount: d.amountPaisas, date, notes: d.notes, period,
-      });
-      const c = await tx.investmentContribution.create({
-        data: { investmentId: investment.id, amount: d.amountPaisas, date, notes: d.notes ?? null, transactionId },
-        select: { id: true },
-      });
-      await tx.investment.update({
-        where: { id: investment.id },
-        data: { investedAmount: { increment: d.amountPaisas }, lastUpdated: new Date() },
-      });
-      return { investmentId: investment.id, contributionId: c.id };
+      return { investmentId, contributionId };
     });
 
     if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ data: result }, { status: 201 });
-  } catch {
+  } catch (e) {
+    if (e instanceof InvestmentMovementError) return NextResponse.json({ error: e.message }, { status: 422 });
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
