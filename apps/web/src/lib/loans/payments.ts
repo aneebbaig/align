@@ -31,6 +31,23 @@ export async function reverseTransactionFunding(
   }
 }
 
+/** Deletes every Expenses/Income entry booked by these loans' history rows
+ * (repayments, top-ups, write-offs), undoing any pot funding first. Loan ->
+ * LoanPayment cascades on delete, but their linked Transactions only SetNull,
+ * so without this they'd stay in the budget after the loan is gone. */
+export async function deleteLoanHistoryTransactions(tx: Prisma.TransactionClient, loanIds: string[]) {
+  if (loanIds.length === 0) return;
+  const rows = await tx.loanPayment.findMany({
+    where: { loanId: { in: loanIds }, transactionId: { not: null } },
+    select: { transaction: true },
+  });
+  for (const { transaction } of rows) {
+    if (!transaction) continue;
+    await reverseTransactionFunding(tx, transaction, { budgetMonth: transaction.budgetMonth, budgetYear: transaction.budgetYear });
+    await tx.transaction.delete({ where: { id: transaction.id } });
+  }
+}
+
 export interface UpdateLoanPaymentInput {
   amountPaisas: number;
   date: string;

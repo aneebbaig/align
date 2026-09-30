@@ -8,7 +8,7 @@ import { toPaisas, toLocalDate } from "@/lib/utils";
 import { debitPot } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
 import { getCurrentPeriod } from "@/lib/month";
-import { updateLoanPaymentCore, deleteLoanPaymentCore } from "@/lib/loans/payments";
+import { updateLoanPaymentCore, deleteLoanPaymentCore, deleteLoanHistoryTransactions } from "@/lib/loans/payments";
 import { ensureCategory } from "@/lib/default-categories";
 import { addToLoanCore, writeOffLoanCore } from "@/lib/loans/entries";
 import { CLOSED_LOAN_STATUSES, isLoanClosed, loanStatusFor } from "@/lib/loans/balance";
@@ -351,15 +351,19 @@ export async function deleteLoan(id: string): Promise<ActionResult> {
     const loan = await prisma.loan.findFirst({ where: { id, userId } });
     if (!loan) return { success: false, error: "Loan not found" };
 
-    if (loan.transactionId) {
-      // Deleting the linked principal transaction cascades to delete this loan
-      // (and its payment history) - no pot balances to reverse anymore.
-      await prisma.transaction.delete({ where: { id: loan.transactionId } });
-    } else {
-      // Created with "skip transaction" - no principal entry to cascade from,
-      // delete the loan row directly (still cascades its LoanPayment rows).
-      await prisma.loan.delete({ where: { id } });
-    }
+    await prisma.$transaction(async (tx) => {
+      // Entries booked by repayments, top-ups and write-offs go too.
+      await deleteLoanHistoryTransactions(tx, [id]);
+      if (loan.transactionId) {
+        // Deleting the linked principal transaction cascades to delete this
+        // loan (and its history rows).
+        await tx.transaction.delete({ where: { id: loan.transactionId } });
+      } else {
+        // Created with "skip transaction" - no principal entry to cascade from,
+        // delete the loan row directly (still cascades its LoanPayment rows).
+        await tx.loan.delete({ where: { id } });
+      }
+    });
 
     revalidatePath("/loans");
     revalidatePath("/expenses");

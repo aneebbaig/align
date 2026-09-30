@@ -1,6 +1,7 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { RESET_GROUP_KEYS, ResetGroupKey } from "@/lib/reset-groups";
 import { deleteContributionTransactionsFor } from "@/lib/investment-contributions";
+import { deleteLoanHistoryTransactions } from "@/lib/loans/payments";
 
 // Deletion order matters for exactly one reason: Transaction.categoryId and
 // BudgetCategory.categoryId hold required (ON DELETE RESTRICT) foreign keys
@@ -71,7 +72,9 @@ export async function wipeAppData(
           case "loans": {
             // Loan.transactionId is optional (null when created via
             // "skip transaction") - only delete the ones that exist.
-            const loans = await tx.loan.findMany({ select: { transactionId: true } });
+            const loans = await tx.loan.findMany({ select: { id: true, transactionId: true } });
+            // Entries booked by repayments, top-ups and write-offs first.
+            await deleteLoanHistoryTransactions(tx, loans.map((l) => l.id));
             const transactionIds = loans.map((l) => l.transactionId).filter((id): id is string => id != null);
             const r = await tx.loan.deleteMany({});
             if (transactionIds.length > 0) {
