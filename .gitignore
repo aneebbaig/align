@@ -12,6 +12,7 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # Per-app build artifacts are ignored by each app's own .gitignore
 
@@ -23,7 +24,6 @@ apps/mobile/.vscode/
 
 # Local-only notes - never committed
 docs/PRIVATE-SETUP.md
-.env*
 
 # Personal financial data / DB snapshots — never commit to this public repo
 backups/

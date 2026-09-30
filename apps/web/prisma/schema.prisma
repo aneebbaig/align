@@ -16,9 +16,9 @@ model User {
   hashedPassword         String
   failedLoginAttempts    Int       @default(0)
   lockedUntil            DateTime?
-  // TOTP two-factor auth. totpSecret is AES-256-GCM encrypted at rest (see
-  // lib/crypto.ts) so a DB dump does not hand over usable seeds. Backup codes
-  // are bcrypt-hashed, single-use (removed from the array on consumption).
+  // Legacy, unused: the original hand-rolled TOTP 2FA. 2FA now runs on the
+  // better-auth twoFactor plugin (the TwoFactor model below), which encrypts
+  // with BETTER_AUTH_SECRET. Kept only so existing databases need no migration.
   totpEnabled            Boolean   @default(false)
   totpSecret             String?
   totpBackupCodes        String[]  @default([])

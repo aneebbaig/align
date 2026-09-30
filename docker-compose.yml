@@ -1,7 +1,7 @@
 # Run the full Align web app locally (contributors / self-hosting):
 #
 #   cp .env.docker.example .env
-#   # edit .env — set AUTH_SECRET / BETTER_AUTH_SECRET / TOTP_ENC_KEY
+#   # edit .env — set AUTH_SECRET / BETTER_AUTH_SECRET
 #   docker compose up --build
 #
 # App:      http://localhost:3000
@@ -45,7 +45,6 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      TOTP_ENC_KEY: ${TOTP_ENC_KEY:?set TOTP_ENC_KEY in .env (openssl rand -base64 32)}
       # First-run seed: categories + an admin user from the USER1_* values.
       SEED_ON_START: ${SEED_ON_START:-true}
       USER1_EMAIL: ${USER1_EMAIL:-admin@example.com}
