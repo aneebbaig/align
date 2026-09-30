@@ -351,7 +351,7 @@ class _SipCard extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       inv != null
-                          ? '${_typeLabels[_type] ?? _type} · ${inv.investedPaisas.formatPKR()} in · ${inv.contributions.length}×'
+                          ? '${_typeLabels[_type] ?? _type} · ${inv.investedPaisas.formatPKR()} invested${inv.withdrawnPaisas > 0 ? ' · ${inv.withdrawnPaisas.formatPKR()} out' : ''}'
                           : '${_typeLabels[_type] ?? _type} · No money added yet',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -438,6 +438,15 @@ class _SipCard extends ConsumerWidget {
                 _addMoney(context, ref);
               },
             ),
+            if (inv.currentValuePaisas > 0)
+              _SheetAction(
+                icon: Icons.remove,
+                label: 'Withdraw',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showWithdrawSheet(context, ref, inv);
+                },
+              ),
             _SheetAction(
               icon: Icons.refresh,
               label: 'Update value',
