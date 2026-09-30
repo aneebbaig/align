@@ -594,12 +594,12 @@ model Loan {
   personName      String // Who you gave/received from
   description     String?
   type            String // "GIVEN" (I lent money) | "RECEIVED" (I borrowed money)
-  principalAmount Int // Original amount in paisas
+  principalAmount Int // Original amount + every "Add to loan", in paisas
   remainingAmount Int // Remaining balance in paisas
   date            DateTime // When the loan started
   dueDate         DateTime?
   notes           String?
-  status          String    @default("ACTIVE") // "ACTIVE" | "PARTIALLY_PAID" | "PAID"
+  status          String    @default("ACTIVE") // "ACTIVE" | "PARTIALLY_PAID" | "PAID" | "WRITTEN_OFF"
   // The loan principal is normally recorded as a ledger Transaction (EXPENSE
   // for GIVEN, INCOME for RECEIVED) - no pot involved. Deleting that
   // transaction (from anywhere) cascades to delete this loan and its
@@ -624,6 +624,8 @@ model LoanPayment {
   id            String   @id @default(cuid())
   loanId        String
   amount        Int // Payment amount in paisas
+  // "PAYMENT" (repaid) | "TOP_UP" (lent/borrowed more) | "WRITE_OFF" (forgiven)
+  kind          String   @default("PAYMENT")
   date          DateTime @default(now())
   notes         String?
   createdAt     DateTime @default(now())
