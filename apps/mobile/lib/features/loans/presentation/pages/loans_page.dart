@@ -17,6 +17,7 @@ import '../../data/datasources/loans_datasource.dart';
 import '../../domain/entities/loan_entity.dart';
 import '../providers/loans_provider.dart';
 import 'add_schedule_page.dart';
+import 'loan_entry_page.dart';
 import 'record_payment_page.dart';
 
 class LoansPage extends ConsumerWidget {
@@ -27,6 +28,15 @@ class LoansPage extends ConsumerWidget {
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => RecordPaymentPage(loan: loan, editPayment: editPayment, linkSchedule: linkSchedule),
+      ),
+    );
+  }
+
+  void _showEntry(BuildContext context, LoanEntity loan, LoanEntryMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => LoanEntryPage(loan: loan, mode: mode),
       ),
     );
   }
@@ -124,12 +134,14 @@ class LoansPage extends ConsumerWidget {
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _LoanCard(
                                 loan: l,
-                                onPay: l.status != 'PAID' ? () => _showPayment(context, l) : null,
-                                onAddSchedule: l.status != 'PAID' ? () => _showAddSchedule(context, l) : null,
+                                onPay: !l.isClosed ? () => _showPayment(context, l) : null,
+                                onAddSchedule: !l.isClosed ? () => _showAddSchedule(context, l) : null,
                                 onDeleteSchedule: (s) => _deleteSchedule(context, ref, s),
                                 onEditPayment: (p) => _showPayment(context, l, editPayment: p),
                                 onDeletePayment: (p) => _deletePayment(context, ref, l, p),
-                                onRecordInstallment: l.status != 'PAID' ? (s) => _showPayment(context, l, linkSchedule: s) : null,
+                                onRecordInstallment: !l.isClosed ? (s) => _showPayment(context, l, linkSchedule: s) : null,
+                                onAddMore: () => _showEntry(context, l, LoanEntryMode.topUp),
+                                onWriteOff: !l.isClosed ? () => _showEntry(context, l, LoanEntryMode.writeOff) : null,
                               ),
                             )),
                         const SizedBox(height: 12),
@@ -146,12 +158,14 @@ class LoansPage extends ConsumerWidget {
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _LoanCard(
                                 loan: l,
-                                onPay: l.status != 'PAID' ? () => _showPayment(context, l) : null,
-                                onAddSchedule: l.status != 'PAID' ? () => _showAddSchedule(context, l) : null,
+                                onPay: !l.isClosed ? () => _showPayment(context, l) : null,
+                                onAddSchedule: !l.isClosed ? () => _showAddSchedule(context, l) : null,
                                 onDeleteSchedule: (s) => _deleteSchedule(context, ref, s),
                                 onEditPayment: (p) => _showPayment(context, l, editPayment: p),
                                 onDeletePayment: (p) => _deletePayment(context, ref, l, p),
-                                onRecordInstallment: l.status != 'PAID' ? (s) => _showPayment(context, l, linkSchedule: s) : null,
+                                onRecordInstallment: !l.isClosed ? (s) => _showPayment(context, l, linkSchedule: s) : null,
+                                onAddMore: () => _showEntry(context, l, LoanEntryMode.topUp),
+                                onWriteOff: !l.isClosed ? () => _showEntry(context, l, LoanEntryMode.writeOff) : null,
                               ),
                             )),
                       ],
@@ -217,6 +231,8 @@ class _LoanCard extends StatelessWidget {
     this.onEditPayment,
     this.onDeletePayment,
     this.onRecordInstallment,
+    this.onAddMore,
+    this.onWriteOff,
   });
   final LoanEntity loan;
   final VoidCallback? onPay;
@@ -225,6 +241,8 @@ class _LoanCard extends StatelessWidget {
   final void Function(LoanPaymentEntity)? onEditPayment;
   final void Function(LoanPaymentEntity)? onDeletePayment;
   final void Function(LoanScheduleEntity)? onRecordInstallment;
+  final VoidCallback? onAddMore;
+  final VoidCallback? onWriteOff;
 
   Future<void> _confirmDeletePayment(BuildContext context, LoanPaymentEntity payment) async {
     final confirmed = await showDialog<bool>(
@@ -251,7 +269,15 @@ class _LoanCard extends StatelessWidget {
   AppBadgeVariant get _badgeVariant => switch (loan.status) {
         'ACTIVE' => AppBadgeVariant.warning,
         'PARTIALLY_PAID' => AppBadgeVariant.primary,
+        'WRITTEN_OFF' => AppBadgeVariant.neutral,
         _ => AppBadgeVariant.success,
+      };
+
+  String get _badgeLabel => switch (loan.status) {
+        'ACTIVE' => 'Active',
+        'PARTIALLY_PAID' => 'Partial',
+        'WRITTEN_OFF' => loan.type == 'GIVEN' ? 'Written off' : 'Forgiven',
+        _ => 'Paid',
       };
 
   @override
@@ -276,11 +302,7 @@ class _LoanCard extends StatelessWidget {
                   ),
                 ),
                 AppBadge(
-                  label: loan.status == 'PARTIALLY_PAID'
-                      ? 'Partial'
-                      : loan.status == 'ACTIVE'
-                          ? 'Active'
-                          : 'Paid',
+                  label: _badgeLabel,
                   variant: _badgeVariant,
                 ),
               ],
@@ -339,7 +361,7 @@ class _LoanCard extends StatelessWidget {
               const AppDivider(),
               const SizedBox(height: 10),
               Text(
-                'RECENT PAYMENTS',
+                'HISTORY',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.mutedForeground,
                   letterSpacing: 0.5,
@@ -355,12 +377,20 @@ class _LoanCard extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              p.amountPaisas.formatPKR(),
+                              switch (p.kind) {
+                                'TOP_UP' => '+${p.amountPaisas.formatPKR()} added',
+                                'WRITE_OFF' => '${p.amountPaisas.formatPKR()} ${loan.type == 'GIVEN' ? 'written off' : 'forgiven'}',
+                                _ => p.amountPaisas.formatPKR(),
+                              },
                               style: AppTextStyles.labelMedium.copyWith(
-                                color: const Color(0xFF4CAF50),
+                                color: switch (p.kind) {
+                                  'TOP_UP' => const Color(0xFFE67E22),
+                                  'WRITE_OFF' => AppColors.mutedForeground,
+                                  _ => const Color(0xFF4CAF50),
+                                },
                               ),
                             ),
-                            if (p.hasTransaction && onEditPayment != null) ...[
+                            if (p.kind == 'PAYMENT' && p.hasTransaction && onEditPayment != null) ...[
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () => onEditPayment!(p),
@@ -384,7 +414,7 @@ class _LoanCard extends StatelessWidget {
                     ),
                   )),
             ],
-            if (loan.status != 'PAID') ...[
+            if (!loan.isClosed) ...[
               const SizedBox(height: 12),
               const AppDivider(),
               const SizedBox(height: 10),
@@ -503,6 +533,26 @@ class _LoanCard extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (onAddMore != null)
+                  TextButton.icon(
+                    onPressed: onAddMore,
+                    icon: const Icon(Icons.add_circle_outline, size: 15, color: AppColors.primary),
+                    label: Text(loan.type == 'GIVEN' ? 'Lend more' : 'Borrow more',
+                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary)),
+                  ),
+                const Spacer(),
+                if (onWriteOff != null)
+                  TextButton.icon(
+                    onPressed: onWriteOff,
+                    icon: const Icon(Icons.block, size: 15, color: AppColors.mutedForeground),
+                    label: Text(loan.type == 'GIVEN' ? 'Write off' : 'Mark as forgiven',
+                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground)),
+                  ),
+              ],
+            ),
           ],
         ),
       );

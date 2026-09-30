@@ -4,6 +4,7 @@ class LoanPaymentEntity {
     required this.amountPaisas,
     required this.date,
     required this.hasTransaction,
+    this.kind = 'PAYMENT',
     this.notes,
   });
 
@@ -14,6 +15,7 @@ class LoanPaymentEntity {
   // False for the legacy "mark fully paid" shortcut, which doesn't book a
   // ledger transaction - those payments can be deleted but not edited.
   final bool hasTransaction;
+  final String kind; // PAYMENT | TOP_UP | WRITE_OFF
 }
 
 class LoanScheduleEntity {
@@ -59,6 +61,7 @@ class LoanEntity {
     this.dueDate,
     this.notes,
     this.schedules = const [],
+    this.offersWriteOffExpense = false,
   });
 
   final String id;
@@ -69,10 +72,14 @@ class LoanEntity {
   final int remainingPaisas;
   final DateTime date;
   final DateTime? dueDate;
-  final String status; // ACTIVE | PARTIALLY_PAID | PAID
+  final String status; // ACTIVE | PARTIALLY_PAID | PAID | WRITTEN_OFF
   final String? notes;
   final List<LoanPaymentEntity> recentPayments;
   final List<LoanScheduleEntity> schedules;
+  // True only for a lent loan created track-only - see the web balance rules.
+  final bool offersWriteOffExpense;
+
+  bool get isClosed => status == 'PAID' || status == 'WRITTEN_OFF';
 
   double get paidPct =>
       principalPaisas > 0

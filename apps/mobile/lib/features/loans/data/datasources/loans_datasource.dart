@@ -124,6 +124,52 @@ class LoansDatasource {
     }
   }
 
+  Future<void> addToLoan({
+    required String loanId,
+    required int amountPaisas,
+    required DateTime date,
+    String? notes,
+    int? budgetMonth,
+    int? budgetYear,
+    bool skipTransaction = false,
+  }) async {
+    try {
+      await _dio.post(ApiConstants.loanTopUps(loanId), data: {
+        'amountPaisas': amountPaisas,
+        'date': date.toIso8601String(),
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (budgetMonth != null) 'budgetMonth': budgetMonth,
+        if (budgetYear != null) 'budgetYear': budgetYear,
+        if (skipTransaction) 'skipTransaction': true,
+      });
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
+  Future<void> writeOff({
+    required String loanId,
+    required int amountPaisas,
+    required DateTime date,
+    String? notes,
+    int? budgetMonth,
+    int? budgetYear,
+    bool bookExpense = false,
+  }) async {
+    try {
+      await _dio.post(ApiConstants.loanWriteOff(loanId), data: {
+        'amountPaisas': amountPaisas,
+        'date': date.toIso8601String(),
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (budgetMonth != null) 'budgetMonth': budgetMonth,
+        if (budgetYear != null) 'budgetYear': budgetYear,
+        if (bookExpense) 'bookExpense': true,
+      });
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
   Future<List<LoanEntity>> getLoans() async {
     try {
       final res = await _dio.get(ApiConstants.loans);
@@ -189,6 +235,7 @@ class LoansDatasource {
             : null,
         status: m['status'] as String,
         notes: m['notes'] as String?,
+        offersWriteOffExpense: m['offersWriteOffExpense'] as bool? ?? false,
         recentPayments: (m['payments'] as List<dynamic>)
             .map((p) => _parsePayment(p as Map<String, dynamic>))
             .toList(),
@@ -204,6 +251,7 @@ class LoansDatasource {
         date: DateTime.parse(m['date'] as String),
         notes: m['notes'] as String?,
         hasTransaction: m['transactionId'] != null,
+        kind: m['kind'] as String? ?? 'PAYMENT',
       );
 
   static LoanScheduleEntity _parseSchedule(Map<String, dynamic> m) =>

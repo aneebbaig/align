@@ -11,8 +11,12 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/form_section.dart';
+import '../../../../core/extensions/async_value_ext.dart';
+import '../../../../core/extensions/currency_ext.dart';
 import '../../data/datasources/loans_datasource.dart';
+import '../../domain/entities/loan_entity.dart';
 import '../providers/loans_provider.dart';
+import 'loan_entry_page.dart';
 
 class QuickAddLoanPage extends ConsumerStatefulWidget {
   const QuickAddLoanPage({super.key});
@@ -36,7 +40,10 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _nameFocus.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _nameFocus.requestFocus();
+      ref.read(loansProvider);
+    });
   }
 
   @override
@@ -52,6 +59,17 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
     final v = double.tryParse(_amountCtrl.text.trim());
     if (v == null || v <= 0) return null;
     return (v * 100).round();
+  }
+
+  String _norm(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  LoanEntity? _findOpenLoanForSamePerson() {
+    final loans = ref.read(loansProvider).valueOrNull ?? const <LoanEntity>[];
+    final name = _norm(_nameCtrl.text);
+    for (final l in loans) {
+      if (!l.isClosed && l.type == _type && _norm(l.personName) == name) return l;
+    }
+    return null;
   }
 
   void _close() {
@@ -96,6 +114,34 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
   Future<void> _submit() async {
     final paisas = _amountPaisas;
     if (paisas == null || _nameCtrl.text.trim().isEmpty) return;
+    final existing = _findOpenLoanForSamePerson();
+    if (existing != null) {
+      final addInstead = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Add to the existing loan?', style: AppTextStyles.headlineSmall),
+          content: Text(
+            'You already have an open loan ${existing.type == 'GIVEN' ? 'to' : 'from'} ${existing.personName} '
+            '(${existing.remainingPaisas.formatPKR()} left).',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Create separate loan')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Add to it')),
+          ],
+        ),
+      );
+      if (!mounted || addInstead == null) return;
+      if (addInstead) {
+        await Navigator.of(context).push(MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => LoanEntryPage(loan: existing, mode: LoanEntryMode.topUp, prefillPaisas: paisas, prefillDate: _date),
+        ));
+        if (mounted) _close();
+        return;
+      }
+    }
     HapticFeedback.mediumImpact();
 
     setState(() => _loading = true);

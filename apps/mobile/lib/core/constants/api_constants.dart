@@ -54,6 +54,8 @@ class ApiConstants {
       '/investment-plan/categories/$categoryId/contributions';
 
   static String loanPayments(String loanId) => '/loans/$loanId/payments';
+  static String loanTopUps(String loanId) => '/loans/$loanId/top-ups';
+  static String loanWriteOff(String loanId) => '/loans/$loanId/write-off';
   static String loanPaymentById(String loanId, String paymentId) =>
       '/loans/$loanId/payments/$paymentId';
   static String loanSchedules(String loanId) => '/loans/$loanId/schedules';
