@@ -54,13 +54,6 @@ interface Props {
     fundingSources?: { priority: number; source: string; potId: string | null; currencyId: string | null; pkrAmount: number; pot?: { id: string; name: string; type: string } | null }[];
   } | null;
   budgetByCategoryId?: Record<string, { allocated: number; spent: number }>;
-  // Prefills a NEW (non-edit) transaction from a cash-flow planner row - all fields
-  // stay editable, unlike `transaction` (which locks amount/date/funding on edit).
-  initialValues?: { amount?: number; categoryId?: string; description?: string; date?: string };
-  // Links the created transaction back to the planner row it books - see
-  // createTransaction's linkPlannedExpenseId/linkRecurringIncomeId.
-  linkPlannedExpenseId?: string;
-  linkRecurringIncomeId?: string;
   // Currencies the household has configured - used for the income native-currency picker.
   currencies?: CurrencyLite[];
   fundingContext?: {
@@ -143,8 +136,7 @@ function FundingSelect({
 // ─── main component ────────────────────────────────────────────────────────────
 
 export function TransactionForm({
-  defaultType, categories, transaction, budgetByCategoryId = {}, initialValues,
-  linkPlannedExpenseId, linkRecurringIncomeId,
+  defaultType, categories, transaction, budgetByCategoryId = {},
   currencies = [], fundingContext, currentPeriod, dateFormat = "dd/MM/yyyy", onSuccess,
 }: Props) {
   const baseCurrency = currencies.find((c) => c.isBase) ?? { id: "", code: "PKR", symbol: "Rs", rateToBase: 1, isBase: true };
@@ -152,7 +144,7 @@ export function TransactionForm({
   const [fileUnderDateBudget, setFileUnderDateBudget] = useState(false);
   const [isRecurring, setIsRecurring] = useState(transaction?.isRecurring ?? false);
   const [isRegretPurchase, setIsRegretPurchase] = useState(transaction?.isRegretPurchase ?? false);
-  const [selectedCategory, setSelectedCategory] = useState(transaction?.categoryId ?? initialValues?.categoryId ?? "");
+  const [selectedCategory, setSelectedCategory] = useState(transaction?.categoryId ?? "");
   const [impulseCheck, setImpulseCheck] = useState<{ data: FormValues } | null>(null);
   const [incomeCurrencyId, setIncomeCurrencyId] = useState(baseCurrency.id);
   const [nativeRate, setNativeRate] = useState(baseCurrency.rateToBase);
@@ -182,11 +174,11 @@ export function TransactionForm({
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      amount: transaction ? String(transaction.amount / 100) : initialValues?.amount != null ? String(initialValues.amount / 100) : "",
-      categoryId: transaction?.categoryId ?? initialValues?.categoryId ?? "",
-      description: transaction?.description ?? initialValues?.description ?? "",
+      amount: transaction ? String(transaction.amount / 100) : "",
+      categoryId: transaction?.categoryId ?? "",
+      description: transaction?.description ?? "",
       notes: transaction?.notes ?? "",
-      date: transaction ? format(new Date(transaction.date), "yyyy-MM-dd") : initialValues?.date ?? format(new Date(), "yyyy-MM-dd"),
+      date: transaction ? format(new Date(transaction.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
       isRecurring: transaction?.isRecurring ?? false,
       recurringFrequency: transaction?.recurringFrequency ?? "",
       tags: transaction?.tags ?? "",
@@ -273,8 +265,6 @@ export function TransactionForm({
         ...(isNativeIncome ? { nativeCurrencyId: incomeCurrencyId, nativeAmount: rawAmount } : {}),
         ...singleFunding,
         ...(splitPayload ?? {}),
-        ...(!transaction && linkPlannedExpenseId ? { linkPlannedExpenseId } : {}),
-        ...(!transaction && linkRecurringIncomeId ? { linkRecurringIncomeId } : {}),
       };
 
       if (transaction) {

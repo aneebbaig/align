@@ -108,8 +108,6 @@ export async function updateUserSettings(data: {
   dateFormat: string;
   firstDayOfWeek: number;
   emergencyFundMonths: number;
-  cashflowHorizonMonths: number;
-  cashflowLeadTimeDays: number;
 }): Promise<ActionResult> {
   try {
     const userId = await getUserId();
@@ -169,7 +167,6 @@ export async function getUserSettings() {
     select: {
       name: true, email: true, dateFormat: true,
       firstDayOfWeek: true, currentBudgetMonth: true, currentBudgetYear: true, emergencyFundMonths: true,
-      cashflowHorizonMonths: true, cashflowLeadTimeDays: true,
       notifyBudgetWarning: true, notifyDoomSpending: true, notifyLoanDue: true,
       notifyDailyDigest: true, notifyDigestTasks: true, notifyDigestCalendar: true,
       notifyDigestBudget: true, notifyDigestFinancials: true,

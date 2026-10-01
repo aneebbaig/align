@@ -30,9 +30,6 @@ export async function GET(req: NextRequest) {
           orderBy: { date: "desc" },
           take: 5,
         },
-        schedules: {
-          orderBy: { startDate: "asc" },
-        },
       },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
     });
@@ -53,19 +50,6 @@ export async function GET(req: NextRequest) {
         payments: l.payments.map((p) => ({
           ...p,
           date: p.date.toISOString(),
-        })),
-        schedules: l.schedules.map((s) => ({
-          id: s.id,
-          loanId: s.loanId,
-          kind: s.kind,
-          amountPaisas: s.amount,
-          startDate: s.startDate.toISOString(),
-          endDate: s.endDate?.toISOString() ?? null,
-          flexibility: s.flexibility,
-          priority: s.priority,
-          slideWindowMonths: s.slideWindowMonths,
-          interestRate: s.interestRate,
-          fulfilledPaymentId: s.fulfilledPaymentId,
         })),
       })),
     });

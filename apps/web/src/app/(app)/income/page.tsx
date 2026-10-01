@@ -2,19 +2,17 @@ import { Metadata } from "next";
 import { getCurrentPeriod, prevPeriod } from "@/lib/month";
 import { getTransactions, getMonthlySummary, getExpenseFundingContext } from "@/actions/expenses";
 import { getCategories, getUserSettings } from "@/actions/settings";
-import { getRecurringIncomes } from "@/actions/cashflow";
 import { getCurrencies } from "@/lib/currency-helpers";
 import { IncomeClient } from "@/components/income/income-client";
 
 export const metadata: Metadata = { title: "Income" };
 
 export default async function IncomePage() {
-  const [transactions, categories, settings, currencies, recurringIncomes] = await Promise.all([
+  const [transactions, categories, settings, currencies] = await Promise.all([
     getTransactions({ type: "INCOME" }),
     getCategories(),
     getUserSettings(),
     getCurrencies(),
-    getRecurringIncomes(),
   ]);
   const { month, year } = getCurrentPeriod(settings?.currentBudgetMonth, settings?.currentBudgetYear);
   const last = prevPeriod(month, year);
@@ -35,7 +33,6 @@ export default async function IncomePage() {
         monthlyAvailable={fundingCtx.monthlyIncomeAvailable}
         currentPeriod={{ month, year }}
         lastPeriod={last}
-        recurringIncomes={recurringIncomes}
       />
     </div>
   );
