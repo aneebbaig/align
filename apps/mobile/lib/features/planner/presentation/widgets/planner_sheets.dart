@@ -316,6 +316,8 @@ class _GoalsSheetState extends ConsumerState<_GoalsSheet> {
   final _amount = TextEditingController();
   final _note = TextEditingController();
   PlannerGoalEntity? _editing;
+  // The month the goal is (or will be) in - change it to move a goal.
+  late DateTime _month = widget.row.date;
   bool _loading = false;
 
   @override
@@ -330,6 +332,7 @@ class _GoalsSheetState extends ConsumerState<_GoalsSheet> {
 
   void _edit(PlannerGoalEntity g) => setState(() {
         _editing = g;
+        _month = widget.row.date;
         _name.text = g.name;
         _amount.text = _toInput(g.amountPaisas);
         _note.text = g.note ?? '';
@@ -338,14 +341,21 @@ class _GoalsSheetState extends ConsumerState<_GoalsSheet> {
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _loading = true);
-    final r = widget.row;
+    final m = _month;
     final editing = _editing;
     final ok = await _apply(
       context,
       ref,
       (ds) => editing == null
-          ? ds.addGoal(name: _name.text.trim(), month: r.month, year: r.year, amountPaisas: _toUnits(_amount.text)!, note: _note.text.trim())
-          : ds.updateGoal(id: editing.id, name: _name.text.trim(), amountPaisas: _toUnits(_amount.text)!, note: _note.text.trim()),
+          ? ds.addGoal(name: _name.text.trim(), month: m.month, year: m.year, amountPaisas: _toUnits(_amount.text)!, note: _note.text.trim())
+          : ds.updateGoal(
+              id: editing.id,
+              name: _name.text.trim(),
+              month: m.month,
+              year: m.year,
+              amountPaisas: _toUnits(_amount.text)!,
+              note: _note.text.trim(),
+            ),
       done: editing == null ? 'Goal added' : 'Goal updated',
     );
     if (!mounted) return;
@@ -412,6 +422,21 @@ class _GoalsSheetState extends ConsumerState<_GoalsSheet> {
             ),
             const SizedBox(height: 8),
             _Field(controller: _note, hint: 'Note (optional, e.g. reserved)'),
+            const SizedBox(height: 8),
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, color: AppColors.foreground),
+                  onPressed: () => setState(() => _month = DateTime(_month.year, _month.month - 1)),
+                ),
+                Expanded(child: Center(child: Text('In ${_month.toShortMonthLabel}', style: AppTextStyles.bodyMedium))),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right, color: AppColors.foreground),
+                  onPressed: () => setState(() => _month = DateTime(_month.year, _month.month + 1)),
+                ),
+              ]),
+            ),
           ],
         ),
       );

@@ -149,12 +149,16 @@ class PlannerDatasource {
   Future<void> updateGoal({
     required String id,
     String? name,
+    int? month, // with year: moves the goal to another month
+    int? year,
     int? amountPaisas,
     String? note, // '' clears it
   }) async {
     try {
       await _dio.patch(ApiConstants.plannerGoal(id), data: {
         if (name != null) 'name': name,
+        if (month != null && year != null) 'month': month,
+        if (month != null && year != null) 'year': year,
         if (amountPaisas != null) 'amountPaisas': amountPaisas,
         if (note != null) 'note': note.isEmpty ? null : note,
       });
