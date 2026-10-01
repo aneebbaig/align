@@ -16,6 +16,7 @@ import 'features/expenses/presentation/pages/quick_add_expense_page.dart';
 import 'features/budget/presentation/pages/budget_page.dart';
 import 'features/savings/presentation/pages/savings_page.dart';
 import 'features/investments/presentation/pages/investments_page.dart';
+import 'features/planner/presentation/pages/planner_page.dart';
 import 'features/plans/presentation/pages/plans_page.dart';
 import 'features/plans/presentation/pages/plan_detail_page.dart';
 import 'features/loans/presentation/pages/loans_page.dart';
@@ -130,6 +131,10 @@ GoRouter goRouter(Ref ref) {
           GoRoute(
             path: '/loans',
             builder: (_, __) => const LoansPage(),
+          ),
+          GoRoute(
+            path: '/planner',
+            builder: (_, __) => const PlannerPage(),
           ),
           GoRoute(
             path: '/plans',

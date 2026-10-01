@@ -19,6 +19,13 @@ extension CurrencyInt on int {
     return 'Rs ${_pkrFmt.format(rupees.round())}';
   }
 
+  /// Grouped rupees without a symbol, sign kept, e.g. -800000 → "-8,000".
+  /// For dense tables where "Rs" on every cell would crowd the columns.
+  String formatAmount() {
+    final rupees = (this / 100).round();
+    return rupees < 0 ? '-${_pkrFmt.format(-rupees)}' : _pkrFmt.format(rupees);
+  }
+
   /// Paisas → rupees as double.
   double get toRupees => this / 100.0;
 }

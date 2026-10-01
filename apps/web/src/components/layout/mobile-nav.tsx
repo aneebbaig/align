@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ArrowDownUp, PiggyBank, ListTodo,
   Calendar, Gift, Settings, TrendingUp, CalendarDays, Wallet,
   HandCoins, ShoppingCart, LineChart, MoreHorizontal, X,
-  FlaskConical, ClipboardList, FolderKanban,
+  FlaskConical, ClipboardList, FolderKanban, Table2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,7 @@ const MORE_GROUPS = [
   {
     label: "Planning",
     items: [
+      { href: "/planner", label: "Planner", icon: Table2 },
       { href: "/plans", label: "Plans", icon: CalendarDays },
       { href: "/want-list", label: "Want List", icon: ShoppingCart },
       { href: "/need-list", label: "Need List", icon: ClipboardList },

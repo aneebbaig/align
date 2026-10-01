@@ -5,7 +5,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/async_value_ext.dart';
 import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/providers/funding_context_provider.dart';
-import '../../../../core/widgets/app_summary_strip.dart';
+import '../../../../core/widgets/app_summary_card.dart';
 import '../../../../core/extensions/datetime_ext.dart';
 import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
@@ -93,7 +93,7 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
                 child: Column(
                   children: [
                     _IncomeSummary(),
-                    SizedBox(height: 12),
+                    SizedBox(height: 16),
                     RecurringIncomeSection(),
                   ],
                 ),
@@ -225,15 +225,22 @@ class _IncomeSummary extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final funding = ref.watch(fundingContextProvider(null, null)).valueOrNull;
     if (funding == null) return const SizedBox.shrink();
+    final income = funding.monthlyIncomePaisas;
     final available = funding.monthlyIncomeAvailablePaisas;
-    return AppSummaryStrip(items: [
-      AppSummaryItem(label: 'Income this period', value: funding.monthlyIncomePaisas.formatPKR(), tone: AppSummaryTone.positive),
-      AppSummaryItem(
-        label: 'Available',
-        value: available.abs().formatPKR(),
-        tone: available >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative,
-        caption: available < 0 ? 'over-allocated' : null,
-      ),
-    ]);
+    // Share of this month's income already spent or put into pots.
+    final used = income > 0 ? (income - available) / income : null;
+
+    return AppSummaryCard(
+      label: 'Income this month',
+      value: income.formatPKR(),
+      valueColor: AppColors.success,
+      progress: used,
+      progressColor: available < 0 ? AppColors.destructive : AppColors.primary,
+      progressLabel: used != null ? '${(used * 100).round()}% used' : null,
+      caption: income > 0 ? null : 'No income yet',
+      footerLabel: available < 0 ? 'Over-allocated' : 'Available',
+      footerValue: available.abs().formatPKR(),
+      footerColor: available < 0 ? AppColors.destructive : AppColors.success,
+    );
   }
 }

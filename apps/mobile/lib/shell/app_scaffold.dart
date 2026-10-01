@@ -16,7 +16,7 @@ class AppScaffold extends StatelessWidget {
   ];
 
   // Sub-routes that live under "More" tab (keep More highlighted)
-  static const _morePaths = ['/budget', '/loans', '/savings', '/investments', '/plans', '/settings'];
+  static const _morePaths = ['/budget', '/loans', '/savings', '/investments', '/plans', '/planner', '/settings'];
 
   int _currentIndex(String location) {
     final idx = _tabs.indexWhere((t) => location.startsWith(t.path));

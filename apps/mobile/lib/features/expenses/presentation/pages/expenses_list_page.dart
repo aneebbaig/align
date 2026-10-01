@@ -5,7 +5,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/extensions/async_value_ext.dart';
 import '../../../../core/providers/funding_context_provider.dart';
-import '../../../../core/widgets/app_summary_strip.dart';
+import '../../../../core/widgets/app_summary_card.dart';
 import '../../../budget/presentation/providers/budget_provider.dart';
 import '../../../../core/extensions/datetime_ext.dart';
 import '../../../../core/extensions/lucide_ext.dart';
@@ -95,7 +95,7 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
                 child: Column(
                   children: [
                     _ExpensesSummary(),
-                    SizedBox(height: 12),
+                    SizedBox(height: 16),
                     PlannedExpensesSection(),
                   ],
                 ),
@@ -227,26 +227,31 @@ class _ExpensesSummary extends ConsumerWidget {
     final budget = ref.watch(budgetProvider).valueOrNull;
     final funding = ref.watch(fundingContextProvider(null, null)).valueOrNull;
     if (budget == null || funding == null) return const SizedBox.shrink();
-    final remaining = budget.remainingPaisas;
+    final spent = budget.totalSpentPaisas;
+    final total = budget.totalBudgetPaisas;
     final available = funding.monthlyIncomeAvailablePaisas;
-    return AppSummaryStrip(items: [
-      AppSummaryItem(label: 'Spent', value: budget.totalSpentPaisas.formatPKR(), tone: AppSummaryTone.negative),
-      AppSummaryItem(
-        label: 'Budget',
-        value: budget.hasBudget ? budget.totalBudgetPaisas!.formatPKR() : '–',
-        tone: budget.hasBudget ? AppSummaryTone.neutral : AppSummaryTone.muted,
-      ),
-      AppSummaryItem(
-        label: remaining == null ? 'Remaining' : (remaining >= 0 ? 'Under' : 'Over'),
-        value: remaining == null ? '–' : remaining.abs().formatPKR(),
-        tone: remaining == null ? AppSummaryTone.muted : (remaining >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative),
-      ),
-      AppSummaryItem(
-        label: 'Available',
-        value: available.abs().formatPKR(),
-        tone: available >= 0 ? AppSummaryTone.positive : AppSummaryTone.negative,
-        caption: available < 0 ? 'over-allocated' : null,
-      ),
-    ]);
+    final over = total != null && spent > total;
+
+    String? caption;
+    if (total == null || total == 0) {
+      caption = 'No budget set';
+    } else if (over) {
+      caption = '${(spent - total).formatPKR()} over a ${total.formatPKR()} budget';
+    } else {
+      caption = 'of ${total.formatPKR()} budget · ${(total - spent).formatPKR()} left';
+    }
+
+    return AppSummaryCard(
+      label: 'Spent this month',
+      value: spent.formatPKR(),
+      progress: total != null && total > 0 ? spent / total : null,
+      progressColor: over ? AppColors.destructive : AppColors.primary,
+      progressLabel: total != null && total > 0 ? '${(spent * 100 / total).round()}%' : null,
+      caption: caption,
+      captionColor: over ? AppColors.destructive : null,
+      footerLabel: available < 0 ? 'Income over-allocated' : 'Available income',
+      footerValue: available.abs().formatPKR(),
+      footerColor: available < 0 ? AppColors.destructive : AppColors.success,
+    );
   }
 }
