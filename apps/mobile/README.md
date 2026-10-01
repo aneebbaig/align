@@ -33,16 +33,16 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 
 | Screen | Purpose |
 |--------|---------|
-| Dashboard | Budget summary, income vs spend bar, cash-flow summary card (due this month, coming-up alerts), recent transactions |
-| Money → Expenses tab | Summary card (Spent this month, a budget progress bar with what's left or over, and Available income), then planned expenses and the paginated current-period list |
-| Money → Income tab | Summary card (Income this month, a bar of how much is already used, and Available), recurring income, then the current-period list |
+| Dashboard | Budget summary, income vs spend bar, recent transactions |
+| Money → Expenses tab | Summary card (Spent this month, a budget progress bar with what's left or over, and Available income), then the paginated current-period list |
+| Money → Income tab | Summary card (Income this month, a bar of how much is already used, and Available), then the current-period list |
 | Quick Add (Expense) | `/quick-add` - amount, category, description, notes, date, budget-period override, fund-from (income or a pot); modal, outside ShellRoute |
 | Quick Add (Income) | `/quick-add-income` - income-category, amount, description, date, budget-period override |
 | Quick Add (Task) | `/quick-add-task` - title, priority, due date |
 | Quick Add (Loan) | `/quick-add-loan` - person name, GIVEN/RECEIVED, amount, dates, budget-period override |
 | Budget | Per-category budget allocations with progress bars |
 | Savings | Savings pots with targets and progress (read-only on mobile - pot CRUD is web-only) |
-| Loans | Active and closed loans; history of payments, top-ups, and write-offs; Record Payment, Lend/Borrow more, Write off / Mark as forgiven (`LoanEntryPage`); repayment plans |
+| Loans | Active and closed loans; history of payments, top-ups, and write-offs; Record Payment, Lend/Borrow more, Write off / Mark as forgiven (`LoanEntryPage`) |
 | Tasks | Daily / One-Time tabs; optimistic toggle |
 | Work (Projects) | Freelance/client project list; per-project task board grouped by status; Quick Add Project at `/quick-add-project` |
 | Investments | Add money, Withdraw, Update value; history marks deposits (+) and withdrawals (−) and whether each booked an entry |
@@ -152,13 +152,12 @@ lib/
 └── features/                      # One folder per vertical slice
     ├── auth/
     ├── budget/
-    ├── cashflow/                  # Recurring income, planned expenses, dashboard cash-flow summary
     ├── dashboard/
     ├── expenses/
     ├── home_widget/               # Flutter side of Android widget (WidgetService)
     ├── income/
     ├── investments/               # SIPs, contributions, allocation plan
-    ├── loans/                     # Includes loan repayment schedules
+    ├── loans/                     # Payments, top-ups, write-offs
     ├── planner/                   # Standalone month-by-month planner
     ├── plans/                     # Life-event plans + item checklists
     ├── projects/                  # Freelance/client project + task board
