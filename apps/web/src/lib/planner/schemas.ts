@@ -5,12 +5,17 @@ import { z } from "zod";
 const month = z.number().int().min(1).max(12);
 const year = z.number().int().min(2000).max(2200);
 
+// Every planner amount is a Postgres INTEGER (paisas/cents), so cap it here
+// rather than letting the database reject it with a generic error.
+const MAX_AMOUNT = 2_147_483_647;
+const tooLarge = "Amount is too large (max Rs 21,474,836)";
+
 export const settingsSchema = z
   .object({
     startMonth: month.optional(),
     startYear: year.optional(),
     months: z.number().int().min(1).max(120).optional(),
-    startingCashPaisas: z.number().int().optional(),
+    startingCashPaisas: z.number().int().min(-MAX_AMOUNT, tooLarge).max(MAX_AMOUNT, tooLarge).optional(),
     usdRate: z.number().positive().optional(),
   })
   .refine((d) => (d.startMonth === undefined) === (d.startYear === undefined), {
@@ -29,7 +34,7 @@ export const orderSchema = z.object({ ids: z.array(z.string()).max(200) });
 export const cellSchema = z.object({
   month,
   year,
-  amount: z.number().int().min(0), // smallest unit of the line's currency
+  amount: z.number().int().min(0).max(MAX_AMOUNT, tooLarge), // smallest unit of the line's currency
   scope: z.enum(["FROM_HERE", "THIS_MONTH"]),
 });
 
@@ -37,7 +42,7 @@ export const goalSchema = z.object({
   name: z.string().trim().min(1).max(80),
   month,
   year,
-  amountPaisas: z.number().int().positive(),
+  amountPaisas: z.number().int().positive().max(MAX_AMOUNT, tooLarge),
   note: z.string().trim().max(80).nullable().optional(),
 });
 export const goalUpdateSchema = goalSchema.partial();
