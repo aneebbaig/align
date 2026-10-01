@@ -47,7 +47,8 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 | Work (Projects) | Freelance/client project list; per-project task board grouped by status; Quick Add Project at `/quick-add-project` |
 | Investments | Add money, Withdraw, Update value; history marks deposits (+) and withdrawals (−) and whether each booked an entry |
 | Plans | Life-event plans with itemised checklists; mark items bought (books the expense) |
-| More | Links out to Budget, Loans, Savings, Investments, Plans, Settings |
+| Planner | `/planner` (from More) - pinned month column, horizontally scrolling lines/Goals/Net/Available; tap a cell for "Just this month" / "From this month on"; app-bar add + menu for lines and settings; goals from the month's Goals cell |
+| More | Links out to Budget, Loans, Savings, Investments, Planner, Plans, Settings |
 | Setup | `/setup` - "Connect to your server": URL entry validated against `/api/health` before it is saved. Shown on first launch, and from Settings to switch servers |
 | Settings | Server address (tap to change), app version (matches git tag), logout |
 
@@ -158,6 +159,7 @@ lib/
     ├── income/
     ├── investments/               # SIPs, contributions, allocation plan
     ├── loans/                     # Includes loan repayment schedules
+    ├── planner/                   # Standalone month-by-month planner
     ├── plans/                     # Life-event plans + item checklists
     ├── projects/                  # Freelance/client project + task board
     ├── savings/
@@ -362,6 +364,7 @@ Routes defined in `lib/app.dart`:
 | `/savings` | SavingsPage | Pushed from More |
 | `/loans` | LoansPage | Pushed from More |
 | `/investments` | InvestmentsPage | Pushed from More |
+| `/planner` | PlannerPage | Pushed from More |
 | `/plans`, `/plans/:id` | PlansPage, PlanDetailPage | Pushed from More |
 | `/settings` | SettingsPage | Pushed from More |
 | `/quick-add` | QuickAddExpensePage | Top-level modal (outside ShellRoute, no bottom nav) |
@@ -489,12 +492,12 @@ Extensions are preferred over utility classes or standalone functions. They live
 
 | Extension | On type | Provides |
 |-----------|---------|---------|
-| `CurrencyInt` | `int` | `formatPKR()`, `formatPKRCompact()`, `toRupees` |
+| `CurrencyInt` | `int` | `formatPKR()`, `formatPKRCompact()`, `formatAmount()` (no symbol, sign kept - for tables), `toRupees` |
 | `CurrencyDouble` | `double` | `toPaisas` |
 | `CurrencyString` | `String` | `parsePaisas` |
 | `LucideIconEmoji` | `String` | `toEmoji` |
 | `LucideIconName` | `String` | `lucideIcon` |
-| `AppDateTime` | `DateTime` | `toRelativeDay`, `isSameDay` |
+| `AppDateTime` | `DateTime` | `toRelativeDay`, `isSameDay`, `toMonthLabel`, `toShortMonthLabel`, `toShortDate` |
 | `AsyncValueX` | `AsyncValue<T>` | helpers used by `AsyncValueWidget` |
 
 ---

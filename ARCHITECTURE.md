@@ -40,6 +40,10 @@ This is the part to understand before changing anything financial. The whole app
 
 Migrations are plain SQL under `prisma/migrations/`, reviewed by hand. Run `prisma migrate dev` locally; production runs `prisma migrate deploy` on deploy. The models are commented inline in `schema.prisma`.
 
+## The planner
+
+The Planner (`/planner`) is deliberately cut off from the ledger: it never reads or writes transactions, pots, loans, or investments. It stores only inputs - settings (start month, length, starting cash, its own USD rate), lines with "from this month on" steps and one-month overrides, and one-off goals - and `src/lib/planner/compute.ts` builds the table on every read. Months are stored as `year * 12 + (month - 1)`. The web page and `GET /api/v1/planner` return the same serialized shape, so both apps render identical numbers.
+
 ## The mobile app
 
 Flutter, organised as clean-architecture slices. Each feature under `lib/features/<name>/` has its own data, domain, and presentation layers:

@@ -95,7 +95,17 @@ mobile-only push legitimately does not rebuild.
    `pubspec.lock` silently downgrades the lockfile and produces analyzer errors
    in code you never touched.
 
-## Investments, loans, and expenses summary (latest)
+## Planner (latest)
+
+Design: `docs/superpowers/specs/2026-09-30-planner-design.md`.
+
+A standalone month-by-month table (`/planner` on web, More → Planner on
+Android): your own lines (in/out, rupees or dollars at the planner's own USD
+rate) with "just this month" / "from this month on" edits, one-off goals, and
+Net / Available Cash computed for every month. It never touches real income,
+expenses, pots, loans, or investments.
+
+## Investments, loans, and expenses summary
 
 Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`.
 
@@ -112,6 +122,10 @@ Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`
   Income tabs got summary strips.
 
 ## Pending / not done
+
+0. **Remove the old Cash-Flow Planner** - sub-project 2 in the planner spec
+   (recurring income, planned expenses, the dashboard cash-flow card, loan
+   repayment plans), now that the new Planner replaces it.
 
 1. **`/api/cron/daily`** (the daily digest email) still is not wired to anything
    that calls it. It will never fire on its own; it needs a native Vercel Cron
