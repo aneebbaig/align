@@ -110,8 +110,10 @@ It replaced the old Cash-Flow Planner, which is gone from both apps (design:
 recurring income, planned expenses, the dashboard cash-flow card, and per-loan
 repayment plans. Migration `20261001150000_remove_cashflow_planner` drops its
 four tables and two user settings on the next deploy. The investment
-suggestion now subtracts borrowed loans due this month, and the bell shows
-open loans due within 7 days.
+suggestion now subtracts borrowed loans due by the end of the budget month
+(overdue included), and the bell shows open loans that are overdue or due
+within 7 days. Both count days in `APP_TIMEZONE` (default `Asia/Karachi`), not
+the server's timezone.
 
 ## Investments, loans, and expenses summary
 
