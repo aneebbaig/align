@@ -48,14 +48,16 @@ export async function getNotifications(): Promise<AppNotification[]> {
 
   const notifications: AppNotification[] = [];
 
-  // Loans coming due in the next week.
+  // Loans overdue or coming due in the next week.
   for (const due of upcomingLoanAlerts(dueLoans, new Date())) {
-    const when = due.daysUntil === 0 ? "today" : due.daysUntil === 1 ? "tomorrow" : `on ${format(due.dueDate, "d MMM")}`;
+    const when = due.daysUntil < 0 ? `overdue since ${format(due.dueDate, "d MMM")}`
+      : due.daysUntil === 0 ? "due today" : due.daysUntil === 1 ? "due tomorrow" : `due on ${format(due.dueDate, "d MMM")}`;
     const direction = due.type === "RECEIVED" ? "to" : "from";
     notifications.push({
+      // Stable per loan and due date, so a dismissal sticks until the date changes.
       id: `loan-due-${due.loanId}-${due.dueDate.getTime()}`,
-      type: due.daysUntil <= 1 ? "warning" : "info",
-      message: `${base.symbol} ${(due.amount / 100).toLocaleString()} ${direction} ${due.personName} due ${when}`,
+      type: due.daysUntil < 0 ? "error" : due.daysUntil <= 1 ? "warning" : "info",
+      message: `${base.symbol} ${(due.amount / 100).toLocaleString()} ${direction} ${due.personName} ${when}`,
     });
   }
 

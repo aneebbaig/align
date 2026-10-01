@@ -1,7 +1,8 @@
 import { isLoanClosed } from "./balance";
+import { APP_TIME_ZONE, dayNumber } from "../day";
 
-// Loans coming due soon, for the notification bell. Open loans of either type
-// with a due date from today through `days` days ahead, soonest first.
+// Loans due soon or overdue, for the notification bell. Open loans of either
+// type, most overdue first.
 
 export interface LoanAlert {
   loanId: string;
@@ -9,21 +10,18 @@ export interface LoanAlert {
   type: string; // GIVEN (they owe you) | RECEIVED (you owe them)
   amount: number; // remaining, paisas
   dueDate: Date;
-  daysUntil: number; // 0 = today
+  daysUntil: number; // 0 = today, negative = overdue
 }
 
-const DAY = 24 * 60 * 60 * 1000;
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
+// Overdue loans (negative daysUntil) are always included; upcoming ones only
+// within `days`. Days are counted in the household's timezone.
 export function upcomingLoanAlerts(
   loans: { id: string; personName: string; type: string; status: string; remainingAmount: number; dueDate: Date | null }[],
   today: Date,
   days = 7,
+  timeZone: string = APP_TIME_ZONE,
 ): LoanAlert[] {
-  const start = startOfDay(today).getTime();
+  const todayDay = dayNumber(today, timeZone);
   return loans
     .filter((l) => !isLoanClosed(l.status) && l.dueDate !== null)
     .map((l) => {
@@ -34,9 +32,9 @@ export function upcomingLoanAlerts(
         type: l.type,
         amount: l.remainingAmount,
         dueDate: due,
-        daysUntil: Math.round((startOfDay(due).getTime() - start) / DAY),
+        daysUntil: dayNumber(due, timeZone) - todayDay,
       };
     })
-    .filter((a) => a.daysUntil >= 0 && a.daysUntil <= days)
+    .filter((a) => a.daysUntil <= days)
     .sort((a, b) => a.daysUntil - b.daysUntil);
 }

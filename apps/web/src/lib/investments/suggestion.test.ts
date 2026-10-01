@@ -56,32 +56,37 @@ describe("computeInvestmentSuggestion", () => {
 });
 
 describe("loansDueThisMonth", () => {
+  const TZ = "Asia/Karachi"; // UTC+5, no DST
+  const at = (iso: string) => new Date(iso);
   const loan = (p: Partial<{ type: string; status: string; remainingAmount: number; dueDate: Date | null }>) => ({
-    type: "RECEIVED", status: "ACTIVE", remainingAmount: 1_000, dueDate: new Date(2026, 9, 15), ...p,
+    type: "RECEIVED", status: "ACTIVE", remainingAmount: 1_000, dueDate: at("2026-10-15T07:00:00Z"), ...p,
   });
 
   it("sums what's left on borrowed loans due this month", () => {
-    expect(loansDueThisMonth([loan({}), loan({ remainingAmount: 500, status: "PARTIALLY_PAID" })], 10, 2026)).toBe(1_500);
+    expect(loansDueThisMonth([loan({}), loan({ remainingAmount: 500, status: "PARTIALLY_PAID" })], 10, 2026, TZ)).toBe(1_500);
   });
 
-  it("ignores money you lent", () => {
-    expect(loansDueThisMonth([loan({ type: "GIVEN" })], 10, 2026)).toBe(0);
+  it("ignores money you lent and closed loans", () => {
+    expect(loansDueThisMonth([loan({ type: "GIVEN" }), loan({ status: "PAID" }), loan({ status: "WRITTEN_OFF" })], 10, 2026, TZ)).toBe(0);
   });
 
-  it("ignores closed loans", () => {
-    expect(loansDueThisMonth([loan({ status: "PAID" }), loan({ status: "WRITTEN_OFF" })], 10, 2026)).toBe(0);
-  });
-
-  it("ignores loans due in another month or with no due date", () => {
+  it("counts overdue loans, including ones due before the budget month started early", () => {
     expect(loansDueThisMonth([
-      loan({ dueDate: new Date(2026, 10, 1) }),
-      loan({ dueDate: new Date(2026, 8, 30) }),
-      loan({ dueDate: new Date(2025, 9, 15) }),
-      loan({ dueDate: null }),
-    ], 10, 2026)).toBe(0);
+      loan({ dueDate: at("2026-09-30T07:00:00Z") }), // due the day before October's budget
+      loan({ dueDate: at("2025-10-15T07:00:00Z") }), // a year overdue
+    ], 10, 2026, TZ)).toBe(2_000);
   });
 
-  it("counts the first and last day of the month", () => {
-    expect(loansDueThisMonth([loan({ dueDate: new Date(2026, 9, 1) }), loan({ dueDate: new Date(2026, 9, 31, 23, 59) })], 10, 2026)).toBe(2_000);
+  it("ignores loans due after this month or with no due date", () => {
+    expect(loansDueThisMonth([loan({ dueDate: at("2026-11-01T07:00:00Z") }), loan({ dueDate: null })], 10, 2026, TZ)).toBe(0);
+  });
+
+  it("decides the month in the household's timezone, not the server's", () => {
+    // 31 Oct 20:00 UTC is already 1 Nov in Karachi.
+    const late = [loan({ dueDate: at("2026-10-31T20:00:00Z") })];
+    expect(loansDueThisMonth(late, 10, 2026, TZ)).toBe(0);
+    expect(loansDueThisMonth(late, 11, 2026, TZ)).toBe(1_000);
+    // A mobile-entered due date (UTC midnight) is that same day in Karachi.
+    expect(loansDueThisMonth([loan({ dueDate: at("2026-10-31T00:00:00Z") })], 10, 2026, TZ)).toBe(1_000);
   });
 });

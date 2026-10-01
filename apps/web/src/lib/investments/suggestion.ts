@@ -7,6 +7,7 @@
 //   per category   = suggestedTotal x category.percentage / 100
 
 import { isLoanClosed } from "../loans/balance";
+import { APP_TIME_ZONE, dayNumber, lastDayOfMonth } from "../day";
 
 type Money = number; // integer, smallest unit (paisas)
 
@@ -48,16 +49,20 @@ export function computeInvestmentSuggestion(input: SuggestionInput): SuggestionR
   return { bufferUnmet, suggestedTotal, categories };
 }
 
-// Money owed back this month: what's left on borrowed loans that are still
-// open and due in the given budget month. Subtracted before suggesting how
-// much to invest, so the suggestion never spends money that has to be repaid.
+// Money owed back by the end of this budget month: what's left on borrowed
+// loans that are still open and due on or before its last day - overdue ones
+// included (they still have to be repaid), and so are loans due in the days
+// before an early-started budget month. Subtracted before suggesting how much
+// to invest, so the suggestion never spends money that has to go back.
 export function loansDueThisMonth(
   loans: { type: string; status: string; remainingAmount: number; dueDate: Date | null }[],
   month: number,
   year: number,
+  timeZone: string = APP_TIME_ZONE,
 ): number {
+  const lastDay = lastDayOfMonth(month, year);
   return loans
     .filter((l) => l.type === "RECEIVED" && !isLoanClosed(l.status) && l.dueDate !== null
-      && l.dueDate.getMonth() + 1 === month && l.dueDate.getFullYear() === year)
+      && dayNumber(l.dueDate, timeZone) <= lastDay)
     .reduce((sum, l) => sum + l.remainingAmount, 0);
 }
