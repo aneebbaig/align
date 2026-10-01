@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:align/features/planner/domain/entities/planner_entity.dart';
+import 'package:align/features/planner/data/datasources/planner_datasource.dart';
 
 void main() {
   test('parses the planner API shape', () {
-    final data = PlannerData.fromJson({
+    final data = PlannerDatasource.parsePlanner({
       'settings': {'startMonth': 9, 'startYear': 2026, 'months': 2, 'startingCashPaisas': 0, 'usdRate': 278},
       'lines': [
         {'id': 'l1', 'name': 'Freelance', 'direction': 'IN', 'currency': 'USD', 'order': 1, 'steps': [], 'overrides': []},

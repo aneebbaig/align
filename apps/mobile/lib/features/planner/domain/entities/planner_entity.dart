@@ -1,6 +1,3 @@
-// Mirrors GET /api/v1/planner. The server computes every row, so the app only
-// renders - it never redoes the maths.
-
 class PlannerSettingsEntity {
   const PlannerSettingsEntity({
     required this.startMonth,
@@ -12,17 +9,11 @@ class PlannerSettingsEntity {
 
   final int startMonth;
   final int startYear;
-  final int months;
+  final int months; // 1..120
   final int startingCashPaisas;
-  final double usdRate;
+  final double usdRate; // the planner's own PKR per USD
 
-  factory PlannerSettingsEntity.fromJson(Map<String, dynamic> m) => PlannerSettingsEntity(
-        startMonth: m['startMonth'] as int,
-        startYear: m['startYear'] as int,
-        months: m['months'] as int,
-        startingCashPaisas: m['startingCashPaisas'] as int,
-        usdRate: (m['usdRate'] as num).toDouble(),
-      );
+  DateTime get start => DateTime(startYear, startMonth);
 }
 
 class PlannerLineEntity {
@@ -42,14 +33,6 @@ class PlannerLineEntity {
 
   bool get isIn => direction == 'IN';
   bool get isUsd => currency == 'USD';
-
-  factory PlannerLineEntity.fromJson(Map<String, dynamic> m) => PlannerLineEntity(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        direction: m['direction'] as String,
-        currency: m['currency'] as String,
-        order: m['order'] as int,
-      );
 }
 
 class PlannerCellEntity {
@@ -62,18 +45,10 @@ class PlannerCellEntity {
   });
 
   final String lineId;
-  final int native; // the line's own unit (paisas or cents)
+  final int native; // the line's own unit: paisas, or cents for USD lines
   final int pkr; // paisas
-  final int signed;
-  final bool isOverride;
-
-  factory PlannerCellEntity.fromJson(Map<String, dynamic> m) => PlannerCellEntity(
-        lineId: m['lineId'] as String,
-        native: m['native'] as int,
-        pkr: m['pkr'] as int,
-        signed: m['signed'] as int,
-        isOverride: m['isOverride'] as bool,
-      );
+  final int signed; // +pkr for IN lines, -pkr for OUT lines
+  final bool isOverride; // set "just this month"
 }
 
 class PlannerGoalEntity {
@@ -83,13 +58,6 @@ class PlannerGoalEntity {
   final String name;
   final int amountPaisas;
   final String? note;
-
-  factory PlannerGoalEntity.fromJson(Map<String, dynamic> m) => PlannerGoalEntity(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        amountPaisas: m['amountPaisas'] as int,
-        note: m['note'] as String?,
-      );
 }
 
 class PlannerRowEntity {
@@ -108,8 +76,10 @@ class PlannerRowEntity {
   final List<PlannerCellEntity> cells;
   final List<PlannerGoalEntity> goals;
   final int goalsTotal;
-  final int net;
-  final int available;
+  final int net; // money in - money out, before goals
+  final int available; // running balance after goals
+
+  DateTime get date => DateTime(year, month);
 
   PlannerCellEntity? cellFor(String lineId) {
     for (final c in cells) {
@@ -117,18 +87,10 @@ class PlannerRowEntity {
     }
     return null;
   }
-
-  factory PlannerRowEntity.fromJson(Map<String, dynamic> m) => PlannerRowEntity(
-        month: m['month'] as int,
-        year: m['year'] as int,
-        cells: (m['cells'] as List<dynamic>).map((c) => PlannerCellEntity.fromJson(c as Map<String, dynamic>)).toList(),
-        goals: (m['goals'] as List<dynamic>).map((g) => PlannerGoalEntity.fromJson(g as Map<String, dynamic>)).toList(),
-        goalsTotal: m['goalsTotal'] as int,
-        net: m['net'] as int,
-        available: m['available'] as int,
-      );
 }
 
+/// The whole planner as GET /api/v1/planner returns it. The server computes
+/// every row, so the app only renders - it never redoes the maths.
 class PlannerData {
   const PlannerData({required this.settings, required this.lines, required this.rows});
 
@@ -136,9 +98,5 @@ class PlannerData {
   final List<PlannerLineEntity> lines;
   final List<PlannerRowEntity> rows;
 
-  factory PlannerData.fromJson(Map<String, dynamic> m) => PlannerData(
-        settings: PlannerSettingsEntity.fromJson(m['settings'] as Map<String, dynamic>),
-        lines: (m['lines'] as List<dynamic>).map((l) => PlannerLineEntity.fromJson(l as Map<String, dynamic>)).toList(),
-        rows: (m['rows'] as List<dynamic>).map((r) => PlannerRowEntity.fromJson(r as Map<String, dynamic>)).toList(),
-      );
+  bool get isEmpty => lines.isEmpty && rows.every((r) => r.goals.isEmpty);
 }

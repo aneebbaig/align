@@ -17,6 +17,9 @@ extension AppDateTime on DateTime {
   String get toMonthLabel =>
       '${_monthsFull[month - 1]} $year';
 
+  /// "Jun 2026"
+  String get toShortMonthLabel => '${_months[month - 1]} $year';
+
   /// "3 Jun 2026"
   String get toShortDate => '$day ${_months[month - 1]} $year';
 
