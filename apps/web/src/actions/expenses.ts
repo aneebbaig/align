@@ -440,16 +440,7 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
           await creditFundingSources(tx, existing.fundingSources, existing.description, period);
         }
       }
-      // If this transaction was booked via a planned expense's "Mark paid", revert
-      // that row to PLANNED once the transaction is gone - looked up before the
-      // delete since ON DELETE SET NULL will have already cleared the FK after.
-      const linkedPlan = await tx.plannedExpense.findFirst({ where: { transactionId: id } });
-
       await tx.transaction.delete({ where: { id } });
-
-      if (linkedPlan) {
-        await tx.plannedExpense.update({ where: { id: linkedPlan.id }, data: { status: "PLANNED" } });
-      }
     });
 
     revalidateTransactionPaths();
