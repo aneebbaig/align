@@ -30,7 +30,6 @@ export async function getLoans(filter?: "ACTIVE" | "PAID" | "ALL") {
         orderBy: { date: "desc" },
         include: { transaction: { select: { fundingSource: true, fundingPotId: true, budgetMonth: true, budgetYear: true } } },
       },
-      schedules: { orderBy: { startDate: "asc" } },
     },
     orderBy: [{ status: "asc" }, { date: "desc" }],
   });
@@ -121,9 +120,6 @@ export async function recordPayment(loanId: string, data: {
   // Optional budget-period override. When omitted, the user's open period is used.
   budgetMonth?: number;
   budgetYear?: number;
-  // Set when this payment is recorded via a LoanSchedule row's "Record installment" -
-  // marks that scheduled row fulfilled so the planner shows it as done, not just forecast.
-  linkScheduleId?: string;
   // When true, no repayment Transaction is booked (no entry in Expenses/Income,
   // no funding-source/pot handling) - same nullable-transaction path the legacy
   // "mark fully paid" shortcut already uses. Defaults to false.
@@ -140,12 +136,6 @@ export async function recordPayment(loanId: string, data: {
     const loan = await prisma.loan.findFirst({ where: { id: loanId, userId } });
     if (!loan) return { success: false, error: "Loan not found" };
     if (isLoanClosed(loan.status)) return { success: false, error: "This loan is already closed" };
-
-    if (data.linkScheduleId) {
-      const schedule = await prisma.loanSchedule.findFirst({ where: { id: data.linkScheduleId, loanId, userId } });
-      if (!schedule) return { success: false, error: "Schedule not found" };
-      if (schedule.fulfilledPaymentId) return { success: false, error: "Already recorded" };
-    }
 
     const paymentAmount = toPaisas(data.amount);
     if (paymentAmount > loan.remainingAmount) {
@@ -254,13 +244,9 @@ export async function recordPayment(loanId: string, data: {
         }
       }
 
-      const payment = await tx.loanPayment.create({
+      await tx.loanPayment.create({
         data: { loanId, amount: paymentAmount, date: toLocalDate(data.date), notes: data.notes, transactionId: createdTransactionId },
       });
-
-      if (data.linkScheduleId) {
-        await tx.loanSchedule.update({ where: { id: data.linkScheduleId }, data: { fulfilledPaymentId: payment.id } });
-      }
     });
 
     revalidatePath("/loans");

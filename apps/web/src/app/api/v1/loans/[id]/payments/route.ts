@@ -20,8 +20,6 @@ const createPaymentSchema = z.object({
   // omitted, funded from income (existing behavior).
   fundingSource: z.enum(["INCOME", "SAVINGS_POT"]).optional(),
   fundingPotId: z.string().optional(),
-  // Set when this payment is recorded via a LoanSchedule row's "Record installment".
-  linkScheduleId: z.string().optional(),
   // When true, no repayment Transaction is booked - no entry in Expenses/Income,
   // no funding-source/pot handling. Defaults to false (book it).
   skipTransaction: z.boolean().optional(),
@@ -45,15 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    const { amountPaisas, date, notes, budgetMonth, budgetYear, fundingPotId, linkScheduleId, skipTransaction } = parsed.data;
+    const { amountPaisas, date, notes, budgetMonth, budgetYear, fundingPotId, skipTransaction } = parsed.data;
     if (amountPaisas > loan.remainingAmount) {
       return NextResponse.json({ error: "Payment exceeds remaining balance" }, { status: 422 });
-    }
-
-    if (linkScheduleId) {
-      const schedule = await prisma.loanSchedule.findFirst({ where: { id: linkScheduleId, loanId, userId: auth.id } });
-      if (!schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
-      if (schedule.fulfilledPaymentId) return NextResponse.json({ error: "Already recorded" }, { status: 422 });
     }
 
     const user = await prisma.user.findUnique({
@@ -125,10 +117,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         data: { loanId, amount: amountPaisas, date: new Date(date), notes: notes ?? null, transactionId: createdTransactionId },
         select: { id: true },
       });
-
-      if (linkScheduleId) {
-        await tx.loanSchedule.update({ where: { id: linkScheduleId }, data: { fulfilledPaymentId: payment.id } });
-      }
 
       return payment;
     });

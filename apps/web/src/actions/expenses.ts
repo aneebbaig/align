@@ -108,11 +108,6 @@ export async function createTransaction(data: {
   fundingCurrencyId?: string;
   // Split sources (up to MAX_FUNDING_SOURCES)
   splitSources?: { source: "INCOME" | "SAVINGS_POT"; potId?: string; currencyId?: string; pkrAmount: number }[];
-  // Cash-flow planner "book this" links - set when this transaction is created via
-  // a planner row's "Mark paid" / "Record this month" action, so the planner row
-  // stays linked to the real ledger entry it represents instead of drifting apart.
-  linkPlannedExpenseId?: string;
-  linkRecurringIncomeId?: string;
 }): Promise<ActionResult> {
   try {
     const user = await getAuthenticatedUser({ email: true, currentBudgetMonth: true, currentBudgetYear: true, notifyDoomSpending: true, notifyBudgetWarning: true });
@@ -124,19 +119,6 @@ export async function createTransaction(data: {
     const validated = transactionSchema.safeParse(data);
     if (!validated.success) return { success: false, error: "Invalid data" };
 
-    if (data.linkPlannedExpenseId) {
-      const plan = await prisma.plannedExpense.findFirst({ where: { id: data.linkPlannedExpenseId, userId: user.id } });
-      if (!plan) return { success: false, error: "Planned expense not found" };
-      if (plan.transactionId) return { success: false, error: "Already recorded" };
-    }
-    if (data.linkRecurringIncomeId) {
-      const recurring = await prisma.recurringIncome.findFirst({ where: { id: data.linkRecurringIncomeId, userId: user.id } });
-      if (!recurring) return { success: false, error: "Recurring income not found" };
-      const existingOccurrence = await prisma.recurringIncomeOccurrence.findUnique({
-        where: { recurringIncomeId_month_year: { recurringIncomeId: data.linkRecurringIncomeId, month: period.month, year: period.year } },
-      });
-      if (existingOccurrence) return { success: false, error: "Already recorded for this period" };
-    }
 
     const amountPaisas = toPaisas(data.amount);
     const txDate = toLocalDate(data.date);
@@ -225,15 +207,6 @@ export async function createTransaction(data: {
         }
       } else if (data.type === "EXPENSE" && fundingSource === "SAVINGS_POT" && data.fundingPotId && data.fundingCurrencyId && fundingAmount) {
         await debitPot(tx, data.fundingPotId, fundingAmount, data.fundingCurrencyId, fundingEntryDescription(data.description), "MANUAL", { budgetMonth: period.month, budgetYear: period.year });
-      }
-
-      if (data.linkPlannedExpenseId) {
-        await tx.plannedExpense.update({ where: { id: data.linkPlannedExpenseId }, data: { status: "PAID", transactionId: created.id } });
-      }
-      if (data.linkRecurringIncomeId) {
-        await tx.recurringIncomeOccurrence.create({
-          data: { recurringIncomeId: data.linkRecurringIncomeId, month: period.month, year: period.year, transactionId: created.id },
-        });
       }
     });
 
@@ -467,16 +440,7 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
           await creditFundingSources(tx, existing.fundingSources, existing.description, period);
         }
       }
-      // If this transaction was booked via a planned expense's "Mark paid", revert
-      // that row to PLANNED once the transaction is gone - looked up before the
-      // delete since ON DELETE SET NULL will have already cleared the FK after.
-      const linkedPlan = await tx.plannedExpense.findFirst({ where: { transactionId: id } });
-
       await tx.transaction.delete({ where: { id } });
-
-      if (linkedPlan) {
-        await tx.plannedExpense.update({ where: { id: linkedPlan.id }, data: { status: "PLANNED" } });
-      }
     });
 
     revalidateTransactionPaths();

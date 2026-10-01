@@ -9,16 +9,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
 
   try {
-    const linkedPlan = await prisma.plannedExpense.findFirst({ where: { transactionId: id } });
-
     const deleted = await prisma.transaction.deleteMany({
       where: { id, userId: auth.id, type: "EXPENSE" },
     });
     if (deleted.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    if (linkedPlan) {
-      await prisma.plannedExpense.update({ where: { id: linkedPlan.id }, data: { status: "PLANNED" } });
-    }
 
     return NextResponse.json({ data: { id } });
   } catch {

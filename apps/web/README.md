@@ -15,8 +15,7 @@ A private finance app for a household of one or two users. Tracks expenses, budg
 | **Budget** | Zero-based monthly budget with category allocations, savings plan, and email alerts |
 | **Savings** | An Emergency Fund plus regular pots, each holding a balance per currency; a pot with a target amount (and optional deadline) is a savings goal; deposits require a declared source (income or pot transfer); spending from a pot creates an expense |
 | **Investments** | Portfolio tracker with a target-allocation plan; add money or withdraw any time, each optionally booked as an expense (from income) or income ("Investment Returns"); gain counts withdrawals; "Update value" only marks to market |
-| **Loans** | Track money lent/borrowed; repayment schedules (lump sum or fixed installments); lend/borrow more on the same loan; write off or mark as forgiven (in part or in full); every entry can book an income/expense entry or be tracked only; starting a second loan with the same person offers to add to the first |
-| **Cash-Flow Planner** | Forward month-by-month projection from loan schedules, recurring income (salary/freelance floor), and planned one-off expenses; dashboard summary card with upcoming-due alerts and shortfall warnings |
+| **Loans** | Track money lent/borrowed with a due date; lend/borrow more on the same loan; write off or mark as forgiven (in part or in full); every entry can book an income/expense entry or be tracked only; starting a second loan with the same person offers to add to the first |
 | **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority |
 | **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
 | **Plans** | Life event planning (house moves, trips, renovations) with itemised checklists |

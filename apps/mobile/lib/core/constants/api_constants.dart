@@ -34,9 +34,6 @@ class ApiConstants {
   static const String tasks = '/tasks';
   static const String projects = '/projects';
   static const String tags = '/tags';
-  static const String recurringIncome = '/recurring-income';
-  static const String plannedExpenses = '/planned-expenses';
-  static const String cashflow = '/cashflow';
   static const String investments = '/investments';
   static const String investmentPlan = '/investment-plan';
   static const String planner = '/planner';
@@ -66,9 +63,6 @@ class ApiConstants {
   static String loanWriteOff(String loanId) => '/loans/$loanId/write-off';
   static String loanPaymentById(String loanId, String paymentId) =>
       '/loans/$loanId/payments/$paymentId';
-  static String loanSchedules(String loanId) => '/loans/$loanId/schedules';
-  static String loanScheduleById(String loanId, String scheduleId) =>
-      '/loans/$loanId/schedules/$scheduleId';
   static String expenseById(String id) => '/expenses/$id';
   static String incomeById(String id) => '/income/$id';
   static String taskById(String id) => '/tasks/$id';
@@ -77,8 +71,4 @@ class ApiConstants {
   static String projectTaskById(String projectId, String taskId) =>
       '/projects/$projectId/tasks/$taskId';
   static String tagById(String id) => '/tags/$id';
-  static String recurringIncomeById(String id) => '/recurring-income/$id';
-  static String plannedExpenseById(String id) => '/planned-expenses/$id';
-  static String plannedExpenseRecord(String id) => '/planned-expenses/$id/record';
-  static String recurringIncomeRecord(String id) => '/recurring-income/$id/record';
 }

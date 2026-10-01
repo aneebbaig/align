@@ -105,6 +105,14 @@ rate) with "just this month" / "from this month on" edits, one-off goals, and
 Net / Available Cash computed for every month. It never touches real income,
 expenses, pots, loans, or investments.
 
+It replaced the old Cash-Flow Planner, which is gone from both apps (design:
+`docs/superpowers/specs/2026-10-01-remove-cashflow-planner-design.md`):
+recurring income, planned expenses, the dashboard cash-flow card, and per-loan
+repayment plans. Migration `20261001150000_remove_cashflow_planner` drops its
+four tables and two user settings on the next deploy. The investment
+suggestion now subtracts borrowed loans due this month, and the bell shows
+open loans due within 7 days.
+
 ## Investments, loans, and expenses summary
 
 Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`.
@@ -117,15 +125,12 @@ Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`
 - **Write off / Mark as forgiven** - part or all of what's left. An expense is
   offered only for money lent "track only" (loan and every top-up); otherwise
   it was already counted.
-  `WRITTEN_OFF` loans are closed and drop out of forecasts and reminders.
+  `WRITTEN_OFF` loans are closed and drop out of reminders and the
+  investment suggestion.
 - **Available** now shows on the web Expenses page; the Android Expenses and
   Income tabs got summary cards (headline figure, progress bar, Available).
 
 ## Pending / not done
-
-0. **Remove the old Cash-Flow Planner** - sub-project 2 in the planner spec
-   (recurring income, planned expenses, the dashboard cash-flow card, loan
-   repayment plans), now that the new Planner replaces it.
 
 1. **`/api/cron/daily`** (the daily digest email) still is not wired to anything
    that calls it. It will never fire on its own; it needs a native Vercel Cron
@@ -145,7 +150,8 @@ Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`
    they're worth until updated once.
 5. **Screenshots go stale.** They live in `docs/screenshots/` and are captured by
    hand from a `seed:demo` database. Any real UI change makes them wrong, and
-   nothing checks that.
+   nothing checks that. The current Expenses screenshot still shows the removed
+   planned-expenses section.
 
 ## Repo facts worth knowing
 

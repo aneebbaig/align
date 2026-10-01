@@ -18,35 +18,6 @@ class LoanPaymentEntity {
   final String kind; // PAYMENT | TOP_UP | WRITE_OFF
 }
 
-class LoanScheduleEntity {
-  const LoanScheduleEntity({
-    required this.id,
-    required this.loanId,
-    required this.kind,
-    required this.amountPaisas,
-    required this.startDate,
-    required this.flexibility,
-    required this.priority,
-    required this.slideWindowMonths,
-    this.endDate,
-    this.interestRate,
-    this.fulfilledPaymentId,
-  });
-
-  final String id;
-  final String loanId;
-  final String kind; // LUMP_SUM | FIXED_INSTALLMENT
-  final int amountPaisas;
-  final DateTime startDate;
-  final DateTime? endDate;
-  final String flexibility; // FIXED | FLEXIBLE
-  final int priority;
-  final int slideWindowMonths;
-  final double? interestRate;
-  // Set once a real LoanPayment has been recorded for this installment.
-  final String? fulfilledPaymentId;
-}
-
 class LoanEntity {
   const LoanEntity({
     required this.id,
@@ -60,7 +31,6 @@ class LoanEntity {
     this.description,
     this.dueDate,
     this.notes,
-    this.schedules = const [],
     this.offersWriteOffExpense = false,
   });
 
@@ -75,7 +45,6 @@ class LoanEntity {
   final String status; // ACTIVE | PARTIALLY_PAID | PAID | WRITTEN_OFF
   final String? notes;
   final List<LoanPaymentEntity> recentPayments;
-  final List<LoanScheduleEntity> schedules;
   // True only for a lent loan created track-only - see the web balance rules.
   final bool offersWriteOffExpense;
 

@@ -30,8 +30,6 @@ interface UserSettings {
   dateFormat: string;
   firstDayOfWeek: number;
   emergencyFundMonths: number;
-  cashflowHorizonMonths: number;
-  cashflowLeadTimeDays: number;
   notifyBudgetWarning: boolean;
   notifyDoomSpending: boolean;
   notifyLoanDue: boolean;
@@ -112,8 +110,6 @@ export function SettingsClient({
     dateFormat: settings?.dateFormat ?? "dd/MM/yyyy",
     firstDayOfWeek: settings?.firstDayOfWeek ?? 1,
     emergencyFundMonths: settings?.emergencyFundMonths ?? 6,
-    cashflowHorizonMonths: settings?.cashflowHorizonMonths ?? 8,
-    cashflowLeadTimeDays: settings?.cashflowLeadTimeDays ?? 3,
   });
 
   // Currencies state
@@ -408,34 +404,6 @@ export function SettingsClient({
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
                 Target months of expenses to save in your emergency fund. 6 months is the standard recommendation.
-              </p>
-            </div>
-            <div>
-              <Label>Cash-flow Projection Window (months)</Label>
-              <Select onValueChange={(v) => setProfile((p) => ({ ...p, cashflowHorizonMonths: Number(v) }))} defaultValue={String(profile.cashflowHorizonMonths)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[3, 6, 8, 12, 18, 24].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n} months</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                How far ahead the repayment planner projects loans, income, and known expenses.
-              </p>
-            </div>
-            <div>
-              <Label>Due-date Warning Lead Time (days)</Label>
-              <Select onValueChange={(v) => setProfile((p) => ({ ...p, cashflowLeadTimeDays: Number(v) }))} defaultValue={String(profile.cashflowLeadTimeDays)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1, 3, 5, 7, 14].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n} day{n !== 1 ? "s" : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                How far ahead to warn about upcoming loan payments and known lump-sum expenses.
               </p>
             </div>
             <Button onClick={handleSaveProfile} disabled={isPending}>

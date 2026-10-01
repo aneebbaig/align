@@ -7,11 +7,9 @@ import { getTodaysTasks } from "@/actions/tasks";
 import { getTodaysEvents } from "@/actions/calendar";
 import { getSavingsPots, getCumulativeSavings, getAverageMonthlyExpenses } from "@/actions/savings";
 import { getUserSettings } from "@/actions/settings";
-import { getCashflowMonthSummary, getUpcomingDueAlerts } from "@/actions/cashflow";
 import { getCurrencies } from "@/lib/currency-helpers";
 import { potBaseBalance } from "@/lib/currency-utils";
 import { OverviewCards } from "@/components/dashboard/overview-cards";
-import { CashflowSummaryCard } from "@/components/dashboard/cashflow-summary-card";
 import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { BudgetProgress } from "@/components/dashboard/budget-progress";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
@@ -28,7 +26,7 @@ export default async function DashboardPage() {
   const { month, year } = getCurrentPeriod(userSettings?.currentBudgetMonth, userSettings?.currentBudgetYear);
   const now = new Date();
 
-  const [summary, spendingByCategory, trend, budgetData, todaysTasks, todaysEvents, savingsPots, recentTransactions, cumulativeSavings, avgMonthlyExpenses, regretStats, currencies, cashflowSummary, upcomingDue] =
+  const [summary, spendingByCategory, trend, budgetData, todaysTasks, todaysEvents, savingsPots, recentTransactions, cumulativeSavings, avgMonthlyExpenses, regretStats, currencies] =
     await Promise.all([
       getMonthlySummary(month, year),
       getSpendingByCategory(month, year),
@@ -42,8 +40,6 @@ export default async function DashboardPage() {
       getAverageMonthlyExpenses(),
       getRegretPurchaseStats(month, year),
       getCurrencies(),
-      getCashflowMonthSummary(),
-      getUpcomingDueAlerts(),
     ]);
 
   const baseSymbol = currencies.find((c) => c.isBase)?.symbol ?? "Rs";
@@ -78,9 +74,6 @@ export default async function DashboardPage() {
         netSavings={summary.netSavings}
         baseSymbol={baseSymbol}
       />
-
-      {/* Cash-flow: this month's obligations, next due, and what's left - zero clicks */}
-      <CashflowSummaryCard summary={cashflowSummary} upcoming={upcomingDue} baseSymbol={baseSymbol} />
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

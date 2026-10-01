@@ -30,9 +30,6 @@ model User {
   currentBudgetMonth     Int?
   currentBudgetYear      Int?
   emergencyFundMonths    Int       @default(6)
-  // Cash-flow / repayment planner config.
-  cashflowHorizonMonths  Int       @default(8) // rolling projection window
-  cashflowLeadTimeDays   Int       @default(3) // how far ahead to warn before a due date
   notifyBudgetWarning    Boolean   @default(true)
   notifyDoomSpending     Boolean   @default(true)
   notifyLoanDue          Boolean   @default(true)
@@ -61,9 +58,6 @@ model User {
   projects       Project[]
   tags           Tag[]
 
-  recurringIncomes RecurringIncome[]
-  loanSchedules    LoanSchedule[]
-  plannedExpenses  PlannedExpense[]
   investmentPlan   InvestmentPlan?
   plannerSettings  PlannerSettings?
   plannerLines     PlannerLine[]
@@ -92,7 +86,6 @@ model Category {
   user             User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions     Transaction[]
   budgetCategories BudgetCategory[]
-  plannedExpenses  PlannedExpense[]
 
   @@map("categories")
 }
@@ -142,8 +135,6 @@ model Transaction {
   fundingCurrency             Currency?                  @relation("TransactionFundingCurrency", fields: [fundingCurrencyId], references: [id], onDelete: Restrict)
   loanPrincipalOf             Loan?
   loanPaymentOf               LoanPayment?
-  plannedExpenseOf            PlannedExpense?
-  recurringIncomeOccurrenceOf RecurringIncomeOccurrence?
   investmentContributionOf    InvestmentContribution?
 
   @@index([userId])
@@ -360,7 +351,6 @@ model Currency {
   fundingTransactions   Transaction[]              @relation("TransactionFundingCurrency")
   weddingExpenseSource1 WeddingExpense[]           @relation("WeddingExpenseSource1Currency")
   weddingExpenseSource2 WeddingExpense[]           @relation("WeddingExpenseSource2Currency")
-  recurringIncomes      RecurringIncome[]
 
   @@unique([code])
   @@map("currencies")
@@ -616,7 +606,6 @@ model Loan {
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   transaction Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   payments    LoanPayment[]
-  schedules   LoanSchedule[]
 
   @@index([userId])
   @@index([status])
@@ -639,122 +628,9 @@ model LoanPayment {
 
   loan             Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
   transaction      Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  fulfillsSchedule LoanSchedule?
 
   @@index([loanId])
   @@map("loan_payments")
-}
-
-// ─── Cash-flow / repayment planner ───────────────────────────────────────────
-// Feeds the deterministic scheduler in src/lib/cashflow. All amounts are paisas
-// (base currency). The scheduler itself is pure; these rows are its persisted
-// inputs, mapped to month-offsets by src/lib/cashflow/adapter.ts against today.
-
-// A forward-looking payment plan attached to a Loan. One loan can have many
-// rows (e.g. "20k now" + "60k in month 4" = two LUMP_SUM rows). Distinct from
-// LoanPayment, which records payments that ALREADY happened.
-model LoanSchedule {
-  id                 String    @id @default(cuid())
-  loanId             String
-  kind               String // "LUMP_SUM" | "FIXED_INSTALLMENT"
-  amount             Int // paisas: lump total, or per-installment amount
-  startDate          DateTime // first (or only) due date
-  endDate            DateTime? // FIXED_INSTALLMENT inclusive; null for LUMP_SUM
-  flexibility        String    @default("FIXED") // "FIXED" | "FLEXIBLE"
-  priority           Int       @default(0) // lower slides first when a month is tight
-  slideWindowMonths  Int       @default(0) // how far it may move (e.g. ±1)
-  interestRate       Float? // annual %, declining balance; null/0 = interest-free
-  userId             String // denormalized for scoped queries (mirrors app convention)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  // Set once a real LoanPayment has been recorded against this scheduled
-  // installment via "Record installment" - lets the UI show it as fulfilled
-  // instead of just a forecast row. Nulled out if that payment is deleted.
-  fulfilledPaymentId String?   @unique
-
-  loan             Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fulfilledPayment LoanPayment? @relation(fields: [fulfilledPaymentId], references: [id], onDelete: SetNull)
-
-  @@index([loanId])
-  @@index([userId])
-  @@map("loan_schedules")
-}
-
-// Recurring income stream. Salary = fixed amount on dayOfMonth. Freelance =
-// guaranteed floor with no fixed date (variable=true, dayOfMonth null).
-// countsTowardFloor marks whether it's part of the conservative debt-service
-// baseline the planner flags against.
-model RecurringIncome {
-  id                String    @id @default(cuid())
-  label             String
-  kind              String // "SALARY" | "FREELANCE" | "OTHER"
-  amount            Int // paisas: salary = fixed, freelance = floor/minimum
-  variable          Boolean   @default(false)
-  countsTowardFloor Boolean   @default(true)
-  dayOfMonth        Int? // 1-31 anchor day for fixed income; null = no fixed date
-  startDate         DateTime  @default(now())
-  endDate           DateTime? // null = ongoing
-  currencyId        String? // null = base currency
-  active            Boolean   @default(true)
-  userId            String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currency    Currency?                   @relation(fields: [currencyId], references: [id])
-  occurrences RecurringIncomeOccurrence[]
-
-  @@index([userId])
-  @@map("recurring_incomes")
-}
-
-// A known one-off future obligation that is not a loan (e.g. tuition, tax,
-// insurance renewal). Optional flexibility so it can be slid like a loan.
-model PlannedExpense {
-  id                String   @id @default(cuid())
-  name              String
-  amount            Int // paisas
-  dueDate           DateTime
-  flexibility       String   @default("FIXED") // "FIXED" | "FLEXIBLE"
-  priority          Int      @default(0)
-  slideWindowMonths Int      @default(0)
-  categoryId        String? // optional link to an expense Category
-  notes             String?
-  status            String   @default("PLANNED") // "PLANNED" | "PAID" | "SKIPPED"
-  userId            String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  // Set once "Mark paid" has actually booked a real ledger Transaction -
-  // reverts to PLANNED if that transaction is deleted, so the row never
-  // silently claims to be paid without a real expense behind it.
-  transactionId     String?  @unique
-
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category    Category?    @relation(fields: [categoryId], references: [id])
-  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@map("planned_expenses")
-}
-
-// Tracks which (month, year) periods a RecurringIncome stream has already had
-// a real Transaction booked for via "Record this month" - prevents
-// double-booking the same period and lets the UI show recorded vs. pending.
-model RecurringIncomeOccurrence {
-  id                String   @id @default(cuid())
-  recurringIncomeId String
-  month             Int
-  year              Int
-  transactionId     String   @unique
-  createdAt         DateTime @default(now())
-
-  recurringIncome RecurringIncome @relation(fields: [recurringIncomeId], references: [id], onDelete: Cascade)
-  transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-
-  @@unique([recurringIncomeId, month, year])
-  @@index([recurringIncomeId])
-  @@map("recurring_income_occurrences")
 }
 
 // Investment planning (Checkpoint 2). One plan per user; monthly target split

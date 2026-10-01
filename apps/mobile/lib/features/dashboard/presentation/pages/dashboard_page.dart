@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_empty_state.dart';
-import '../../../cashflow/presentation/widgets/cashflow_summary_card.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/budget_bar.dart';
 import '../widgets/recent_transactions_list.dart';
@@ -52,8 +51,6 @@ class DashboardPage extends ConsumerWidget {
                       totalExpensesPaisas: d.totalExpensesPaisas,
                       netSavingsPaisas: d.netSavingsPaisas,
                     ),
-                    const SizedBox(height: 16),
-                    const CashflowSummaryCard(),
                     if (d.budget != null) ...[
                       const SizedBox(height: 16),
                       BudgetBar(budget: d.budget!),

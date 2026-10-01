@@ -18,7 +18,7 @@ The core is a zero-based budget: income comes in, you assign all of it, and mone
 
 - Expenses and income with categories, tags, and recurring entries
 - Savings pots that hold a balance per currency (PKR is the base, USD comes set up, add your own), with deposits that have to declare a source. A pot with a target and deadline is a savings goal
-- Investments with deposits and withdrawals (each optionally booked as an expense or income) and loans you can top up, repay, or write off (settling a loan logs the expense for you, with repayment schedules and a forward cash-flow projection)
+- Investments with deposits and withdrawals (each optionally booked as an expense or income) and loans you can top up, repay, or write off (settling a loan logs the expense for you)
 - Tasks (daily habits and one-offs) and a Work board for freelance/client projects
 - Plans for big life events, a dedicated wedding planner, a calendar, and want/need lists
 - A month-by-month Planner: your own lines (savings, fees, loan instalments, freelance in USD) and one-off goals in a table, with net and available cash worked out for every month. Separate from your real income and expenses
@@ -34,7 +34,7 @@ Currencies and their rates live in Settings. The USD rate can sync itself once a
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Budget](docs/screenshots/budget.png) |
 | **Dashboard** - month at a glance, spend by category, six-month trend | **Budget** - every category with what is left in it, overspend in red |
 | ![Expenses](docs/screenshots/expenses.png) | ![Savings](docs/screenshots/savings.png) |
-| **Expenses** - grouped by day, with upcoming planned expenses on top | **Savings** - pots in PKR and USD, emergency fund coverage in months |
+| **Expenses** - grouped by day | **Savings** - pots in PKR and USD, emergency fund coverage in months |
 | ![Investments](docs/screenshots/investments.png) | ![Work](docs/screenshots/projects.png) |
 | **Investments** - SIPs with contributions and gain/loss per holding | **Work** - a board per project for freelance and client jobs |
 
