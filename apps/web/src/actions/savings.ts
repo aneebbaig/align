@@ -8,8 +8,8 @@ import { toPaisas } from "@/lib/utils";
 import { computeFinancialPosition } from "@/lib/financial-position";
 import { creditPot, debitPot } from "@/lib/pot-helpers";
 import { getCurrencies, getPotBalancesInBase } from "@/lib/currency-helpers";
-import { getCashflowProjection } from "@/actions/cashflow";
-import { computeInvestmentSuggestion } from "@/lib/cashflow/investment-suggestion";
+import { computeInvestmentSuggestion, loansDueThisMonth } from "@/lib/investments/suggestion";
+import { CLOSED_LOAN_STATUSES } from "@/lib/loans/balance";
 import {
   bookContributionTransaction, deleteContribution, deleteContributionTransactionsFor,
   recordInvestmentMovement, ensureCategoryInvestment, InvestmentMovementError,
@@ -641,7 +641,7 @@ export interface InvestmentCategorySuggestion {
 export interface InvestmentSuggestion {
   hasPlan: boolean;
   monthlyIncome: number; // this period's actual income
-  obligationsDue: number; // this period's due obligations (Checkpoint 1, month 1 of the projection)
+  obligationsDue: number; // what's left on borrowed loans due this budget month
   bufferTarget: number; // emergencyFundMonths x average monthly expenses
   bufferCurrent: number; // current EMERGENCY-pot balance, base currency
   bufferUnmet: number; // max(0, bufferTarget - bufferCurrent)
@@ -650,9 +650,9 @@ export interface InvestmentSuggestion {
 }
 
 /**
- * Suggested investment = income − this cycle's obligations (from the cash-flow
- * scheduler) − any unmet emergency-fund buffer, then split by category. This is
- * a read-only projection - it never moves money or creates rows.
+ * Suggested investment = income − borrowed loans due this month − any unmet
+ * emergency-fund buffer, then split by category. Read-only - it never moves
+ * money or creates rows.
  */
 export async function getInvestmentSuggestion(): Promise<InvestmentSuggestion> {
   const user = await getAuthenticatedUser({
@@ -666,7 +666,7 @@ export async function getInvestmentSuggestion(): Promise<InvestmentSuggestion> {
     user.currentBudgetYear as number | null,
   );
 
-  const [plan, monthIncomeTx, projection, avgMonthlyExpenses, emergencyPots] = await Promise.all([
+  const [plan, monthIncomeTx, openBorrowedLoans, avgMonthlyExpenses, emergencyPots] = await Promise.all([
     prisma.investmentPlan.findUnique({
       where: { userId },
       include: { categories: { orderBy: { order: "asc" } } },
@@ -675,7 +675,10 @@ export async function getInvestmentSuggestion(): Promise<InvestmentSuggestion> {
       where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
       _sum: { amount: true },
     }),
-    getCashflowProjection(),
+    prisma.loan.findMany({
+      where: { userId, type: "RECEIVED", status: { notIn: CLOSED_LOAN_STATUSES }, dueDate: { not: null } },
+      select: { type: true, status: true, remainingAmount: true, dueDate: true },
+    }),
     getAverageMonthlyExpenses(),
     prisma.savingsPot.findMany({
       where: { userId, type: "EMERGENCY" },
@@ -684,7 +687,7 @@ export async function getInvestmentSuggestion(): Promise<InvestmentSuggestion> {
   ]);
 
   const monthlyIncome = monthIncomeTx._sum.amount ?? 0;
-  const obligationsDue = projection[0]?.dueTotal ?? 0;
+  const obligationsDue = loansDueThisMonth(openBorrowedLoans, month, year);
   const bufferTarget = Math.round(avgMonthlyExpenses * (user.emergencyFundMonths as number));
   const bufferCurrent = emergencyPots.reduce(
     (sum, pot) => sum + pot.balances.reduce((s, b) => s + Math.round(b.amount * b.currency.rateToBase), 0),

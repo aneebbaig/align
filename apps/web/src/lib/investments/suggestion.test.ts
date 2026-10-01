@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeInvestmentSuggestion } from "./investment-suggestion";
+import { computeInvestmentSuggestion, loansDueThisMonth } from "./suggestion";
 
 describe("computeInvestmentSuggestion", () => {
   it("splits the surplus by category percentage", () => {
@@ -52,5 +52,36 @@ describe("computeInvestmentSuggestion", () => {
     });
     expect(result.categories[0].actualAmount).toBe(42_000);
     expect(result.categories[0].plannedAmount).toBe(100_000);
+  });
+});
+
+describe("loansDueThisMonth", () => {
+  const loan = (p: Partial<{ type: string; status: string; remainingAmount: number; dueDate: Date | null }>) => ({
+    type: "RECEIVED", status: "ACTIVE", remainingAmount: 1_000, dueDate: new Date(2026, 9, 15), ...p,
+  });
+
+  it("sums what's left on borrowed loans due this month", () => {
+    expect(loansDueThisMonth([loan({}), loan({ remainingAmount: 500, status: "PARTIALLY_PAID" })], 10, 2026)).toBe(1_500);
+  });
+
+  it("ignores money you lent", () => {
+    expect(loansDueThisMonth([loan({ type: "GIVEN" })], 10, 2026)).toBe(0);
+  });
+
+  it("ignores closed loans", () => {
+    expect(loansDueThisMonth([loan({ status: "PAID" }), loan({ status: "WRITTEN_OFF" })], 10, 2026)).toBe(0);
+  });
+
+  it("ignores loans due in another month or with no due date", () => {
+    expect(loansDueThisMonth([
+      loan({ dueDate: new Date(2026, 10, 1) }),
+      loan({ dueDate: new Date(2026, 8, 30) }),
+      loan({ dueDate: new Date(2025, 9, 15) }),
+      loan({ dueDate: null }),
+    ], 10, 2026)).toBe(0);
+  });
+
+  it("counts the first and last day of the month", () => {
+    expect(loansDueThisMonth([loan({ dueDate: new Date(2026, 9, 1) }), loan({ dueDate: new Date(2026, 9, 31, 23, 59) })], 10, 2026)).toBe(2_000);
   });
 });

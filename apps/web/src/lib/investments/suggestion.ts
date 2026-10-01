@@ -1,12 +1,14 @@
-// ─── Investment contribution suggestion (spec Checkpoint 2) ─────────────────
-// Pure math, mirrors the scheduler in ./scheduler.ts: no DB, no dates beyond
-// what's handed in. src/actions/savings.ts fetches the inputs and calls this.
+// ─── Investment contribution suggestion ─────────────────────────────────────
+// Pure math: no DB, no dates beyond what's handed in. src/actions/savings.ts
+// fetches the inputs and calls this.
 //
 //   suggestedTotal = max(0, income − obligationsDue − bufferUnmet)
 //   bufferUnmet    = max(0, bufferTarget − bufferCurrent)
 //   per category   = suggestedTotal x category.percentage / 100
 
-import type { Money } from "./types";
+import { isLoanClosed } from "../loans/balance";
+
+type Money = number; // integer, smallest unit (paisas)
 
 export interface SuggestionCategoryInput {
   id: string;
@@ -44,4 +46,18 @@ export function computeInvestmentSuggestion(input: SuggestionInput): SuggestionR
   }));
 
   return { bufferUnmet, suggestedTotal, categories };
+}
+
+// Money owed back this month: what's left on borrowed loans that are still
+// open and due in the given budget month. Subtracted before suggesting how
+// much to invest, so the suggestion never spends money that has to be repaid.
+export function loansDueThisMonth(
+  loans: { type: string; status: string; remainingAmount: number; dueDate: Date | null }[],
+  month: number,
+  year: number,
+): number {
+  return loans
+    .filter((l) => l.type === "RECEIVED" && !isLoanClosed(l.status) && l.dueDate !== null
+      && l.dueDate.getMonth() + 1 === month && l.dueDate.getFullYear() === year)
+    .reduce((sum, l) => sum + l.remainingAmount, 0);
 }
