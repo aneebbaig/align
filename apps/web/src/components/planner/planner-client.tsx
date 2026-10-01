@@ -16,6 +16,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
 import type { SerializedPlanner } from "@/lib/planner/store";
+import { lineForm, settingsForm } from "@/lib/planner/forms";
 import {
   plannerAddGoal, plannerAddLine, plannerDeleteGoal, plannerDeleteLine, plannerRemoveOverride,
   plannerReorderLines, plannerSetCell, plannerUpdateGoal, plannerUpdateLine, plannerUpdateSettings,
@@ -101,18 +102,22 @@ function LineCell({ line, row }: { line: Line; row: Row }) {
 function GoalsCell({ row }: { row: Row }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
-  const [form, setForm] = useState({ name: "", amount: "", note: "" });
+  const thisMonth = monthInput(row.month, row.year);
+  const [form, setForm] = useState({ name: "", amount: "", note: "", month: thisMonth });
   const [busy, setBusy] = useState(false);
 
   function startEdit(g: Goal | null) {
     setEditing(g);
-    setForm(g ? { name: g.name, amount: String(g.amountPaisas / 100), note: g.note ?? "" } : { name: "", amount: "", note: "" });
+    setForm(g
+      ? { name: g.name, amount: String(g.amountPaisas / 100), note: g.note ?? "", month: thisMonth }
+      : { name: "", amount: "", note: "", month: thisMonth });
   }
 
   async function save() {
-    if (!form.name.trim() || !(parseFloat(form.amount) > 0)) return;
+    if (!form.name.trim() || !(parseFloat(form.amount) > 0) || !form.month) return;
     setBusy(true);
-    const payload = { name: form.name, month: row.month, year: row.year, amountPaisas: toUnits(form.amount), note: form.note.trim() || null };
+    // The month can be changed to move a goal; the table recalculates from there.
+    const payload = { name: form.name, ...parseMonthInput(form.month), amountPaisas: toUnits(form.amount), note: form.note.trim() || null };
     const ok = await report(editing ? plannerUpdateGoal(editing.id, payload) : plannerAddGoal(payload));
     setBusy(false);
     if (ok) startEdit(null);
@@ -145,6 +150,10 @@ function GoalsCell({ row }: { row: Row }) {
           <Input placeholder="Name (e.g. Engine Swap)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           <Input type="number" min="0" placeholder="Amount (Rs)" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
           <Input placeholder="Note (optional, e.g. reserved)" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground shrink-0">Month</Label>
+            <Input type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} />
+          </div>
           <div className="flex gap-2">
             {editing && <Button size="sm" variant="ghost" onClick={() => startEdit(null)}>Cancel</Button>}
             <Button size="sm" className="flex-1" disabled={busy} onClick={save}>{editing ? "Save" : "Add goal"}</Button>
@@ -156,7 +165,8 @@ function GoalsCell({ row }: { row: Row }) {
 }
 
 function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ name: "", direction: "IN", currency: "PKR" });
+  // Remounted on every open (see the key where it is rendered), so this is always the current line.
+  const [form, setForm] = useState(() => lineForm(line));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -168,10 +178,7 @@ function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean;
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => {
-      if (o) setForm(line ? { name: line.name, direction: line.direction, currency: line.currency } : { name: "", direction: "IN", currency: "PKR" });
-      else onClose();
-    }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>{line ? "Edit line" : "Add a line"}</DialogTitle></DialogHeader>
         <div className="space-y-4">
@@ -209,7 +216,8 @@ function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean;
 }
 
 function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlanner["settings"]; open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ start: "", months: "", startingCash: "", usdRate: "" });
+  // Remounted on every open (see the key where it is rendered), so this is always the current settings.
+  const [form, setForm] = useState(() => settingsForm(settings));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -227,15 +235,7 @@ function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlann
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => {
-      if (o) setForm({
-        start: monthInput(settings.startMonth, settings.startYear),
-        months: String(settings.months),
-        startingCash: String(settings.startingCashPaisas / 100),
-        usdRate: String(settings.usdRate),
-      });
-      else onClose();
-    }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Planner settings</DialogTitle></DialogHeader>
         <div className="space-y-4">
@@ -353,8 +353,13 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
         </table>
       </div>
 
-      <LineDialog line={lineDialog.line} open={lineDialog.open} onClose={() => setLineDialog({ open: false, line: null })} />
-      <SettingsDialog settings={settings} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <LineDialog
+        key={lineDialog.open ? `line-${lineDialog.line?.id ?? "new"}` : "line-closed"}
+        line={lineDialog.line}
+        open={lineDialog.open}
+        onClose={() => setLineDialog({ open: false, line: null })}
+      />
+      <SettingsDialog key={settingsOpen ? "settings-open" : "settings-closed"} settings={settings} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConfirmDialog
         open={!!deleteLine}
         onOpenChange={(o) => !o && setDeleteLine(null)}
