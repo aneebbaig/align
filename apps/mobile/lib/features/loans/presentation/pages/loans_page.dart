@@ -16,18 +16,17 @@ import '../../../../core/widgets/app_progress_bar.dart';
 import '../../data/datasources/loans_datasource.dart';
 import '../../domain/entities/loan_entity.dart';
 import '../providers/loans_provider.dart';
-import 'add_schedule_page.dart';
 import 'loan_entry_page.dart';
 import 'record_payment_page.dart';
 
 class LoansPage extends ConsumerWidget {
   const LoansPage({super.key});
 
-  void _showPayment(BuildContext context, LoanEntity loan, {LoanPaymentEntity? editPayment, LoanScheduleEntity? linkSchedule}) {
+  void _showPayment(BuildContext context, LoanEntity loan, {LoanPaymentEntity? editPayment}) {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => RecordPaymentPage(loan: loan, editPayment: editPayment, linkSchedule: linkSchedule),
+        builder: (_) => RecordPaymentPage(loan: loan, editPayment: editPayment),
       ),
     );
   }
@@ -51,32 +50,6 @@ class LoansPage extends ConsumerWidget {
     } catch (e) {
       if (!context.mounted) return;
       final msg = e is AppException ? e.message : 'Failed to delete payment';
-      ref.read(toastServiceProvider).error(context, msg);
-    }
-  }
-
-  void _showAddSchedule(BuildContext context, LoanEntity loan) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => AddSchedulePage(loan: loan),
-      ),
-    );
-  }
-
-  Future<void> _deleteSchedule(BuildContext context, WidgetRef ref, LoanScheduleEntity schedule) async {
-    try {
-      await ref.read(loansDatasourceProvider).deleteSchedule(
-            loanId: schedule.loanId,
-            scheduleId: schedule.id,
-          );
-      ref.invalidate(loansProvider);
-      if (context.mounted) {
-        ref.read(toastServiceProvider).success(context, 'Schedule removed');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      final msg = e is AppException ? e.message : 'Failed to remove schedule';
       ref.read(toastServiceProvider).error(context, msg);
     }
   }
@@ -135,11 +108,8 @@ class LoansPage extends ConsumerWidget {
                               child: _LoanCard(
                                 loan: l,
                                 onPay: !l.isClosed ? () => _showPayment(context, l) : null,
-                                onAddSchedule: !l.isClosed ? () => _showAddSchedule(context, l) : null,
-                                onDeleteSchedule: (s) => _deleteSchedule(context, ref, s),
                                 onEditPayment: (p) => _showPayment(context, l, editPayment: p),
                                 onDeletePayment: (p) => _deletePayment(context, ref, l, p),
-                                onRecordInstallment: !l.isClosed ? (s) => _showPayment(context, l, linkSchedule: s) : null,
                                 onAddMore: () => _showEntry(context, l, LoanEntryMode.topUp),
                                 onWriteOff: !l.isClosed ? () => _showEntry(context, l, LoanEntryMode.writeOff) : null,
                               ),
@@ -159,11 +129,8 @@ class LoansPage extends ConsumerWidget {
                               child: _LoanCard(
                                 loan: l,
                                 onPay: !l.isClosed ? () => _showPayment(context, l) : null,
-                                onAddSchedule: !l.isClosed ? () => _showAddSchedule(context, l) : null,
-                                onDeleteSchedule: (s) => _deleteSchedule(context, ref, s),
                                 onEditPayment: (p) => _showPayment(context, l, editPayment: p),
                                 onDeletePayment: (p) => _deletePayment(context, ref, l, p),
-                                onRecordInstallment: !l.isClosed ? (s) => _showPayment(context, l, linkSchedule: s) : null,
                                 onAddMore: () => _showEntry(context, l, LoanEntryMode.topUp),
                                 onWriteOff: !l.isClosed ? () => _showEntry(context, l, LoanEntryMode.writeOff) : null,
                               ),
@@ -226,21 +193,15 @@ class _LoanCard extends StatelessWidget {
   const _LoanCard({
     required this.loan,
     this.onPay,
-    this.onAddSchedule,
-    this.onDeleteSchedule,
     this.onEditPayment,
     this.onDeletePayment,
-    this.onRecordInstallment,
     this.onAddMore,
     this.onWriteOff,
   });
   final LoanEntity loan;
   final VoidCallback? onPay;
-  final VoidCallback? onAddSchedule;
-  final void Function(LoanScheduleEntity)? onDeleteSchedule;
   final void Function(LoanPaymentEntity)? onEditPayment;
   final void Function(LoanPaymentEntity)? onDeletePayment;
-  final void Function(LoanScheduleEntity)? onRecordInstallment;
   final VoidCallback? onAddMore;
   final VoidCallback? onWriteOff;
 
@@ -413,89 +374,6 @@ class _LoanCard extends StatelessWidget {
                       ],
                     ),
                   )),
-            ],
-            if (!loan.isClosed) ...[
-              const SizedBox(height: 12),
-              const AppDivider(),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'REPAYMENT PLAN',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.mutedForeground,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  if (onAddSchedule != null)
-                    GestureDetector(
-                      onTap: onAddSchedule,
-                      behavior: HitTestBehavior.opaque,
-                      child: const Icon(Icons.add_circle_outline, size: 16, color: AppColors.primary),
-                    ),
-                ],
-              ),
-              if (loan.schedules.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    'No repayment plan yet',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
-                  ),
-                )
-              else ...[
-                const SizedBox(height: 6),
-                ...loan.schedules.map((s) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              s.kind == 'LUMP_SUM'
-                                  ? 'Lump sum · ${s.startDate.toShortDate}'
-                                  : 'Installments · ${s.startDate.toShortDate} - ${s.endDate?.toShortDate ?? ''}',
-                              style: AppTextStyles.bodySmall,
-                            ),
-                          ),
-                          Text(
-                            s.amountPaisas.formatPKR(),
-                            style: AppTextStyles.labelMedium,
-                          ),
-                          if (s.fulfilledPaymentId != null)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: Text('Recorded', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF4CAF50))),
-                            )
-                          else if (onRecordInstallment != null)
-                            GestureDetector(
-                              onTap: () => onRecordInstallment!(s),
-                              behavior: HitTestBehavior.opaque,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text('Record', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-                          if (onDeleteSchedule != null) ...[
-                            const SizedBox(width: 10),
-                            GestureDetector(
-                              onTap: () => onDeleteSchedule!(s),
-                              behavior: HitTestBehavior.opaque,
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  size: 14,
-                                  color: AppColors.destructive.withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    )),
-              ],
             ],
             if (onPay != null) ...[
               const SizedBox(height: 12),

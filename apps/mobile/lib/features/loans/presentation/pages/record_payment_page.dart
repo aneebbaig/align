@@ -17,12 +17,10 @@ import '../../domain/entities/loan_entity.dart';
 import '../providers/loans_provider.dart';
 
 class RecordPaymentPage extends ConsumerStatefulWidget {
-  const RecordPaymentPage({required this.loan, this.editPayment, this.linkSchedule, super.key});
+  const RecordPaymentPage({required this.loan, this.editPayment, super.key});
   final LoanEntity loan;
   // When set, the page edits this existing payment instead of recording a new one.
   final LoanPaymentEntity? editPayment;
-  // When set, the recorded payment fulfills this scheduled installment.
-  final LoanScheduleEntity? linkSchedule;
 
   @override
   ConsumerState<RecordPaymentPage> createState() => _RecordPaymentPageState();
@@ -32,7 +30,7 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
   late final TextEditingController _amountCtrl;
   late final _notesCtrl = TextEditingController(text: widget.editPayment?.notes ?? '');
   final _amountFocus = FocusNode();
-  late DateTime _date = widget.editPayment?.date ?? widget.linkSchedule?.startDate ?? DateTime.now();
+  late DateTime _date = widget.editPayment?.date ?? DateTime.now();
   bool _fileUnderDateBudget = false;
   String? _fundingPotId;
   bool _bookTransaction = true;
@@ -43,9 +41,8 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill with the existing payment amount when editing, the schedule's
-    // amount when fulfilling an installment, else the remaining balance.
-    final prefill = (widget.editPayment?.amountPaisas ?? widget.linkSchedule?.amountPaisas ?? widget.loan.remainingPaisas) / 100;
+    // Pre-fill with the existing payment amount when editing, else the remaining balance.
+    final prefill = (widget.editPayment?.amountPaisas ?? widget.loan.remainingPaisas) / 100;
     _amountCtrl = TextEditingController(
       text: prefill == prefill.truncateToDouble()
           ? prefill.toInt().toString()
@@ -128,7 +125,6 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
               budgetMonth: _fileUnderDateBudget ? _date.month : null,
               budgetYear: _fileUnderDateBudget ? _date.year : null,
               fundingPotId: widget.loan.type == 'RECEIVED' ? _fundingPotId : null,
-              linkScheduleId: widget.linkSchedule?.id,
               skipTransaction: !_bookTransaction,
             );
       }

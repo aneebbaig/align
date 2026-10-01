@@ -60,7 +60,6 @@ class LoansDatasource {
     int? budgetMonth,
     int? budgetYear,
     String? fundingPotId,
-    String? linkScheduleId,
     // When true, no repayment Transaction is booked - no entry in
     // Expenses/Income, no funding-source/pot handling. Defaults to false.
     bool skipTransaction = false,
@@ -76,7 +75,6 @@ class LoansDatasource {
           if (budgetYear != null) 'budgetYear': budgetYear,
           if (fundingPotId != null) 'fundingSource': 'SAVINGS_POT',
           if (fundingPotId != null) 'fundingPotId': fundingPotId,
-          if (linkScheduleId != null) 'linkScheduleId': linkScheduleId,
           if (skipTransaction) 'skipTransaction': true,
         },
       );
@@ -180,48 +178,6 @@ class LoansDatasource {
     }
   }
 
-  Future<String> createSchedule({
-    required String loanId,
-    required String kind,
-    required int amountPaisas,
-    required DateTime startDate,
-    DateTime? endDate,
-    String flexibility = 'FIXED',
-    int priority = 0,
-    int slideWindowMonths = 0,
-    double? interestRate,
-  }) async {
-    try {
-      final res = await _dio.post(
-        ApiConstants.loanSchedules(loanId),
-        data: {
-          'kind': kind,
-          'amountPaisas': amountPaisas,
-          'startDate': startDate.toIso8601String(),
-          if (endDate != null) 'endDate': endDate.toIso8601String(),
-          'flexibility': flexibility,
-          'priority': priority,
-          'slideWindowMonths': slideWindowMonths,
-          if (interestRate != null) 'interestRate': interestRate,
-        },
-      );
-      return (res.data['data'] as Map<String, dynamic>)['id'] as String;
-    } catch (e) {
-      throw ErrorHandler.handle(e);
-    }
-  }
-
-  Future<void> deleteSchedule({
-    required String loanId,
-    required String scheduleId,
-  }) async {
-    try {
-      await _dio.delete(ApiConstants.loanScheduleById(loanId, scheduleId));
-    } catch (e) {
-      throw ErrorHandler.handle(e);
-    }
-  }
-
   static LoanEntity _parse(Map<String, dynamic> m) => LoanEntity(
         id: m['id'] as String,
         personName: m['personName'] as String,
@@ -239,9 +195,6 @@ class LoansDatasource {
         recentPayments: (m['payments'] as List<dynamic>)
             .map((p) => _parsePayment(p as Map<String, dynamic>))
             .toList(),
-        schedules: (m['schedules'] as List<dynamic>? ?? [])
-            .map((s) => _parseSchedule(s as Map<String, dynamic>))
-            .toList(),
       );
 
   static LoanPaymentEntity _parsePayment(Map<String, dynamic> m) =>
@@ -252,22 +205,5 @@ class LoansDatasource {
         notes: m['notes'] as String?,
         hasTransaction: m['transactionId'] != null,
         kind: m['kind'] as String? ?? 'PAYMENT',
-      );
-
-  static LoanScheduleEntity _parseSchedule(Map<String, dynamic> m) =>
-      LoanScheduleEntity(
-        id: m['id'] as String,
-        loanId: m['loanId'] as String,
-        kind: m['kind'] as String,
-        amountPaisas: m['amountPaisas'] as int,
-        startDate: DateTime.parse(m['startDate'] as String),
-        endDate: m['endDate'] != null
-            ? DateTime.parse(m['endDate'] as String)
-            : null,
-        flexibility: m['flexibility'] as String,
-        priority: m['priority'] as int,
-        slideWindowMonths: m['slideWindowMonths'] as int,
-        interestRate: (m['interestRate'] as num?)?.toDouble(),
-        fulfilledPaymentId: m['fulfilledPaymentId'] as String?,
       );
 }
