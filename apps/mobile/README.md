@@ -34,8 +34,8 @@ Mobile companion to the Align web app. All data lives on the server - the app is
 | Screen | Purpose |
 |--------|---------|
 | Dashboard | Budget summary, income vs spend bar, cash-flow summary card (due this month, coming-up alerts), recent transactions |
-| Money → Expenses tab | Summary strip (Spent · Budget · Under/Over · Available), then planned expenses and the paginated current-period list |
-| Money → Income tab | Summary strip (Income this period · Available), recurring income, then the current-period list |
+| Money → Expenses tab | Summary card (Spent this month, a budget progress bar with what's left or over, and Available income), then planned expenses and the paginated current-period list |
+| Money → Income tab | Summary card (Income this month, a bar of how much is already used, and Available), recurring income, then the current-period list |
 | Quick Add (Expense) | `/quick-add` - amount, category, description, notes, date, budget-period override, fund-from (income or a pot); modal, outside ShellRoute |
 | Quick Add (Income) | `/quick-add-income` - income-category, amount, description, date, budget-period override |
 | Quick Add (Task) | `/quick-add-task` - title, priority, due date |
@@ -139,7 +139,7 @@ lib/
 │       ├── app_progress_bar.dart  # Thin progress bar (0.0-1.0)
 │       ├── app_section.dart       # Section header wrapper
 │       ├── app_skeleton.dart      # Loading placeholder shimmer
-│       ├── app_summary_strip.dart # Row of labelled figures (Expenses/Income tab summaries)
+│       ├── app_summary_card.dart  # Headline figure + progress bar + footer figure (Expenses/Income tabs)
 │       ├── app_text_field.dart    # Styled text input
 │       ├── async_value_widget.dart # AsyncValue<T> → data/loading/error widget
 │       ├── book_transaction_field.dart # "Book a real entry" toggle (loans/investments)

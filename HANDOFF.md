@@ -119,7 +119,7 @@ Design: `docs/superpowers/specs/2026-09-30-investments-loans-expenses-design.md`
   it was already counted.
   `WRITTEN_OFF` loans are closed and drop out of forecasts and reminders.
 - **Available** now shows on the web Expenses page; the Android Expenses and
-  Income tabs got summary strips.
+  Income tabs got summary cards (headline figure, progress bar, Available).
 
 ## Pending / not done
 
