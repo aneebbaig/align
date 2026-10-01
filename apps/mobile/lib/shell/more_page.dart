@@ -47,6 +47,13 @@ class MorePage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _MoreItem(
+              icon: Icons.table_chart_outlined,
+              label: 'Planner',
+              subtitle: 'Month-by-month plan: lines, goals, available cash',
+              onTap: () => context.push('/planner'),
+            ),
+            const SizedBox(height: 8),
+            _MoreItem(
               icon: Icons.checklist_rtl,
               label: 'Plans',
               subtitle: 'Projects & itemized checklists',
