@@ -122,3 +122,8 @@ export function stats(routines: RoutineLike[], completions: CompletionLike[], fr
 
   return { days, currentStreak: current, bestStreak: best };
 }
+
+/** The calendar day `now` falls on in `timeZone`, as "YYYY-MM-DD". */
+export function todayString(now: Date = new Date(), timeZone: string = APP_TIME_ZONE): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}

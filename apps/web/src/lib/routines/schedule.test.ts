@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dayView, isoWeekday, isScheduledOn, stats, type CompletionLike, type RoutineLike } from "./schedule";
+import { addDays, dayView, todayString, isoWeekday, isScheduledOn, stats, type CompletionLike, type RoutineLike } from "./schedule";
 
 const TZ = "Asia/Karachi"; // UTC+5
 const routine = (id: string, p: Partial<RoutineLike> = {}): RoutineLike => ({
@@ -92,5 +92,13 @@ describe("stats", () => {
     const s = stats(rs, comps, "2026-10-12", "2026-10-14"); // Tue missed, Wed in progress
     expect(s.currentStreak).toBe(0);
     expect(s.bestStreak).toBe(1);
+  });
+});
+
+describe("todayString", () => {
+  it("uses the household timezone, not UTC", () => {
+    // 20:00Z is already the next calendar day in Karachi (UTC+5).
+    expect(todayString(new Date("2026-10-14T20:00:00Z"), TZ)).toBe("2026-10-15");
+    expect(todayString(new Date("2026-10-14T18:00:00Z"), TZ)).toBe("2026-10-14");
   });
 });

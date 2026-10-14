@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ArrowDownUp, PiggyBank, CalendarDays,
   ListTodo, Calendar, Gift, Settings, TrendingUp, Wallet, HandCoins,
   ChevronLeft, ChevronRight, LineChart, Heart,
-  FlaskConical, ClipboardList, FolderKanban, Table2,
+  FlaskConical, ClipboardList, FolderKanban, Table2, AlarmClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlignLogo } from "@/components/shared/align-logo";
@@ -44,6 +44,7 @@ const NAV_GROUPS = [
     label: "Life",
     items: [
       { href: "/tasks", label: "Tasks", icon: ListTodo },
+      { href: "/routines", label: "Routines", icon: AlarmClock },
       { href: "/projects", label: "Work", icon: FolderKanban },
       { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/vault", label: "Vault", icon: Gift },
