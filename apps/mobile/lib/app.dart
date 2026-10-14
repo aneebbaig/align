@@ -21,6 +21,9 @@ import 'features/plans/presentation/pages/plans_page.dart';
 import 'features/plans/presentation/pages/plan_detail_page.dart';
 import 'features/loans/presentation/pages/loans_page.dart';
 import 'features/settings/presentation/pages/settings_page.dart';
+import 'features/routines/presentation/pages/routine_stats_page.dart';
+import 'features/routines/presentation/pages/routines_page.dart';
+import 'features/routines/presentation/providers/routine_sync.dart';
 import 'features/tasks/presentation/pages/tasks_page.dart';
 import 'features/tasks/presentation/pages/quick_add_task_page.dart';
 import 'features/projects/presentation/pages/projects_page.dart';
@@ -97,7 +100,7 @@ GoRouter goRouter(Ref ref) {
         builder: (_, __) => const LoginPage(),
       ),
       ShellRoute(
-        builder: (_, __, child) => AppScaffold(child: child),
+        builder: (_, __, child) => RoutineSyncHost(child: AppScaffold(child: child)),
         routes: [
           GoRoute(
             path: '/dashboard',
@@ -135,6 +138,16 @@ GoRouter goRouter(Ref ref) {
           GoRoute(
             path: '/planner',
             builder: (_, __) => const PlannerPage(),
+          ),
+          GoRoute(
+            path: '/routines',
+            builder: (_, __) => const RoutinesPage(),
+            routes: [
+              GoRoute(
+                path: 'stats',
+                builder: (_, __) => const RoutineStatsPage(),
+              ),
+            ],
           ),
           GoRoute(
             path: '/plans',
