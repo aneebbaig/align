@@ -5,13 +5,14 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/errors/error_handler.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/routine_entity.dart';
+import '../tick_queue.dart';
 
 part 'routines_datasource.g.dart';
 
 @riverpod
 RoutinesDatasource routinesDatasource(Ref ref) => RoutinesDatasource(ref.watch(apiClientProvider));
 
-class RoutinesDatasource {
+class RoutinesDatasource implements TickSink {
   const RoutinesDatasource(this._dio);
   final Dio _dio;
 
@@ -60,6 +61,7 @@ class RoutinesDatasource {
 
   /// Marks a routine done for [date]. The server keeps the first tick time, so
   /// replaying a queued tick is safe.
+  @override
   Future<void> setCompletion(String id, String date, DateTime at) async {
     try {
       await _dio.put(ApiConstants.routineCompletion(id), data: {'date': date, 'completedAt': at.toUtc().toIso8601String()});
@@ -68,6 +70,7 @@ class RoutinesDatasource {
     }
   }
 
+  @override
   Future<void> clearCompletion(String id, String date) async {
     try {
       await _dio.delete(ApiConstants.routineCompletion(id), queryParameters: {'date': date});
