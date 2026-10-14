@@ -19,13 +19,19 @@ import { SplitFunding, FundingSelectContent, type FundingOption } from "@/compon
 import { FormSection, MoreOptions } from "@/components/shared/form-section";
 import { addToWantList } from "@/actions/want-list";
 import { cn } from "@/lib/utils";
+import { evaluateAmount } from "@/lib/amount-expr";
 
 // ─── types ─────────────────────────────────────────────────────────────────────
 
 const schema = z.object({
-  amount: z.string().min(1, "Amount is required"),
+  // Free text: a plain number or a simple sum like "35+67" (see evaluateAmount).
+  amount: z.string().superRefine((v, ctx) => {
+    const r = evaluateAmount(v);
+    if (!r.ok) ctx.addIssue({ code: "custom", message: r.error });
+  }),
   categoryId: z.string().min(1, "Category is required"),
-  description: z.string().min(1, "Description is required"),
+  // Optional, like the phone app: left blank it falls back to the category name.
+  description: z.string().optional(),
   notes: z.string().optional(),
   date: z.string().min(1),
   isRecurring: z.boolean(),
@@ -79,6 +85,12 @@ function dateFormatToLang(fmt: string): string {
 }
 
 function fmtMoney(paisas: number) { return (paisas / 100).toLocaleString(); }
+
+/** The amount field's value in major units, or 0 while it isn't a valid amount yet. */
+function amountOf(text: string): number {
+  const r = evaluateAmount(text);
+  return r.ok ? r.value : 0;
+}
 
 /** Parse a funding picker value into action-ready data. */
 function parseFundingValue(value: string): { source: "INCOME" | "SAVINGS_POT"; potId?: string; currencyId?: string } {
@@ -187,6 +199,7 @@ export function TransactionForm({
   });
 
   const watchedAmount = watch("amount");
+  const amountPreview = watchedAmount?.trim() ? evaluateAmount(watchedAmount) : null;
   const watchedDate = watch("date");
   const budget = selectedCategory && defaultType === "EXPENSE" ? budgetByCategoryId[selectedCategory] : null;
   const remaining = budget ? budget.allocated - budget.spent : null;
@@ -229,10 +242,15 @@ export function TransactionForm({
     return { splitSources: sources };
   }
 
+  // Blank description -> the category's name, same as the phone app.
+  function descriptionFor(data: FormValues): string {
+    return data.description?.trim() || categories.find((c) => c.id === data.categoryId)?.name || (defaultType === "INCOME" ? "Income" : "Expense");
+  }
+
   async function submitTransaction(data: FormValues) {
     setLoading(true);
     try {
-      const rawAmount = parseFloat(data.amount);
+      const rawAmount = amountOf(data.amount);
       const pkrAmount = isNativeIncome ? rawAmount * nativeRate : rawAmount;
 
       const splitPayload = defaultType === "EXPENSE" && !isEditingExpense ? buildSplitPayload(pkrAmount) : null;
@@ -254,7 +272,7 @@ export function TransactionForm({
         amount: pkrAmount,
         type: defaultType,
         categoryId: data.categoryId,
-        description: data.description,
+        description: descriptionFor(data),
         notes: data.notes,
         date: data.date,
         isRecurring: data.isRecurring,
@@ -283,7 +301,7 @@ export function TransactionForm({
   }
 
   async function onSubmit(data: FormValues) {
-    const amount = parseFloat(data.amount);
+    const amount = amountOf(data.amount);
     if (!transaction && defaultType === "EXPENSE" && amount >= IMPULSE_THRESHOLD) {
       setImpulseCheck({ data });
       return;
@@ -295,8 +313,8 @@ export function TransactionForm({
     if (!impulseCheck) return;
     setLoading(true);
     const result = await addToWantList({
-      name: impulseCheck.data.description,
-      estimatedCost: parseFloat(impulseCheck.data.amount),
+      name: descriptionFor(impulseCheck.data),
+      estimatedCost: amountOf(impulseCheck.data.amount),
       coolingHours: 48,
     });
     if (result.success) {
@@ -312,7 +330,7 @@ export function TransactionForm({
   // ─── impulse check screen ──────────────────────────────────────────────────
 
   if (impulseCheck) {
-    const amount = parseFloat(impulseCheck.data.amount);
+    const amount = amountOf(impulseCheck.data.amount);
     return (
       <div className="space-y-5">
         <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700 p-5 text-center space-y-2">
@@ -320,7 +338,7 @@ export function TransactionForm({
           <div className="font-bold text-lg text-foreground">Hold on - big spend!</div>
           <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{baseCurrency.symbol} {amount.toLocaleString()}</div>
           <p className="text-sm text-muted-foreground">
-            Was <span className="font-medium">"{impulseCheck.data.description}"</span> planned, or did it just pop into your head?
+            Was <span className="font-medium">"{descriptionFor(impulseCheck.data)}"</span> planned, or did it just pop into your head?
           </p>
         </div>
         <div className="space-y-3">
@@ -379,14 +397,45 @@ export function TransactionForm({
         </div>
       )}
 
-      {/* What: description + category */}
-      <FormSection title="What">
-        <div className="space-y-1">
-          <Label htmlFor="description">Description</Label>
-          <Input id="description" placeholder="What was this for?" {...register("description")} />
-          {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
-        </div>
+      {/* Amount + currency toggle */}
+      {!isEditingExpense && (
+        <FormSection title="Amount">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="amount">Amount ({selectedCurrency.symbol} {selectedCurrency.code})</Label>
+              {showCurrencyToggle && (
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-xs flex-wrap">
+                  {currencies.map((c) => (
+                    <button key={c.id} type="button" onClick={() => { setIncomeCurrencyId(c.id); setNativeRate(c.rateToBase); }}
+                      className={cn("px-2 py-1 rounded-md font-semibold transition-colors", incomeCurrencyId === c.id ? "bg-background shadow text-foreground" : "text-muted-foreground")}>
+                      {c.symbol} {c.code}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Input id="amount" type="text" inputMode="decimal" autoComplete="off" autoFocus={!transaction} placeholder="0.00 or a sum like 35+67" className="text-lg font-semibold" {...register("amount")} />
+            {errors.amount ? (
+              <p className="text-xs text-destructive">{errors.amount.message}</p>
+            ) : amountPreview?.ok && amountPreview.isExpression ? (
+              <p className="text-xs text-muted-foreground px-1">= {selectedCurrency.symbol} {amountPreview.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+            ) : null}
+            {isNativeIncome && (
+              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium shrink-0">1 {selectedCurrency.code} =</span>
+                <input type="number" step="0.01" value={nativeRate}
+                  onChange={(e) => setNativeRate(parseFloat(e.target.value) || selectedCurrency.rateToBase)}
+                  className="w-24 text-xs font-semibold bg-transparent border-b border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 focus:outline-none" />
+                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">{baseCurrency.code}</span>
+                <span className="text-xs text-blue-500 ml-auto">≈ {baseCurrency.symbol} {(amountOf(watchedAmount) * nativeRate).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </FormSection>
+      )}
 
+      {/* What: category, then an optional description */}
+      <FormSection title="What">
         <div className="space-y-1">
           <Label>Category</Label>
           <Select onValueChange={(v) => { setValue("categoryId", v); setSelectedCategory(v); }} defaultValue={transaction?.categoryId}>
@@ -415,40 +464,13 @@ export function TransactionForm({
             <p className="text-xs text-muted-foreground px-1">No budget set for this category this month</p>
           )}
         </div>
-      </FormSection>
 
-      {/* Amount + currency toggle */}
-      {!isEditingExpense && (
-        <FormSection title="Amount">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="amount">Amount ({selectedCurrency.symbol} {selectedCurrency.code})</Label>
-              {showCurrencyToggle && (
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 text-xs flex-wrap">
-                  {currencies.map((c) => (
-                    <button key={c.id} type="button" onClick={() => { setIncomeCurrencyId(c.id); setNativeRate(c.rateToBase); }}
-                      className={cn("px-2 py-1 rounded-md font-semibold transition-colors", incomeCurrencyId === c.id ? "bg-background shadow text-foreground" : "text-muted-foreground")}>
-                      {c.symbol} {c.code}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Input id="amount" type="number" step="0.01" placeholder="0.00" className="text-lg font-semibold" {...register("amount")} />
-            {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
-            {isNativeIncome && (
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
-                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium shrink-0">1 {selectedCurrency.code} =</span>
-                <input type="number" step="0.01" value={nativeRate}
-                  onChange={(e) => setNativeRate(parseFloat(e.target.value) || selectedCurrency.rateToBase)}
-                  className="w-24 text-xs font-semibold bg-transparent border-b border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 focus:outline-none" />
-                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">{baseCurrency.code}</span>
-                <span className="text-xs text-blue-500 ml-auto">≈ {baseCurrency.symbol} {((parseFloat(watchedAmount) || 0) * nativeRate).toLocaleString()}</span>
-              </div>
-            )}
-          </div>
-        </FormSection>
-      )}
+        <div className="space-y-1">
+          <Label htmlFor="description">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Input id="description" placeholder="What was this for?" {...register("description")} />
+          {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
+        </div>
+      </FormSection>
 
       {/* When: date + budget-period checkbox, right next to each other */}
       {!isEditingExpense && (
@@ -494,7 +516,7 @@ export function TransactionForm({
                   </button>
                 </div>
                 <SplitFunding
-                  totalAmount={parseFloat(watchedAmount) || 0}
+                  totalAmount={amountOf(watchedAmount)}
                   options={fundingOptions}
                   value={splitSources}
                   onChange={setSplitSources}
