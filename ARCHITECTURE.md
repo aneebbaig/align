@@ -44,6 +44,12 @@ Migrations are plain SQL under `prisma/migrations/`, reviewed by hand. Run `pris
 
 The Planner (`/planner`) is deliberately cut off from the ledger: it never reads or writes transactions, pots, loans, or investments. It stores only inputs - settings (start month, length, starting cash, its own USD rate), lines with "from this month on" steps and one-month overrides, and one-off goals - and `src/lib/planner/compute.ts` builds the table on every read. Months are stored as `year * 12 + (month - 1)`. The web page and `GET /api/v1/planner` return the same serialized shape, so both apps render identical numbers.
 
+## Routines
+
+Routines (`/routines`) are timed daily items such as "Wake up 06:00" or "Gym 18:00", repeating on chosen weekdays or happening once on a date. `Routine` holds the definition; `RoutineCompletion` holds one row per routine per day with the time it was ticked (unique on routine + date, so ticking twice is a no-op). `src/lib/routines/schedule.ts` is the single place that decides what is scheduled on a date and builds the day view and stats (done/scheduled, the tick-vs-scheduled minute delta, streaks); the web actions and `/api/v1/routines` both go through `store.ts`. There is no on-time pass/fail rule - the delta is stored and shown.
+
+Reminders are scheduled on the phone, not pushed from the server. After every sync (app start, resume, any edit) the Flutter app cancels its routine alarms and reschedules them with `flutter_local_notifications` as exact, max-importance notifications with **Done** and **Snooze 10m** actions. The routine list is cached so alarms can be rescheduled offline, and ticks made offline or from a notification action are queued (`TickQueue`) and replayed later. Day boundaries on the server follow `APP_TIMEZONE`; alarms follow the phone's clock.
+
 ## The mobile app
 
 Flutter, organised as clean-architecture slices. Each feature under `lib/features/<name>/` has its own data, domain, and presentation layers:
