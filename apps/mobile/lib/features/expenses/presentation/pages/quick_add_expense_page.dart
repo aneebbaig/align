@@ -10,6 +10,8 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/form_section.dart';
@@ -66,11 +68,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     }
   }
 
-  int? get _amountPaisas {
-    final v = double.tryParse(_amountCtrl.text.trim());
-    if (v == null || v <= 0) return null;
-    return (v * 100).round();
-  }
+  // The field takes a plain number or a sum like "35+67"; null until it is a valid, positive amount.
+  int? get _amountPaisas => parseAmount(_amountCtrl.text).paisas;
 
   bool get _canSubmit => _amountPaisas != null && _selectedCategoryId != null;
 
@@ -199,7 +198,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               controller: _amountCtrl,
               focusNode: _amountFocus,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [_DecimalFormatter()],
+              inputFormatters: [AmountExprFormatter()],
               style: AppTextStyles.displayLarge.copyWith(
                 color: AppColors.primary,
                 letterSpacing: -1,
@@ -221,6 +220,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               ),
               onChanged: (_) => setState(() {}),
             ),
+            AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
 
             const SizedBox(height: 12),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
@@ -424,12 +424,3 @@ class _FormField extends StatelessWidget {
       );
 }
 
-class _DecimalFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue val) {
-    final text = val.text;
-    if (text.isEmpty) return val;
-    if (!RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(text)) return old;
-    return val;
-  }
-}

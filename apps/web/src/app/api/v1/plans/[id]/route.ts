@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const [plan, position] = await Promise.all([
       prisma.plan.findFirst({
         where: { id, userId: auth.id },
-        include: { items: { orderBy: { status: "asc" } } },
+        include: { items: { orderBy: [{ order: "asc" }, { id: "asc" }] } },
       }),
       computeFinancialPosition(auth.id),
     ]);

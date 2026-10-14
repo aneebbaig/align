@@ -32,6 +32,9 @@ class ApiConstants {
   static const String dashboard = '/dashboard';
 
   static const String tasks = '/tasks';
+  static const String routines = '/routines';
+  static const String routinesDay = '/routines/day';
+  static const String routinesStats = '/routines/stats';
   static const String projects = '/projects';
   static const String tags = '/tags';
   static const String investments = '/investments';
@@ -48,6 +51,7 @@ class ApiConstants {
 
   static String planById(String id) => '/plans/$id';
   static String planItems(String planId) => '/plans/$planId/items';
+  static String planItemsOrder(String planId) => '/plans/$planId/items/order';
   static String planItemBuy(String planId, String itemId) => '/plans/$planId/items/$itemId/buy';
   static String planItem(String planId, String itemId) => '/plans/$planId/items/$itemId';
 
@@ -66,6 +70,8 @@ class ApiConstants {
   static String expenseById(String id) => '/expenses/$id';
   static String incomeById(String id) => '/income/$id';
   static String taskById(String id) => '/tasks/$id';
+  static String routineById(String id) => '/routines/$id';
+  static String routineCompletion(String id) => '/routines/$id/completion';
   static String projectById(String id) => '/projects/$id';
   static String projectTasks(String projectId) => '/projects/$projectId/tasks';
   static String projectTaskById(String projectId, String taskId) =>

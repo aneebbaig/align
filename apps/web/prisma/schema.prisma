@@ -63,6 +63,9 @@ model User {
   plannerLines     PlannerLine[]
   plannerGoals     PlannerGoal[]
 
+  routines           Routine[]
+  routineCompletions RoutineCompletion[]
+
   emailVerified    Boolean     @default(false)
   image            String?
   twoFactorEnabled Boolean?    @default(false)
@@ -239,6 +242,8 @@ model PlanItem {
   vendor        String?
   // JSON array of vendor quotes: [{vendor, amount, notes}]
   quotes        String?
+  // Manual (drag) order within the plan; items are listed by this ascending.
+  order         Int       @default(0)
 
   plan         Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -978,4 +983,42 @@ model PlannerGoal {
 
   @@index([userId])
   @@map("planner_goals")
+}
+
+// ─── Routines ────────────────────────────────────────────────────────────────
+// Timed daily routines. Weekday routines repeat on `days` (ISO 1-7, Monday = 1);
+// a one-off has no days and a single `date`. One completion row per routine per
+// day records when it was ticked.
+
+model Routine {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  time      String // "HH:mm"
+  days      Int[]    @default([])
+  date      String? // "YYYY-MM-DD", one-offs only
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions RoutineCompletion[]
+
+  @@index([userId])
+  @@map("routines")
+}
+
+model RoutineCompletion {
+  id          String   @id @default(cuid())
+  routineId   String
+  userId      String
+  date        String // "YYYY-MM-DD"
+  completedAt DateTime
+
+  routine Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([routineId, date])
+  @@index([userId, date])
+  @@map("routine_completions")
 }

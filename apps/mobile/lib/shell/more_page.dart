@@ -54,6 +54,13 @@ class MorePage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _MoreItem(
+              icon: Icons.alarm,
+              label: 'Routines',
+              subtitle: 'Daily routine with timed reminders',
+              onTap: () => context.push('/routines'),
+            ),
+            const SizedBox(height: 8),
+            _MoreItem(
               icon: Icons.checklist_rtl,
               label: 'Plans',
               subtitle: 'Projects & itemized checklists',

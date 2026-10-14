@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { toPaisas } from "@/lib/utils";
 import { ActionResult } from "@/types";
 import { createTransaction } from "@/actions/expenses";
+import { nextItemOrder, reorderPlanItems } from "@/lib/plans/store";
 
 export async function getPlanners() {
   const userId = await getUserId();
@@ -22,7 +23,7 @@ export async function getPlanner(id: string) {
     where: { id, userId },
     include: {
       items: {
-        orderBy: [{ eventGroup: "asc" }, { dueDate: "asc" }],
+        orderBy: [{ order: "asc" }, { id: "asc" }],
       },
     },
   });
@@ -119,6 +120,7 @@ export async function createPlannerItem(planId: string, data: {
         ...data,
         estimatedCost: toPaisas(data.estimatedCost),
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        order: await nextItemOrder(planId),
         planId,
       },
     });
@@ -211,6 +213,42 @@ export async function logPlanItemExpense(itemId: string): Promise<ActionResult> 
   } catch (e) {
     console.error("[logPlanItemExpense]", e);
     return { success: false, error: "Failed to log expense" };
+  }
+}
+
+// Mark an item bought without booking an expense (logging is optional). It
+// still counts toward "actually paid", at its actual cost or its estimate.
+export async function markPlanItemBought(itemId: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const item = await prisma.planItem.findFirst({
+      where: { id: itemId },
+      include: { plan: { select: { userId: true, id: true } } },
+    });
+    if (!item || item.plan.userId !== userId) return { success: false, error: "Not found" };
+
+    await prisma.planItem.update({
+      where: { id: itemId },
+      data: { status: "PAID", actualCost: item.actualCost ?? item.estimatedCost },
+    });
+    revalidatePath(`/plans/${item.plan.id}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[markPlanItemBought]", e);
+    return { success: false, error: "Failed to mark as bought" };
+  }
+}
+
+/** Saves a drag-reorder of a group of items (`ids` = the new sequence). */
+export async function reorderPlannerItems(planId: string, ids: string[]): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    if (!(await reorderPlanItems(userId, planId, ids))) return { success: false, error: "Could not reorder these items" };
+    revalidatePath(`/plans/${planId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[reorderPlannerItems]", e);
+    return { success: false, error: "Failed to reorder items" };
   }
 }
 

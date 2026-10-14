@@ -35,6 +35,7 @@ This is the part to understand before changing anything financial. The whole app
 - Investments track what you put in and what they're worth. Adding money raises both; withdrawing lowers only the current value, and gain counts what was taken out (current + withdrawn − invested). Either can book an expense/income entry, or not.
 - A loan's history holds repayments, top-ups ("Add to loan"), and write-offs. A write-off books an expense only for money lent "track only" (the loan and every top-up) - otherwise part of the loss was already counted when it was lent. `PAID` and `WRITTEN_OFF` loans are closed and drop out of reminders, net position, and the investment suggestion.
 - You can't delete income if doing so would leave that month's income-funded expenses and deposits underwater.
+- Amount fields on the expense and income forms (web and phone) accept a plain number or a sum of numbers with `+` and `-` (`35+67`). The result must be positive; `evaluateAmount` (web, `src/lib/amount-expr.ts`) and `parseAmount` (phone, `core/utils/amount_expr.dart`) do the same parsing and are tested side by side.
 - All money is stored as integers in the smallest unit (paisas, the currency times 100). No floats.
 - Currencies are household-defined (Settings → Currencies). One is the base (PKR by default) that every total is reported in; the rest carry a rate to it. `/api/cron/daily` refreshes the USD rate from a free public endpoint, but only if something schedules that route (see `apps/web/DEPLOYMENT.md`); otherwise rates are set by hand.
 
@@ -43,6 +44,12 @@ Migrations are plain SQL under `prisma/migrations/`, reviewed by hand. Run `pris
 ## The planner
 
 The Planner (`/planner`) is deliberately cut off from the ledger: it never reads or writes transactions, pots, loans, or investments. It stores only inputs - settings (start month, length, starting cash, its own USD rate), lines with "from this month on" steps and one-month overrides, and one-off goals - and `src/lib/planner/compute.ts` builds the table on every read. Months are stored as `year * 12 + (month - 1)`. The web page and `GET /api/v1/planner` return the same serialized shape, so both apps render identical numbers.
+
+## Routines
+
+Routines (`/routines`) are timed daily items such as "Wake up 06:00" or "Gym 18:00", repeating on chosen weekdays or happening once on a date. `Routine` holds the definition; `RoutineCompletion` holds one row per routine per day with the time it was ticked (unique on routine + date, so ticking twice is a no-op). `src/lib/routines/schedule.ts` is the single place that decides what is scheduled on a date and builds the day view and stats (done/scheduled, the tick-vs-scheduled minute delta, streaks); the web actions and `/api/v1/routines` both go through `store.ts`. There is no on-time pass/fail rule - the delta is stored and shown.
+
+Reminders are scheduled on the phone, not pushed from the server. After every sync (app start, resume, any edit) the Flutter app cancels its routine alarms and reschedules them with `flutter_local_notifications` as exact, max-importance notifications with **Done** and **Snooze 10m** actions. The routine list is cached so alarms can be rescheduled offline, and ticks made offline or from a notification action are queued (`TickQueue`) and replayed later. Day boundaries on the server follow `APP_TIMEZONE`; alarms follow the phone's clock.
 
 ## The mobile app
 
