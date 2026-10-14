@@ -242,6 +242,8 @@ model PlanItem {
   vendor        String?
   // JSON array of vendor quotes: [{vendor, amount, notes}]
   quotes        String?
+  // Manual (drag) order within the plan; items are listed by this ascending.
+  order         Int       @default(0)
 
   plan         Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
   transactions Transaction[]

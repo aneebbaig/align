@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
+import { nextItemOrder } from "@/lib/plans/store";
 
 // Add a checklist item to a plan.
 const createSchema = z.object({
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         notes: d.notes ?? null,
         vendor: d.vendor ?? null,
         dueDate: d.dueDate ? new Date(d.dueDate) : null,
+        order: await nextItemOrder(id),
       },
       select: { id: true },
     });

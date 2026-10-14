@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, CheckCircle, Clock, Tag, Store, CheckCircle2, AlertTriangle, TrendingUp, Info } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, CheckCircle, Clock, Tag, Store, CheckCircle2, AlertTriangle, TrendingUp, Info } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -13,7 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { createPlannerItem, updatePlannerItem, deletePlannerItem, updatePlannerStatus, deletePlanner, logPlanItemExpense } from "@/actions/plan";
+import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { createPlannerItem, updatePlannerItem, deletePlannerItem, updatePlannerStatus, deletePlanner, logPlanItemExpense, markPlanItemBought, reorderPlannerItems } from "@/actions/plan";
 import { cn } from "@/lib/utils";
 
 interface PlanItem {
@@ -53,6 +56,55 @@ const PLANNER_STATUS_LABELS: Record<string, string> = {
 
 const GENERIC_GROUPS = ["Phase 1", "Phase 2", "Phase 3", "Venue", "Catering", "Decor", "Transport", "Other"];
 
+// A row that can be dragged by its handle. `children` receives the handle to place.
+function SortableRow({ id, children }: { id: string; children: (handle: React.ReactNode) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const handle = (
+    <button
+      type="button"
+      aria-label="Drag to reorder"
+      className="cursor-grab touch-none text-muted-foreground hover:text-foreground p-1 -ml-1"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
+      {children(handle)}
+    </div>
+  );
+}
+
+// One draggable list (a group, or the ungrouped items). Reports the new id sequence on drop.
+function SortableItems({ items, onReorder, renderItem }: {
+  items: PlanItem[];
+  onReorder: (ids: string[]) => void;
+  renderItem: (item: PlanItem, handle: React.ReactNode) => React.ReactNode;
+}) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = items.findIndex((i) => i.id === active.id);
+    const to = items.findIndex((i) => i.id === over.id);
+    if (from < 0 || to < 0) return;
+    onReorder(arrayMove(items, from, to).map((i) => i.id));
+  }
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2">
+          {items.map((item) => (
+            <SortableRow key={item.id} id={item.id}>{(handle) => renderItem(item, handle)}</SortableRow>
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }: { plan: Plan; financialPosition: FinancialPosition; baseSymbol?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -75,10 +127,17 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
   const paidCount = plan.items.filter((i) => i.status === "PAID").length;
   const pct = plan.items.length > 0 ? Math.round((paidCount / plan.items.length) * 100) : 0;
 
+  // Drag-reorder shows instantly; the server order replaces it after the refresh.
+  // It only applies to the items array it was made for, so fresh server data wins.
+  const [override, setOverride] = useState<{ base: PlanItem[]; ids: string[] } | null>(null);
+  const displayItems = override && override.base === plan.items
+    ? [...plan.items].sort((a, b) => override.ids.indexOf(a.id) - override.ids.indexOf(b.id))
+    : plan.items;
+
   // Group items by eventGroup
   const grouped: Record<string, PlanItem[]> = {};
   const ungrouped: PlanItem[] = [];
-  for (const item of plan.items) {
+  for (const item of displayItems) {
     if (item.eventGroup) {
       if (!grouped[item.eventGroup]) grouped[item.eventGroup] = [];
       grouped[item.eventGroup].push(item);
@@ -129,6 +188,30 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
     });
   }
 
+  // Bought, without booking an expense.
+  async function handleMarkBought(itemId: string) {
+    startTransition(async () => {
+      const result = await markPlanItemBought(itemId);
+      if (result.success) toast.success("Marked as bought");
+      else toast.error(result.error ?? "Failed");
+      router.refresh();
+    });
+  }
+
+  // `ids` is the new order of one list; splice it into the full sequence in the
+  // slots those items already occupy, so other groups stay put.
+  async function handleReorder(ids: string[]) {
+    const inList = new Set(ids);
+    let next = 0;
+    setOverride({ base: plan.items, ids: displayItems.map((i) => (inList.has(i.id) ? ids[next++] : i.id)) });
+    const result = await reorderPlannerItems(plan.id, ids);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to reorder");
+      setOverride(null);
+    }
+    router.refresh();
+  }
+
   async function handleDeleteItem() {
     if (!deleteItemId) return;
     await deletePlannerItem(deleteItemId);
@@ -155,10 +238,11 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
     router.push("/plans");
   }
 
-  function ItemRow({ item }: { item: PlanItem }) {
+  function ItemRow({ item, handle }: { item: PlanItem; handle?: React.ReactNode }) {
     return (
       <div className={cn("p-3 rounded-lg border border-border bg-background", item.status === "SKIPPED" && "opacity-50")}>
         <div className="flex items-start gap-3">
+          {handle}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-foreground">{item.name}</span>
@@ -191,16 +275,28 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                 <CheckCircle2 className="h-4 w-4" /> Bought
               </button>
             ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                disabled={isPending}
-                onClick={() => handleLogExpense(item.id)}
-                title="Mark bought and log a real expense"
-              >
-                Buy &amp; log
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  disabled={isPending}
+                  onClick={() => handleMarkBought(item.id)}
+                  title="Mark as bought without logging an expense"
+                >
+                  Mark bought
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  disabled={isPending}
+                  onClick={() => handleLogExpense(item.id)}
+                  title="Mark bought and log a real expense"
+                >
+                  Buy &amp; log
+                </Button>
+              </>
             )}
             <button onClick={() => setDeleteItemId(item.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-1">
               <Trash2 className="h-3.5 w-3.5" />
@@ -361,8 +457,8 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group}</span>
                   <span className="text-xs text-muted-foreground">· {baseSymbol} {(items.reduce((s, i) => s + i.estimatedCost, 0) / 100).toLocaleString()} est.</span>
                 </div>
-                <div className="space-y-2 pl-2 border-l-2 border-muted">
-                  {items.map((item) => <ItemRow key={item.id} item={item} />)}
+                <div className="pl-2 border-l-2 border-muted">
+                  <SortableItems items={items} onReorder={handleReorder} renderItem={(item, handle) => <ItemRow item={item} handle={handle} />} />
                 </div>
               </div>
             ))}
@@ -375,9 +471,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Other</span>
                   </div>
                 )}
-                <div className="space-y-2">
-                  {ungrouped.map((item) => <ItemRow key={item.id} item={item} />)}
-                </div>
+                <SortableItems items={ungrouped} onReorder={handleReorder} renderItem={(item, handle) => <ItemRow item={item} handle={handle} />} />
               </div>
             )}
           </div>
