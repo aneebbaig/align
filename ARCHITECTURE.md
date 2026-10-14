@@ -35,6 +35,7 @@ This is the part to understand before changing anything financial. The whole app
 - Investments track what you put in and what they're worth. Adding money raises both; withdrawing lowers only the current value, and gain counts what was taken out (current + withdrawn − invested). Either can book an expense/income entry, or not.
 - A loan's history holds repayments, top-ups ("Add to loan"), and write-offs. A write-off books an expense only for money lent "track only" (the loan and every top-up) - otherwise part of the loss was already counted when it was lent. `PAID` and `WRITTEN_OFF` loans are closed and drop out of reminders, net position, and the investment suggestion.
 - You can't delete income if doing so would leave that month's income-funded expenses and deposits underwater.
+- Amount fields on the expense and income forms (web and phone) accept a plain number or a sum of numbers with `+` and `-` (`35+67`). The result must be positive; `evaluateAmount` (web, `src/lib/amount-expr.ts`) and `parseAmount` (phone, `core/utils/amount_expr.dart`) do the same parsing and are tested side by side.
 - All money is stored as integers in the smallest unit (paisas, the currency times 100). No floats.
 - Currencies are household-defined (Settings → Currencies). One is the base (PKR by default) that every total is reported in; the rest carry a rate to it. `/api/cron/daily` refreshes the USD rate from a free public endpoint, but only if something schedules that route (see `apps/web/DEPLOYMENT.md`); otherwise rates are set by hand.
 
