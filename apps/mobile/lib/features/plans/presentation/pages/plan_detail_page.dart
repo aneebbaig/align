@@ -61,17 +61,48 @@ class PlanDetailPage extends ConsumerWidget {
   }
 }
 
-class _Content extends ConsumerWidget {
+class _Content extends ConsumerStatefulWidget {
   const _Content({required this.plan});
   final PlanDetailEntity plan;
 
-  Future<void> _buy(BuildContext context, WidgetRef ref, PlanItemEntity item) async {
+  @override
+  ConsumerState<_Content> createState() => _ContentState();
+}
+
+class _ContentState extends ConsumerState<_Content> {
+  PlanDetailEntity get plan => widget.plan;
+
+  /// Item order while a drag is being saved; cleared when fresh data arrives.
+  List<PlanItemEntity>? _local;
+
+  @override
+  void didUpdateWidget(covariant _Content old) {
+    super.didUpdateWidget(old);
+    if (old.plan != widget.plan) _local = null;
+  }
+
+  Future<void> _reorder(int from, int to) async {
+    final items = [...(_local ?? plan.items)];
+    items.insert(to, items.removeAt(from));
+    setState(() => _local = items);
+    HapticFeedback.selectionClick();
+    try {
+      await ref.read(plansDatasourceProvider).reorderItems(planId: plan.id, ids: items.map((i) => i.id).toList());
+      ref.invalidate(planDetailProvider(plan.id));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _local = null);
+      ref.read(toastServiceProvider).error(context, e is AppException ? e.message : 'Failed to reorder');
+    }
+  }
+
+  Future<void> _buy(BuildContext context, WidgetRef ref, PlanItemEntity item, {required bool log}) async {
     try {
       HapticFeedback.mediumImpact();
-      await ref.read(plansDatasourceProvider).buyItem(planId: plan.id, itemId: item.id);
+      await ref.read(plansDatasourceProvider).buyItem(planId: plan.id, itemId: item.id, log: log);
       ref.invalidate(planDetailProvider(plan.id));
       ref.invalidate(plansProvider);
-      if (context.mounted) ref.read(toastServiceProvider).success(context, 'Bought — expense logged');
+      if (context.mounted) ref.read(toastServiceProvider).success(context, log ? 'Bought — expense logged' : 'Marked as bought');
     } catch (e) {
       if (context.mounted) {
         ref.read(toastServiceProvider).error(context, e is AppException ? e.message : 'Failed');
@@ -92,7 +123,8 @@ class _Content extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final items = _local ?? plan.items;
     final paidCount = plan.items.where((i) => i.isBought).length;
     final pct = plan.items.isEmpty ? 0 : ((paidCount / plan.items.length) * 100).round();
     return ListView(
@@ -128,16 +160,35 @@ class _Content extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        ...plan.items.map((item) => Padding(
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: items.length,
+          onReorderItem: _reorder,
+          proxyDecorator: (child, _, __) => Material(color: Colors.transparent, child: child),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return Padding(
+              key: ValueKey(item.id),
               padding: const EdgeInsets.only(bottom: 8),
               child: _ItemRow(
                 item: item,
-                onBuy: () => _buy(context, ref, item),
+                dragHandle: ReorderableDragStartListener(
+                  index: index,
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.drag_indicator, size: 20, color: AppColors.mutedForeground),
+                  ),
+                ),
+                onBuy: (log) => _buy(context, ref, item, log: log),
                 onUndo: () => _undo(context, ref, item),
                 onEdit: () => showEditItemSheet(context, ref, plan.id, item),
                 onDelete: () => _deleteItem(context, ref, item),
               ),
-            )),
+            );
+          },
+        ),
       ],
     );
   }
@@ -260,9 +311,19 @@ class _Mini extends StatelessWidget {
 }
 
 class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item, required this.onBuy, required this.onUndo, required this.onEdit, required this.onDelete});
+  const _ItemRow({
+    required this.item,
+    required this.dragHandle,
+    required this.onBuy,
+    required this.onUndo,
+    required this.onEdit,
+    required this.onDelete,
+  });
   final PlanItemEntity item;
-  final VoidCallback onBuy;
+  final Widget dragHandle;
+
+  /// Called with whether to also log an expense.
+  final void Function(bool log) onBuy;
   final VoidCallback onUndo;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -289,12 +350,37 @@ class _ItemRow extends StatelessWidget {
     );
   }
 
+  void _buyMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.popover,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined, color: AppColors.primary, size: 20),
+            title: const Text('Buy & log expense', style: AppTextStyles.bodyMedium),
+            subtitle: const Text('Marks it bought and books an expense', style: AppTextStyles.bodySmall),
+            onTap: () { Navigator.pop(ctx); onBuy(true); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.check_circle_outline, color: AppColors.foreground, size: 20),
+            title: const Text('Mark bought only', style: AppTextStyles.bodyMedium),
+            subtitle: const Text('No expense is logged', style: AppTextStyles.bodySmall),
+            onTap: () { Navigator.pop(ctx); onBuy(false); },
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AppCard(
         onTap: () => _menu(context),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
+            dragHandle,
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,13 +403,13 @@ class _ItemRow extends StatelessWidget {
               )
             else
               OutlinedButton(
-                onPressed: onBuy,
+                onPressed: () => _buyMenu(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ),
-                child: const Text('Buy & log'),
+                child: const Text('Buy'),
               ),
           ],
         ),

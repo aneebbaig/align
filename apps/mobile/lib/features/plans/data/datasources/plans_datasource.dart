@@ -118,9 +118,20 @@ class PlansDatasource {
     }
   }
 
-  Future<void> buyItem({required String planId, required String itemId}) async {
+  /// Marks the item bought. With [log] (the default) it also books an expense;
+  /// without, it only marks it bought.
+  Future<void> buyItem({required String planId, required String itemId, bool log = true}) async {
     try {
-      await _dio.post(ApiConstants.planItemBuy(planId, itemId));
+      await _dio.post(ApiConstants.planItemBuy(planId, itemId), data: {'log': log});
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
+  /// Saves a drag-reorder: [ids] is the new sequence of the plan's items.
+  Future<void> reorderItems({required String planId, required List<String> ids}) async {
+    try {
+      await _dio.put(ApiConstants.planItemsOrder(planId), data: {'ids': ids});
     } catch (e) {
       throw ErrorHandler.handle(e);
     }
