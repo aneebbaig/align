@@ -14,12 +14,16 @@ class BudgetPeriodField extends StatelessWidget {
     required this.date,
     required this.checked,
     required this.onChanged,
+    this.otherwise,
     super.key,
   });
 
   final DateTime date;
   final bool checked;
   final void Function(bool checked) onChanged;
+
+  /// Replaces the "Otherwise files under the current open period" line (e.g. when editing).
+  final String? otherwise;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -45,7 +49,7 @@ class BudgetPeriodField extends StatelessWidget {
                       style: AppTextStyles.bodyMedium,
                     ),
                     Text(
-                      'Otherwise files under the current open period',
+                      otherwise ?? 'Otherwise files under the current open period',
                       style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
                     ),
                   ],

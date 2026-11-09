@@ -17,6 +17,34 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
   Future<void> deleteExpense(String id) => _datasource.deleteExpense(id);
 
   @override
+  Future<void> updateExpense({
+    required String id,
+    required int amountPaisas,
+    required String categoryId,
+    required String description,
+    String? notes,
+    required DateTime date,
+    bool isRegretPurchase = false,
+    int? budgetMonth,
+    int? budgetYear,
+    bool changeFunding = false,
+    String? fundingPotId,
+  }) =>
+      _datasource.updateExpense(
+        id: id,
+        amountPaisas: amountPaisas,
+        categoryId: categoryId,
+        description: description,
+        notes: notes,
+        date: date,
+        isRegretPurchase: isRegretPurchase,
+        budgetMonth: budgetMonth,
+        budgetYear: budgetYear,
+        changeFunding: changeFunding,
+        fundingPotId: fundingPotId,
+      );
+
+  @override
   Future<String> createExpense({
     required int amountPaisas,
     required String categoryId,

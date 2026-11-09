@@ -45,6 +45,36 @@ class IncomeDatasource {
     }
   }
 
+  /// Edits an income entry; every figure it feeds is recalculated server-side.
+  /// [budgetMonth]/[budgetYear] re-file it; omitted keeps its period.
+  Future<void> updateIncome({
+    required String id,
+    required int amountPaisas,
+    required String categoryId,
+    required String description,
+    String? notes,
+    required DateTime date,
+    int? budgetMonth,
+    int? budgetYear,
+  }) async {
+    try {
+      await _dio.patch(
+        ApiConstants.incomeById(id),
+        data: {
+          'amountPaisas': amountPaisas,
+          'categoryId': categoryId,
+          'description': description,
+          'notes': (notes != null && notes.isNotEmpty) ? notes : null,
+          'date': date.toIso8601String(),
+          if (budgetMonth != null) 'budgetMonth': budgetMonth,
+          if (budgetYear != null) 'budgetYear': budgetYear,
+        },
+      );
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
   Future<void> deleteIncome(String id) async {
     try {
       await _dio.delete(ApiConstants.incomeById(id));
@@ -92,6 +122,9 @@ class IncomeDatasource {
       description: m['description'] as String,
       notes: m['notes'] as String?,
       date: DateTime.parse(m['date'] as String),
+      budgetMonth: m['budgetMonth'] as int?,
+      budgetYear: m['budgetYear'] as int?,
+      locked: m['locked'] as bool? ?? false,
       category: CategoryEntity(
         id: cat['id'] as String,
         name: cat['name'] as String,

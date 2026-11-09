@@ -21,6 +21,7 @@ export function BudgetPeriodOverride({
   checked,
   onChange,
   affectsFunding = false,
+  otherwise,
 }: {
   date: string;
   checked: boolean;
@@ -28,6 +29,8 @@ export function BudgetPeriodOverride({
   /** When true (expense/loan-payment forms), adds a note that the funding
    * figures shown elsewhere in the form follow this same target period. */
   affectsFunding?: boolean;
+  /** Replaces the "Otherwise files under the current open period" line (e.g. when editing). */
+  otherwise?: string;
 }) {
   const { month, year } = date ? monthYearFromDateStr(date) : { month: 0, year: 0 };
 
@@ -46,7 +49,7 @@ export function BudgetPeriodOverride({
           "File under this date's budget month"
         )}
         <span className="block text-xs text-muted-foreground">
-          Otherwise files under the current open period
+          {otherwise ?? "Otherwise files under the current open period"}
           {affectsFunding && month ? ` - income figures below reflect ${getMonthName(month)} ${year}` : ""}
         </span>
       </Label>

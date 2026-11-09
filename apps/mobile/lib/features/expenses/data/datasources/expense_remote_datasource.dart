@@ -23,6 +23,43 @@ class ExpenseRemoteDatasource {
     }
   }
 
+  /// Edits an expense; budget, income-available and pot balances are recalculated
+  /// server-side. [fundingPotId] null with [changeFunding] means "fund from income";
+  /// leave [changeFunding] false to keep the current funding (e.g. a split).
+  Future<void> updateExpense({
+    required String id,
+    required int amountPaisas,
+    required String categoryId,
+    required String description,
+    String? notes,
+    required DateTime date,
+    bool isRegretPurchase = false,
+    int? budgetMonth,
+    int? budgetYear,
+    bool changeFunding = false,
+    String? fundingPotId,
+  }) async {
+    try {
+      await _dio.patch(
+        ApiConstants.expenseById(id),
+        data: {
+          'amountPaisas': amountPaisas,
+          'categoryId': categoryId,
+          'description': description,
+          'notes': (notes != null && notes.isNotEmpty) ? notes : null,
+          'date': date.toIso8601String(),
+          'isRegretPurchase': isRegretPurchase,
+          if (budgetMonth != null) 'budgetMonth': budgetMonth,
+          if (budgetYear != null) 'budgetYear': budgetYear,
+          if (changeFunding) 'fundingSource': fundingPotId != null ? 'SAVINGS_POT' : 'INCOME',
+          if (changeFunding && fundingPotId != null) 'fundingPotId': fundingPotId,
+        },
+      );
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
   Future<String> createExpense({
     required int amountPaisas,
     required String categoryId,

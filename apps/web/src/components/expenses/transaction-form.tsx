@@ -18,8 +18,9 @@ import { BudgetPeriodOverride, monthYearFromDateStr } from "@/components/shared/
 import { SplitFunding, FundingSelectContent, type FundingOption } from "@/components/shared/split-funding";
 import { FormSection, MoreOptions } from "@/components/shared/form-section";
 import { addToWantList } from "@/actions/want-list";
-import { cn } from "@/lib/utils";
+import { cn, getMonthName } from "@/lib/utils";
 import { evaluateAmount } from "@/lib/amount-expr";
+import { CategoryCombobox } from "@/components/shared/category-combobox";
 
 // ─── types ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,11 @@ interface Props {
     notes?: string | null; date: Date; budgetMonth?: number; budgetYear?: number; isRecurring: boolean;
     recurringFrequency?: string | null; tags: string; isRegretPurchase?: boolean;
     fundingSource?: string; fundingPotId?: string | null; fundingCurrencyId?: string | null; fundingAmount?: number | null;
-    fundingSources?: { priority: number; source: string; potId: string | null; currencyId: string | null; pkrAmount: number; pot?: { id: string; name: string; type: string } | null }[];
+    fundingSources?: { priority: number; source: string; potId: string | null; currencyId: string | null; potAmount?: number | null; pkrAmount: number; pot?: { id: string; name: string; type: string } | null }[];
+    // Income entered in another currency: edited in that currency at the rate it was booked with.
+    nativeCurrencyId?: string | null; nativeAmount?: number | null; exchangeRateUsed?: number | null;
+    // Set when a loan, loan payment or investment owns this entry (its amount/funding/period are changed there).
+    loanPrincipalOf?: unknown; loanPaymentOf?: unknown; investmentContributionOf?: unknown;
   } | null;
   budgetByCategoryId?: Record<string, { allocated: number; spent: number }>;
   // Currencies the household has configured - used for the income native-currency picker.
@@ -145,6 +150,35 @@ function FundingSelect({
   );
 }
 
+/** Adds back what an existing expense holds, so pickers show what it could draw on if re-funded. */
+function restoreFunding(ctx: NonNullable<Props["fundingContext"]>, t: NonNullable<Props["transaction"]>): NonNullable<Props["fundingContext"]> {
+  let income = ctx.monthlyIncomeAvailable;
+  const potBack = new Map<string, number>(); // `${potId}:${currencyId}` -> units
+  if (t.fundingSource === "SPLIT") {
+    for (const r of t.fundingSources ?? []) {
+      if (r.source === "INCOME") income += r.pkrAmount;
+      else if (r.potId && r.currencyId) potBack.set(`${r.potId}:${r.currencyId}`, (potBack.get(`${r.potId}:${r.currencyId}`) ?? 0) + (r.potAmount ?? 0));
+    }
+  } else if (t.fundingSource === "SAVINGS_POT" && t.fundingPotId && t.fundingCurrencyId) {
+    potBack.set(`${t.fundingPotId}:${t.fundingCurrencyId}`, t.fundingAmount ?? 0);
+  } else {
+    income += t.amount;
+  }
+  const pots = ctx.pots.map((p) => {
+    const balances = p.balances.map((b) => ({ ...b, amount: b.amount + (potBack.get(`${p.id}:${b.currency.id}`) ?? 0) }));
+    // A pot drained to zero by this expense has no balance row to show - bring it back.
+    for (const [key, units] of potBack) {
+      const [potId, currencyId] = key.split(":");
+      if (potId === p.id && units > 0 && !balances.some((b) => b.currency.id === currencyId)) {
+        const currency = ctx.pots.flatMap((x) => x.balances).find((b) => b.currency.id === currencyId)?.currency;
+        if (currency) balances.push({ amount: units, currency });
+      }
+    }
+    return { ...p, balances };
+  });
+  return { monthlyIncomeAvailable: income, pots };
+}
+
 // ─── main component ────────────────────────────────────────────────────────────
 
 export function TransactionForm({
@@ -157,9 +191,16 @@ export function TransactionForm({
   const [isRecurring, setIsRecurring] = useState(transaction?.isRecurring ?? false);
   const [isRegretPurchase, setIsRegretPurchase] = useState(transaction?.isRegretPurchase ?? false);
   const [selectedCategory, setSelectedCategory] = useState(transaction?.categoryId ?? "");
+  // Categories added from the picker while this form is open.
+  const [createdCategories, setCreatedCategories] = useState<Props["categories"]>([]);
+  const allCategories = [...categories, ...createdCategories];
   const [impulseCheck, setImpulseCheck] = useState<{ data: FormValues } | null>(null);
-  const [incomeCurrencyId, setIncomeCurrencyId] = useState(baseCurrency.id);
-  const [nativeRate, setNativeRate] = useState(baseCurrency.rateToBase);
+  const [incomeCurrencyId, setIncomeCurrencyId] = useState(transaction?.nativeCurrencyId ?? baseCurrency.id);
+  const [nativeRate, setNativeRate] = useState(
+    transaction?.nativeCurrencyId && transaction.nativeAmount
+      ? transaction.exchangeRateUsed ?? transaction.amount / transaction.nativeAmount
+      : baseCurrency.rateToBase,
+  );
 
   // Funding: either single source OR split
   const isExistingSplit = transaction?.fundingSource === "SPLIT";
@@ -186,7 +227,7 @@ export function TransactionForm({
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      amount: transaction ? String(transaction.amount / 100) : "",
+      amount: transaction ? String((transaction.nativeCurrencyId && transaction.nativeAmount ? transaction.nativeAmount : transaction.amount) / 100) : "",
       categoryId: transaction?.categoryId ?? "",
       description: transaction?.description ?? "",
       notes: transaction?.notes ?? "",
@@ -204,19 +245,27 @@ export function TransactionForm({
   const budget = selectedCategory && defaultType === "EXPENSE" ? budgetByCategoryId[selectedCategory] : null;
   const remaining = budget ? budget.allocated - budget.spent : null;
   const isOverBudget = remaining !== null && remaining < 0;
-  const isEditingExpense = !!transaction && defaultType === "EXPENSE";
+  // Owned by a loan/investment: only the descriptive fields can change here.
+  const owned = !!(transaction?.loanPrincipalOf || transaction?.loanPaymentOf || transaction?.investmentContributionOf);
   const showCurrencyToggle = defaultType === "INCOME" && !transaction && currencies.length > 1;
+  const editingNativeIncome = defaultType === "INCOME" && !!transaction?.nativeCurrencyId;
   const selectedCurrency = currencies.find((c) => c.id === incomeCurrencyId) ?? baseCurrency;
-  const isNativeIncome = showCurrencyToggle && incomeCurrencyId !== baseCurrency.id;
-  // Resolved target period: the date-derived period when the checkbox is on,
-  // otherwise the page's current open period.
-  const targetPeriod = fileUnderDateBudget && watchedDate ? monthYearFromDateStr(watchedDate) : currentPeriod;
+  const isNativeIncome = (showCurrencyToggle && incomeCurrencyId !== baseCurrency.id) || editingNativeIncome;
+  // The period this entry sits in: its own when editing, else the page's open period.
+  const homePeriod = transaction ? { month: transaction.budgetMonth ?? currentPeriod?.month ?? 0, year: transaction.budgetYear ?? currentPeriod?.year ?? 0 } : currentPeriod;
+  // Resolved target period: the date-derived period when the checkbox is on, otherwise the home period.
+  const targetPeriod = fileUnderDateBudget && watchedDate ? monthYearFromDateStr(watchedDate) : homePeriod;
   const isCurrentPeriod = !!targetPeriod && !!currentPeriod && targetPeriod.month === currentPeriod.month && targetPeriod.year === currentPeriod.year;
-  const liveFundingContext = isCurrentPeriod ? fundingContext : (fetchedFundingContext ?? fundingContext);
+  const rawFundingContext = isCurrentPeriod ? fundingContext : (fetchedFundingContext ?? fundingContext);
+  // When editing, what this expense already holds is given back so "available" is what it can really use.
+  const liveFundingContext = transaction && rawFundingContext && defaultType === "EXPENSE" && targetPeriod
+    && targetPeriod.month === transaction.budgetMonth && targetPeriod.year === transaction.budgetYear
+    ? restoreFunding(rawFundingContext, transaction)
+    : rawFundingContext;
   const fundingOptions = buildFundingOptions(liveFundingContext, baseCurrency.symbol);
 
   useEffect(() => {
-    if (defaultType !== "EXPENSE" || isEditingExpense || !fundingContext || !targetPeriod || isCurrentPeriod) return;
+    if (defaultType !== "EXPENSE" || owned || !fundingContext || !targetPeriod || isCurrentPeriod) return;
     let cancelled = false;
     setFundingContextLoading(true);
     getExpenseFundingContext(targetPeriod.month, targetPeriod.year)
@@ -224,7 +273,7 @@ export function TransactionForm({
       .finally(() => { if (!cancelled) setFundingContextLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetPeriod?.month, targetPeriod?.year, defaultType, isEditingExpense, isCurrentPeriod]);
+  }, [targetPeriod?.month, targetPeriod?.year, defaultType, owned, isCurrentPeriod]);
 
   // Build splitSources payload for submit
   function buildSplitPayload(totalAmount: number): {
@@ -244,7 +293,7 @@ export function TransactionForm({
 
   // Blank description -> the category's name, same as the phone app.
   function descriptionFor(data: FormValues): string {
-    return data.description?.trim() || categories.find((c) => c.id === data.categoryId)?.name || (defaultType === "INCOME" ? "Income" : "Expense");
+    return data.description?.trim() || allCategories.find((c) => c.id === data.categoryId)?.name || (defaultType === "INCOME" ? "Income" : "Expense");
   }
 
   async function submitTransaction(data: FormValues) {
@@ -253,13 +302,13 @@ export function TransactionForm({
       const rawAmount = amountOf(data.amount);
       const pkrAmount = isNativeIncome ? rawAmount * nativeRate : rawAmount;
 
-      const splitPayload = defaultType === "EXPENSE" && !isEditingExpense ? buildSplitPayload(pkrAmount) : null;
+      const splitPayload = defaultType === "EXPENSE" && !owned ? buildSplitPayload(pkrAmount) : null;
       const dateOverride = monthYearFromDateStr(data.date);
 
       let singleFunding: { fundingSource: string; fundingPotId?: string; fundingCurrencyId?: string } = {
         fundingSource: "INCOME",
       };
-      if (defaultType === "EXPENSE" && !splitPayload) {
+      if (defaultType === "EXPENSE" && !splitPayload && !owned) {
         const parsed = parseFundingValue(singleFundingValue);
         singleFunding = {
           fundingSource: parsed.source,
@@ -286,7 +335,7 @@ export function TransactionForm({
       };
 
       if (transaction) {
-        const result = await updateTransaction(transaction.id, { ...base, amount: rawAmount });
+        const result = await updateTransaction(transaction.id, { ...base, amount: pkrAmount });
         if (result.success) { toast.success("Transaction updated"); onSuccess(); }
         else toast.error(result.error ?? "Something went wrong");
         return;
@@ -362,43 +411,14 @@ export function TransactionForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
-      {/* Edit mode - locked summary */}
-      {isEditingExpense && (
-        <div className="rounded-lg bg-muted/50 border border-border px-4 py-3 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Locked</p>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Amount</p>
-              <p className="font-semibold">{baseCurrency.symbol} {fmtMoney(transaction.amount)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Date</p>
-              <p className="font-semibold">{format(new Date(transaction.date), dateFormat)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Funded by</p>
-              {transaction.fundingSource === "SPLIT" && transaction.fundingSources?.length ? (
-                <div className="space-y-0.5">
-                  {[...transaction.fundingSources]
-                    .sort((a, b) => a.priority - b.priority)
-                    .map((s, i) => (
-                      <p key={i} className="font-semibold text-xs">
-                        {s.source === "INCOME" ? "Income" : s.pot?.name ?? "Savings pot"}
-                        {" · "}{baseCurrency.symbol} {fmtMoney(s.pkrAmount)}
-                      </p>
-                    ))}
-                </div>
-              ) : (
-                <p className="font-semibold">{transaction.fundingSource === "SAVINGS_POT" ? "Savings pot" : "Income"}</p>
-              )}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">To change amount, date, or funding - delete and re-add.</p>
+      {owned && (
+        <div className="rounded-lg bg-muted/50 border border-border px-4 py-3 text-xs text-muted-foreground">
+          This entry belongs to a loan or investment. Its amount, funding and budget period are changed there; you can still edit the details below.
         </div>
       )}
 
       {/* Amount + currency toggle */}
-      {!isEditingExpense && (
+      {(
         <FormSection title="Amount">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -414,7 +434,7 @@ export function TransactionForm({
                 </div>
               )}
             </div>
-            <Input id="amount" type="text" inputMode="decimal" autoComplete="off" autoFocus={!transaction} placeholder="0.00 or a sum like 35+67" className="text-lg font-semibold" {...register("amount")} />
+            <Input id="amount" type="text" inputMode="decimal" autoComplete="off" autoFocus={!transaction} disabled={owned} placeholder="0.00 or a sum like 35+67" className="text-lg font-semibold" {...register("amount")} />
             {errors.amount ? (
               <p className="text-xs text-destructive">{errors.amount.message}</p>
             ) : amountPreview?.ok && amountPreview.isExpression ? (
@@ -438,19 +458,14 @@ export function TransactionForm({
       <FormSection title="What">
         <div className="space-y-1">
           <Label>Category</Label>
-          <Select onValueChange={(v) => { setValue("categoryId", v); setSelectedCategory(v); }} defaultValue={transaction?.categoryId}>
-            <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-            <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                    {cat.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CategoryCombobox
+            categories={allCategories}
+            value={selectedCategory}
+            type={defaultType}
+            invalid={!!errors.categoryId}
+            onChange={(id) => { setValue("categoryId", id, { shouldValidate: true }); setSelectedCategory(id); }}
+            onCreated={(c) => setCreatedCategories((prev) => [...prev, c])}
+          />
           {errors.categoryId && <p className="text-xs text-destructive">{errors.categoryId.message}</p>}
           {budget && remaining !== null && (
             <div className={cn("flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg", isOverBudget ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300")}>
@@ -473,23 +488,26 @@ export function TransactionForm({
       </FormSection>
 
       {/* When: date + budget-period checkbox, right next to each other */}
-      {!isEditingExpense && (
+      {(
         <FormSection title="When">
           <div className="space-y-1">
             <Label htmlFor="date">Date</Label>
             <Input id="date" type="date" lang={dateFormatToLang(dateFormat)} {...register("date")} />
           </div>
-          <BudgetPeriodOverride
-            date={watchedDate}
-            checked={fileUnderDateBudget}
-            onChange={setFileUnderDateBudget}
-            affectsFunding={defaultType === "EXPENSE"}
-          />
+          {!owned && (
+            <BudgetPeriodOverride
+              date={watchedDate}
+              checked={fileUnderDateBudget}
+              onChange={setFileUnderDateBudget}
+              affectsFunding={defaultType === "EXPENSE"}
+              otherwise={transaction ? `Otherwise stays under ${getMonthName(transaction.budgetMonth ?? 0)} ${transaction.budgetYear}'s budget` : undefined}
+            />
+          )}
         </FormSection>
       )}
 
       {/* Funding - only for new expenses with funding context */}
-      {defaultType === "EXPENSE" && fundingContext && !isEditingExpense && (
+      {defaultType === "EXPENSE" && fundingContext && !owned && (
         <FormSection title="Funding">
           <div className={cn("space-y-2 transition-opacity", fundingContextLoading && "opacity-60")}>
             {!useSplit ? (

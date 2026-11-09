@@ -57,6 +57,11 @@ class ExpenseListDatasource {
       notes: m['notes'] as String?,
       date: DateTime.parse(m['date'] as String),
       isRegretPurchase: m['isRegretPurchase'] as bool? ?? false,
+      budgetMonth: m['budgetMonth'] as int?,
+      budgetYear: m['budgetYear'] as int?,
+      fundingSource: m['fundingSource'] as String? ?? 'INCOME',
+      fundingPotId: m['fundingPotId'] as String?,
+      locked: m['locked'] as bool? ?? false,
       category: CategoryEntity(
         id: cat['id'] as String,
         name: cat['name'] as String,

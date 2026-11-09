@@ -17,7 +17,9 @@ import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/form_section.dart';
 import '../../../../core/widgets/funding_source_field.dart';
 import '../../../home_widget/widget_service.dart';
+import '../../../savings/presentation/providers/savings_provider.dart';
 import '../../data/repositories/expense_repository_impl.dart';
+import '../../domain/entities/expense_entity.dart';
 import '../providers/categories_provider.dart';
 import '../providers/expenses_list_provider.dart';
 import '../providers/recent_categories_provider.dart';
@@ -25,8 +27,11 @@ import '../widgets/category_chip_list.dart';
 import '../../../../core/providers/funding_context_provider.dart';
 import '../../../budget/presentation/providers/budget_provider.dart';
 
+/// Adds an expense, or edits [existing] (everything it feeds - budget, income
+/// available, pot balances - is recalculated by the server).
 class QuickAddExpensePage extends ConsumerStatefulWidget {
-  const QuickAddExpensePage({super.key});
+  const QuickAddExpensePage({this.existing, super.key});
+  final ExpenseEntity? existing;
 
   @override
   ConsumerState<QuickAddExpensePage> createState() =>
@@ -45,10 +50,27 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
   bool _loading = false;
   bool _isRegretPurchase = false;
 
+  ExpenseEntity? get _existing => widget.existing;
+  bool get _editing => _existing != null;
+  // Owned by a loan/investment: only the descriptive fields change here.
+  bool get _locked => _existing?.locked ?? false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+    final e = _existing;
+    if (e != null) {
+      final v = e.amountPaisas / 100;
+      _amountCtrl.text = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      _descCtrl.text = e.description;
+      _notesCtrl.text = e.notes ?? '';
+      _selectedCategoryId = e.category.id;
+      _date = e.date;
+      _isRegretPurchase = e.isRegretPurchase;
+      _fundingPotId = e.fundingSource == 'SAVINGS_POT' ? e.fundingPotId : null;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+    }
   }
 
   @override
@@ -79,7 +101,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       context: context,
       initialDate: _date,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: _date.isAfter(DateTime.now()) ? _date : DateTime.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.dark(
@@ -111,33 +133,52 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     setState(() => _loading = true);
 
     try {
-      await ref.read(expenseRepositoryProvider).createExpense(
-            amountPaisas: paisas,
-            categoryId: _selectedCategoryId!,
-            description: description,
-            notes: notes,
-            date: _date,
-            isRegretPurchase: _isRegretPurchase,
-            budgetMonth: _fileUnderDateBudget ? _date.month : null,
-            budgetYear: _fileUnderDateBudget ? _date.year : null,
-            fundingPotId: _fundingPotId,
-          );
+      final repo = ref.read(expenseRepositoryProvider);
+      if (_editing) {
+        await repo.updateExpense(
+          id: _existing!.id,
+          amountPaisas: paisas,
+          categoryId: _selectedCategoryId!,
+          description: description,
+          notes: notes,
+          date: _date,
+          isRegretPurchase: _isRegretPurchase,
+          budgetMonth: _fileUnderDateBudget && !_locked ? _date.month : null,
+          budgetYear: _fileUnderDateBudget && !_locked ? _date.year : null,
+          // A split (set up on the web) keeps its sources; a loan/investment keeps its own.
+          changeFunding: !_locked && !_existing!.isSplit,
+          fundingPotId: _fundingPotId,
+        );
+      } else {
+        await repo.createExpense(
+          amountPaisas: paisas,
+          categoryId: _selectedCategoryId!,
+          description: description,
+          notes: notes,
+          date: _date,
+          isRegretPurchase: _isRegretPurchase,
+          budgetMonth: _fileUnderDateBudget ? _date.month : null,
+          budgetYear: _fileUnderDateBudget ? _date.year : null,
+          fundingPotId: _fundingPotId,
+        );
+      }
 
       if (!mounted) return;
       ref.invalidate(expensesListProvider);
       ref.invalidate(budgetProvider);
       ref.invalidate(fundingContextProvider);
+      if (_editing) ref.invalidate(savingsProvider);
       await ref.read(recentCategoriesProvider.notifier).record(_selectedCategoryId!);
-      unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
+      if (!_editing) unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
 
       if (!mounted) return;
-      ref.read(toastServiceProvider).success(context, 'Expense added');
+      ref.read(toastServiceProvider).success(context, _editing ? 'Expense updated' : 'Expense added');
       HapticFeedback.lightImpact();
       _close();
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      final msg = e is AppException ? e.message : 'Failed to add expense';
+      final msg = e is AppException ? e.message : (_editing ? 'Failed to update expense' : 'Failed to add expense');
       ref.read(toastServiceProvider).error(context, msg);
     }
   }
@@ -156,7 +197,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('Add Expense', style: AppTextStyles.headlineSmall),
+        title: Text(_editing ? 'Edit Expense' : 'Add Expense', style: AppTextStyles.headlineSmall),
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,
@@ -176,7 +217,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
                       ),
                     )
                   : Text(
-                      'Add',
+                      _editing ? 'Save' : 'Add',
                       style: AppTextStyles.labelLarge.copyWith(
                         color: _canSubmit
                             ? AppColors.primary
@@ -194,9 +235,18 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_locked)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'This belongs to a loan or investment - its amount, funding and period are changed there.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
             TextField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
+              enabled: !_locked,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [AmountExprFormatter()],
               style: AppTextStyles.displayLarge.copyWith(
@@ -220,7 +270,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               ),
               onChanged: (_) => setState(() {}),
             ),
-            AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
+            if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
 
             const SizedBox(height: 12),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
@@ -303,11 +353,15 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
                     ),
                   ),
                 ),
-                BudgetPeriodField(
-                  date: _date,
-                  checked: _fileUnderDateBudget,
-                  onChanged: (v) => setState(() => _fileUnderDateBudget = v),
-                ),
+                if (!_locked)
+                  BudgetPeriodField(
+                    date: _date,
+                    checked: _fileUnderDateBudget,
+                    onChanged: (v) => setState(() => _fileUnderDateBudget = v),
+                    otherwise: _existing?.budgetMonth != null
+                        ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
+                        : null,
+                  ),
               ],
             ),
 
@@ -315,12 +369,18 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
             const SizedBox(height: 16),
 
-            FundingSourceField(
-              potId: _fundingPotId,
-              onChanged: (potId) => setState(() => _fundingPotId = potId),
-              month: _fileUnderDateBudget ? _date.month : null,
-              year: _fileUnderDateBudget ? _date.year : null,
-            ),
+            if (_existing?.isSplit ?? false)
+              Text(
+                'Funded from several sources - change the split on the web.',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+              )
+            else if (!_locked)
+              FundingSourceField(
+                potId: _fundingPotId,
+                onChanged: (potId) => setState(() => _fundingPotId = potId),
+                month: _fileUnderDateBudget ? _date.month : _existing?.budgetMonth,
+                year: _fileUnderDateBudget ? _date.year : _existing?.budgetYear,
+              ),
 
             const SizedBox(height: 20),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),

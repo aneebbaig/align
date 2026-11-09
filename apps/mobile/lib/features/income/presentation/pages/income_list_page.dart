@@ -17,6 +17,7 @@ import '../../../../core/widgets/app_list_row.dart';
 import '../../../expenses/domain/entities/expense_entity.dart';
 import '../../data/datasources/income_datasource.dart';
 import '../providers/income_list_provider.dart';
+import 'quick_add_income_page.dart';
 
 class IncomeListPage extends ConsumerStatefulWidget {
   const IncomeListPage({this.showAppBar = true, super.key});
@@ -49,11 +50,18 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
     }
   }
 
+  void _edit(ExpenseEntity item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => QuickAddIncomePage(existing: item)),
+    );
+  }
+
   Future<void> _delete(ExpenseEntity item) async {
     try {
       await ref.read(incomeDatasourceProvider).deleteIncome(item.id);
       if (!mounted) return;
       ref.invalidate(incomeListProvider);
+      ref.invalidate(fundingContextProvider);
       ref.read(toastServiceProvider).success(context, 'Income deleted');
     } catch (e) {
       if (!mounted) return;
@@ -140,6 +148,7 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: _IncomeRow(
                                     item: item,
+                                    onTap: () => _edit(item),
                                     onDelete: () => _delete(item),
                                   ),
                                 ),
@@ -171,15 +180,17 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
 }
 
 class _IncomeRow extends StatelessWidget {
-  const _IncomeRow({required this.item, this.onDelete});
+  const _IncomeRow({required this.item, this.onDelete, this.onTap});
   final ExpenseEntity item;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => AppListRow(
         leading: AppIconBox(icon: item.category.icon.lucideIcon, size: 36),
         title: item.description,
         subtitle: item.category.name,
+        onTap: onTap,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
