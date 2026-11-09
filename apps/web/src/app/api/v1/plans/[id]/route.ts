@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { computeFinancialPosition } from "@/lib/financial-position";
+import { planTotals } from "@/lib/plans/totals";
 import type { Prisma } from "@/generated/prisma/client";
 
 // A plan with its item checklist + an affordability snapshot (plan cost vs the
@@ -22,13 +23,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ]);
     if (!plan) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const totalEstimated = plan.items.reduce((s, i) => s + i.estimatedCost, 0);
-    const totalPaid = plan.items.reduce(
-      (s, i) => s + (i.actualCost ?? (i.status === "PAID" ? i.estimatedCost : 0)),
-      0,
-    );
-    const total = plan.planType === "FIXED" ? plan.estimatedTotalCost : totalEstimated;
-    const remaining = total - totalPaid;
+    const totals = planTotals(plan.items, plan.planType === "FIXED" ? plan.estimatedTotalCost : null);
+    const remaining = totals.remaining;
 
     return NextResponse.json({
       data: {
@@ -39,8 +35,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         planType: plan.planType,
         status: plan.status,
         targetDate: plan.targetDate ? plan.targetDate.toISOString() : null,
-        totalEstimatedPaisas: total,
-        totalPaidPaisas: totalPaid,
+        totalEstimatedPaisas: totals.estimated,
+        totalPaidPaisas: totals.paid,
         remainingPaisas: remaining,
         items: plan.items.map((i) => ({
           id: i.id,
@@ -49,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           actualCostPaisas: i.actualCost,
           status: i.status,
           notes: i.notes,
-          vendor: i.vendor,
+          groupName: i.eventGroup,
           dueDate: i.dueDate ? i.dueDate.toISOString() : null,
         })),
         affordability: {

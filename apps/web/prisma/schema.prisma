@@ -717,6 +717,9 @@ model WeddingEvent {
   @@map("wedding_events")
 }
 
+// DEPRECATED - vendors now live on expenses (vendorName) and as quotes (WeddingQuote).
+// Existing rows were copied across by the 20261020120000_wedding_planner_revamp
+// migration; the table is kept, unused, until a later release drops it.
 model WeddingVendor {
   id            String   @id @default(cuid())
   weddingPlanId String
@@ -741,31 +744,68 @@ model WeddingVendor {
   @@map("wedding_vendors")
 }
 
+// One thing the couple expects to spend on (or is imagining spending on).
+// A planner row: estimated cost first, actual cost once it is known, optionally
+// the vendor behind it, and any number of competing quotes (WeddingQuote).
+// All amounts are in the base currency, in its smallest unit.
 model WeddingExpense {
-  id                String   @id @default(cuid())
-  weddingPlanId     String
-  eventId           String? // null = general expense (spans whole wedding)
-  name              String // e.g. "Bridal dress", "Fireworks", "Flower arrangement"
-  category          String   @default("MISC") // DRESS|JEWELRY|DECOR|FLOWERS|FIREWORKS|TRANSPORT|FOOD|ENTERTAINMENT|PRINTING|PROPS|MISC
-  // Up to two funding sources (priority order: source1 first, source2 for remainder)
-  source1CurrencyId String
-  source1Amount     Int      @default(0) // estimated — smallest unit of source1Currency
-  source1Paid       Int? // actual paid — smallest unit of source1Currency
-  source2CurrencyId String? // null if single source
-  source2Amount     Int? // estimated
-  source2Paid       Int? // actual paid
-  isPaid            Boolean  @default(false)
-  notes             String?
-  createdAt         DateTime @default(now())
+  id              String   @id @default(cuid())
+  weddingPlanId   String
+  eventId         String? // null = general expense (spans whole wedding)
+  name            String // e.g. "Bridal dress", "Fireworks", "Photographer"
+  category        String   @default("MISC") // see EXPENSE_CATEGORIES in wedding-types.ts
+  estimatedAmount Int      @default(0) // the plan: follows the chosen quote, or typed in by hand
+  actualAmount    Int? // what it really cost, once known
+  vendorName      String? // who it is with (set by hand, or by choosing a quote)
+  vendorPhone     String?
+  vendorInstagram String?
+  // Payment is tracked apart from cost: how much has actually been handed over so
+  // far (a deposit is just a part payment). Status is derived - unpaid at 0,
+  // part-paid below the cost, paid once it reaches actualAmount ?? estimatedAmount.
+  paidAmount      Int      @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
 
-  weddingPlan     WeddingPlan   @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
-  event           WeddingEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  source1Currency Currency      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id])
-  source2Currency Currency?     @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id], onDelete: Restrict)
+  // DEPRECATED - the old two-funding-source cost model and paid flag. Kept (and
+  // readable) so nothing is lost on upgrade; the app no longer reads or writes
+  // them. To be dropped in a later release.
+  isPaid            Boolean @default(false)
+  source1CurrencyId String?
+  source1Amount     Int     @default(0)
+  source1Paid       Int?
+  source2CurrencyId String?
+  source2Amount     Int?
+  source2Paid       Int?
+
+  weddingPlan     WeddingPlan    @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
+  event           WeddingEvent?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  source1Currency Currency?      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id], onDelete: Restrict)
+  source2Currency Currency?      @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id], onDelete: Restrict)
+  quotes          WeddingQuote[]
 
   @@index([weddingPlanId])
   @@index([eventId])
   @@map("wedding_expenses")
+}
+
+// A vendor's price for an expense. Several quotes on one expense are the
+// "compare in a spreadsheet" step; at most one is chosen (isChosen), which
+// sets the expense's vendor and estimate.
+model WeddingQuote {
+  id         String   @id @default(cuid())
+  expenseId  String
+  vendorName String
+  phone      String?
+  instagram  String?
+  amount     Int      @default(0)
+  notes      String?
+  isChosen   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  expense WeddingExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+  @@map("wedding_quotes")
 }
 
 // ─── Projects (Freelance / Client PM) ────────────────────────────────────────

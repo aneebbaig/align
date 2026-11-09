@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingUp, TrendingDown, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Trash2, Pencil, PlusCircle, Ban } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Trash2, Pencil, PlusCircle, Ban, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { createLoan, recordPayment, updateLoanPayment, deleteLoanPayment, deleteLoan, addToLoan, writeOffLoan } from "@/actions/loans";
@@ -324,34 +325,51 @@ export function LoansClient({
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-1 items-end shrink-0">
-              {!isLoanClosed(loan.status) && (
-                <>
-                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setPayOpen(loan.id)}>
-                    Record Payment
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-xs h-7 text-emerald-600" onClick={() => handleMarkPaid(loan)}>
-                    <CheckCircle className="h-3.5 w-3.5 mr-1" />Mark Paid
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => openEntry(loan, "WRITE_OFF")}>
-                    <Ban className="h-3.5 w-3.5 mr-1" />{isGiven ? "Write off" : "Mark as forgiven"}
-                  </Button>
-                </>
-              )}
-              <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => openEntry(loan, "TOP_UP")}>
-                <PlusCircle className="h-3.5 w-3.5 mr-1" />{isGiven ? "Lend more" : "Borrow more"}
+          </div>
+
+          {/* Actions: one horizontal row. The main step first, the rest quieter, rare ones in the menu. */}
+          <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap items-center gap-2">
+            {!isLoanClosed(loan.status) && (
+              <>
+                <Button size="sm" className="h-8" onClick={() => setPayOpen(loan.id)}>
+                  Record payment
+                </Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => openEntry(loan, "TOP_UP")}>
+                  <PlusCircle className="h-3.5 w-3.5" />{isGiven ? "Lend more" : "Borrow more"}
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/40" onClick={() => handleMarkPaid(loan)}>
+                  <CheckCircle className="h-3.5 w-3.5" />Mark paid
+                </Button>
+              </>
+            )}
+            {isLoanClosed(loan.status) && (
+              <Button size="sm" variant="outline" className="h-8" onClick={() => openEntry(loan, "TOP_UP")}>
+                <PlusCircle className="h-3.5 w-3.5" />{isGiven ? "Lend more" : "Borrow more"}
               </Button>
-              <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setExpanded(isExpanded ? null : loan.id)}>
+            )}
+
+            <div className="ml-auto flex items-center gap-1">
+              <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setExpanded(isExpanded ? null : loan.id)}>
                 {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 History
               </Button>
-              <button
-                onClick={() => setDeleteLoanData({ id: loan.id, personName: loan.personName })}
-                className="text-muted-foreground hover:text-red-500 transition-colors p-1"
-                title="Delete loan"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" aria-label="More actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {!isLoanClosed(loan.status) && (
+                    <DropdownMenuItem onClick={() => openEntry(loan, "WRITE_OFF")}>
+                      <Ban className="h-3.5 w-3.5 mr-2" />{isGiven ? "Write off" : "Mark as forgiven"}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteLoanData({ id: loan.id, personName: loan.personName })}>
+                    <Trash2 className="h-3.5 w-3.5 mr-2" />Delete loan
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

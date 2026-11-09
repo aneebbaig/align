@@ -15,12 +15,15 @@ import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/form_section.dart';
 import '../../../expenses/presentation/providers/categories_provider.dart';
 import '../../../expenses/presentation/widgets/category_chip_list.dart';
+import '../../../expenses/domain/entities/expense_entity.dart';
 import '../../data/datasources/income_datasource.dart';
 import '../providers/income_list_provider.dart';
 import '../../../../core/providers/funding_context_provider.dart';
 
+/// Adds an income entry, or edits [existing] (the month's available income is recalculated).
 class QuickAddIncomePage extends ConsumerStatefulWidget {
-  const QuickAddIncomePage({super.key});
+  const QuickAddIncomePage({this.existing, super.key});
+  final ExpenseEntity? existing;
 
   @override
   ConsumerState<QuickAddIncomePage> createState() => _QuickAddIncomePageState();
@@ -35,10 +38,24 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
   bool _fileUnderDateBudget = false;
   bool _loading = false;
 
+  ExpenseEntity? get _existing => widget.existing;
+  bool get _editing => _existing != null;
+  // Entered in another currency, or owned by a loan/investment: the amount is changed there.
+  bool get _locked => _existing?.locked ?? false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+    final e = _existing;
+    if (e != null) {
+      final v = e.amountPaisas / 100;
+      _amountCtrl.text = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      _descCtrl.text = e.description;
+      _selectedCategoryId = e.category.id;
+      _date = e.date;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+    }
   }
 
   @override
@@ -68,7 +85,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
       context: context,
       initialDate: _date,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: _date.isAfter(DateTime.now()) ? _date : DateTime.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.dark(
@@ -99,25 +116,39 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
     setState(() => _loading = true);
 
     try {
-      await ref.read(incomeDatasourceProvider).createIncome(
-            amountPaisas: paisas,
-            categoryId: _selectedCategoryId!,
-            description: description,
-            date: _date,
-            budgetMonth: _fileUnderDateBudget ? _date.month : null,
-            budgetYear: _fileUnderDateBudget ? _date.year : null,
-          );
+      final ds = ref.read(incomeDatasourceProvider);
+      if (_editing) {
+        await ds.updateIncome(
+          id: _existing!.id,
+          amountPaisas: paisas,
+          categoryId: _selectedCategoryId!,
+          description: description,
+          notes: _existing!.notes,
+          date: _date,
+          budgetMonth: _fileUnderDateBudget ? _date.month : null,
+          budgetYear: _fileUnderDateBudget ? _date.year : null,
+        );
+      } else {
+        await ds.createIncome(
+          amountPaisas: paisas,
+          categoryId: _selectedCategoryId!,
+          description: description,
+          date: _date,
+          budgetMonth: _fileUnderDateBudget ? _date.month : null,
+          budgetYear: _fileUnderDateBudget ? _date.year : null,
+        );
+      }
 
       if (!mounted) return;
       ref.invalidate(incomeListProvider);
       ref.invalidate(fundingContextProvider);
-      ref.read(toastServiceProvider).success(context, 'Income added');
+      ref.read(toastServiceProvider).success(context, _editing ? 'Income updated' : 'Income added');
       HapticFeedback.lightImpact();
       _close();
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      final msg = e is AppException ? e.message : 'Failed to add income';
+      final msg = e is AppException ? e.message : (_editing ? 'Failed to update income' : 'Failed to add income');
       ref.read(toastServiceProvider).error(context, msg);
     }
   }
@@ -137,7 +168,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('Add Income', style: AppTextStyles.headlineSmall),
+        title: Text(_editing ? 'Edit Income' : 'Add Income', style: AppTextStyles.headlineSmall),
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,
@@ -157,7 +188,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
                       ),
                     )
                   : Text(
-                      'Add',
+                      _editing ? 'Save' : 'Add',
                       style: AppTextStyles.labelLarge.copyWith(
                         color: _canSubmit
                             ? AppColors.primary
@@ -175,9 +206,18 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_locked)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Entered in another currency, or owned by a loan or investment - its amount is changed there.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
             TextField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
+              enabled: !_locked,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [AmountExprFormatter()],
               style: AppTextStyles.displayLarge.copyWith(
@@ -201,7 +241,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
               ),
               onChanged: (_) => setState(() {}),
             ),
-            AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
+            if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
 
             const SizedBox(height: 12),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
@@ -307,6 +347,9 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
                   date: _date,
                   checked: _fileUnderDateBudget,
                   onChanged: (v) => setState(() => _fileUnderDateBudget = v),
+                  otherwise: _existing?.budgetMonth != null
+                      ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
+                      : null,
                 ),
               ],
             ),

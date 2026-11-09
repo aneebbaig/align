@@ -46,6 +46,37 @@ export async function createCategory(data: {
   }
 }
 
+const QUICK_COLORS = ["#f97316", "#84cc16", "#06b6d4", "#a855f7", "#3b82f6", "#ef4444", "#ec4899", "#14b8a6", "#eab308", "#6366f1"];
+
+/** One-click category from a form: returns the new category (or the existing one with that name). */
+export async function quickCreateCategory(name: string, type: "EXPENSE" | "INCOME") {
+  try {
+    const userId = await getUserId();
+    const clean = name.trim().slice(0, 50);
+    if (!clean) return { success: false as const, error: "Enter a category name" };
+
+    const existing = await prisma.category.findFirst({
+      where: {
+        isHidden: false,
+        name: { equals: clean, mode: "insensitive" },
+        type: { in: [type, "BOTH"] },
+        OR: [{ userId: null }, { userId }],
+      },
+    });
+    if (existing) return { success: true as const, category: existing };
+
+    const count = await prisma.category.count({ where: { userId } });
+    const category = await prisma.category.create({
+      data: { name: clean, icon: "Tag", color: QUICK_COLORS[count % QUICK_COLORS.length], type, userId, isDefault: false },
+    });
+    revalidatePath("/settings");
+    return { success: true as const, category };
+  } catch (e) {
+    console.error("[quickCreateCategory]", e);
+    return { success: false as const, error: "Failed to create category" };
+  }
+}
+
 export async function updateCategory(id: string, data: {
   name?: string;
   icon?: string;

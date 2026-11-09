@@ -35,6 +35,7 @@ This is the part to understand before changing anything financial. The whole app
 - Investments track what you put in and what they're worth. Adding money raises both; withdrawing lowers only the current value, and gain counts what was taken out (current + withdrawn − invested). Either can book an expense/income entry, or not.
 - A loan's history holds repayments, top-ups ("Add to loan"), and write-offs. A write-off books an expense only for money lent "track only" (the loan and every top-up) - otherwise part of the loss was already counted when it was lent. `PAID` and `WRITTEN_OFF` loans are closed and drop out of reminders, net position, and the investment suggestion.
 - You can't delete income if doing so would leave that month's income-funded expenses and deposits underwater.
+- Expenses and income can be edited after the fact - amount, date, category, budget period and (expenses) funding. `updateTransactionCore` (`src/lib/expenses/update.ts`, shared by the web action and `PATCH /api/v1/expenses|income/:id`) reverses the old pot movement, re-validates the new state (income available for the target month, pot balances with the old draw given back) and applies it in one database transaction. Shrinking or moving income is refused if that month's expenses and deposits would be left unfunded. Entries owned by a loan, repayment or investment keep their amount, funding and period locked (change them on the loan/investment); income entered in a non-base currency is edited in that currency. Splits are set up on the web; the phone keeps an existing split as is.
 - Amount fields on the expense and income forms (web and phone) accept a plain number or a sum of numbers with `+` and `-` (`35+67`). The result must be positive; `evaluateAmount` (web, `src/lib/amount-expr.ts`) and `parseAmount` (phone, `core/utils/amount_expr.dart`) do the same parsing and are tested side by side.
 - All money is stored as integers in the smallest unit (paisas, the currency times 100). No floats.
 - Currencies are household-defined (Settings → Currencies). One is the base (PKR by default) that every total is reported in; the rest carry a rate to it. `/api/cron/daily` refreshes the USD rate from a free public endpoint, but only if something schedules that route (see `apps/web/DEPLOYMENT.md`); otherwise rates are set by hand.
@@ -44,6 +45,16 @@ Migrations are plain SQL under `prisma/migrations/`, reviewed by hand. Run `pris
 ## The planner
 
 The Planner (`/planner`) is deliberately cut off from the ledger: it never reads or writes transactions, pots, loans, or investments. It stores only inputs - settings (start month, length, starting cash, its own USD rate), lines with "from this month on" steps and one-month overrides, and one-off goals - and `src/lib/planner/compute.ts` builds the table on every read. Months are stored as `year * 12 + (month - 1)`. The web page and `GET /api/v1/planner` return the same serialized shape, so both apps render identical numbers.
+
+## Plans
+
+A plan item has two costs on purpose. The **estimate** is for planning on imagination alone; the **actual cost** is what the user types in once they have asked the market (a quote on a pending item) or have bought it. Buying always records an actual cost (the quote, else the estimate), and only bought items count as paid. `src/lib/plans/totals.ts` is the one place that adds this up (estimated, paid, still to pay) for web and `/api/v1/plans`. On the tile only the name and the two prices edit in place (saved after a short pause); everything else is in the edit sheet.
+
+## The wedding planner
+
+`/wedding` is a planner, not a ledger: like Plans it never touches transactions. A wedding has events and one flat list of **expenses** (`WeddingExpense`), each with a single *estimated* cost (the plan, made on imagination), an optional *actual* cost (once the real price is known) and an optional vendor. Cost and payment are kept apart: `paidAmount` is what has been handed over (a deposit is a part payment) and the paid / part-paid / unpaid status is derived from it, never stored. Everything is in the base currency. Several vendors can quote one expense (`WeddingQuote`); choosing one copies its vendor and price onto the expense (the estimate then follows that quote). `src/lib/wedding/totals.ts` does all the adding up, so the overview, expense list and plan list agree.
+
+The old shape (two funding sources per expense, a separate `WeddingVendor` table) was folded in by the `wedding_planner_revamp` migration, which keeps every old column and the `wedding_vendors` table in place, unused, so upgrading loses nothing; a later release can drop them. Vendors sharing an event and category became one expense, with quotes when there were several.
 
 ## Routines
 

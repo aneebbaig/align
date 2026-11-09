@@ -3,14 +3,16 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 
-// Edit a plan item: status (undo → PENDING) and/or its name/cost. Booking an
+// Edit a plan item: status (undo → PENDING), name, estimated/actual cost, due date, notes. Booking an
 // expense goes through the /buy sub-route.
 const patchSchema = z.object({
   status: z.enum(["PENDING", "BOOKED", "PAID", "SKIPPED"]).optional(),
   name: z.string().min(1).max(200).optional(),
   estimatedCostPaisas: z.number().int().nonnegative().optional(),
   notes: z.string().max(1000).nullable().optional(),
-  vendor: z.string().max(100).nullable().optional(),
+  // The real (market) cost; null clears it. Independent of status - a pending item can carry a quote.
+  actualCostPaisas: z.number().int().nonnegative().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
 });
 
 export async function PATCH(
@@ -31,11 +33,15 @@ export async function PATCH(
     if (d.name != null) data.name = d.name;
     if (d.estimatedCostPaisas != null) data.estimatedCost = d.estimatedCostPaisas;
     if (d.notes !== undefined) data.notes = d.notes;
-    if (d.vendor !== undefined) data.vendor = d.vendor;
+    if (d.actualCostPaisas !== undefined) data.actualCost = d.actualCostPaisas;
+    if (d.dueDate !== undefined) data.dueDate = d.dueDate ? new Date(d.dueDate) : null;
     if (d.status != null) {
       data.status = d.status;
-      // Un-marking (back to PENDING) clears the recorded actual cost.
-      if (d.status === "PENDING") data.actualCost = null;
+      // Buying always records an actual cost: the quote if there is one, else the estimate.
+      if (d.status === "PAID") {
+        const cur = await prisma.planItem.findFirst({ where: { id: itemId, planId: id, plan: { userId: auth.id } }, select: { actualCost: true, estimatedCost: true } });
+        if (cur && d.actualCostPaisas === undefined) data.actualCost = cur.actualCost ?? cur.estimatedCost;
+      }
     }
 
     const updated = await prisma.planItem.updateMany({

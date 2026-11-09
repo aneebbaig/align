@@ -4,40 +4,30 @@ import { revalidatePath } from "next/cache";
 import { getUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { toPaisas } from "@/lib/utils";
-import { getBaseCurrency } from "@/lib/currency-helpers";
 import { ActionResult } from "@/types";
 
 // ─── WeddingPlan ───────────────────────────────────────────────────────────
+
+const planInclude = {
+  events: { orderBy: { order: "asc" as const } },
+  expenses: {
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+    include: { quotes: { orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] } },
+  },
+};
 
 export async function getWeddingPlans() {
   const userId = await getUserId();
   return prisma.weddingPlan.findMany({
     where: { userId },
-    include: {
-      events: { orderBy: { order: "asc" } },
-      vendors: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
-      expenses: {
-        orderBy: { createdAt: "asc" },
-        include: { source1Currency: true, source2Currency: true },
-      },
-    },
+    include: planInclude,
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function getWeddingPlan(id: string) {
   const userId = await getUserId();
-  return prisma.weddingPlan.findFirst({
-    where: { id, userId },
-    include: {
-      events: { orderBy: { order: "asc" } },
-      vendors: { orderBy: [{ eventId: "asc" }, { category: "asc" }, { createdAt: "asc" }] },
-      expenses: {
-        orderBy: [{ eventId: "asc" }, { createdAt: "asc" }],
-        include: { source1Currency: true, source2Currency: true },
-      },
-    },
-  });
+  return prisma.weddingPlan.findFirst({ where: { id, userId }, include: planInclude });
 }
 
 export async function createWeddingPlan(data: {
@@ -206,167 +196,56 @@ export async function deleteWeddingEvent(id: string): Promise<ActionResult> {
   }
 }
 
-// ─── WeddingVendor ─────────────────────────────────────────────────────────
-
-export async function createWeddingVendor(weddingPlanId: string, data: {
-  category: string;
-  name: string;
-  eventId?: string;       // null = general vendor
-  phone?: string;
-  instagram?: string;
-  quotedAmount?: number;
-  finalAmount?: number;
-  depositPaid?: number;
-  paymentStatus?: string;
-  notes?: string;
-}): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId } });
-    if (!plan) return { success: false, error: "Not found" };
-
-    await prisma.weddingVendor.create({
-      data: {
-        weddingPlanId,
-        category: data.category,
-        name: data.name,
-        eventId: data.eventId || null,
-        phone: data.phone || null,
-        instagram: data.instagram || null,
-        quotedAmount: data.quotedAmount ? toPaisas(data.quotedAmount) : 0,
-        finalAmount: data.finalAmount ? toPaisas(data.finalAmount) : null,
-        depositPaid: data.depositPaid ? toPaisas(data.depositPaid) : null,
-        paymentStatus: data.paymentStatus ?? "UNPAID",
-        notes: data.notes || null,
-      },
-    });
-    revalidatePath(`/wedding/${weddingPlanId}`);
-    return { success: true };
-  } catch (e) {
-    console.error("[createWeddingVendor]", e);
-    return { success: false, error: "Failed to add vendor" };
-  }
-}
-
-export async function updateWeddingVendor(id: string, data: Partial<{
-  name: string;
-  eventId: string | null;
-  phone: string;
-  instagram: string;
-  quotedAmount: number;
-  finalAmount: number;
-  depositPaid: number;
-  paymentStatus: string;
-  isSelected: boolean;
-  notes: string;
-  category: string;
-}>): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const vendor = await prisma.weddingVendor.findFirst({
-      where: { id },
-      select: { weddingPlan: { select: { userId: true, id: true } } },
-    });
-    if (!vendor || vendor.weddingPlan.userId !== userId) return { success: false, error: "Not found" };
-
-    await prisma.weddingVendor.update({
-      where: { id },
-      data: {
-        ...data,
-        quotedAmount: data.quotedAmount !== undefined ? toPaisas(data.quotedAmount) : undefined,
-        finalAmount: data.finalAmount !== undefined ? toPaisas(data.finalAmount) : undefined,
-        depositPaid: data.depositPaid !== undefined ? toPaisas(data.depositPaid) : undefined,
-      },
-    });
-    revalidatePath(`/wedding/${vendor.weddingPlan.id}`);
-    return { success: true };
-  } catch (e) {
-    console.error("[updateWeddingVendor]", e);
-    return { success: false, error: "Failed to update vendor" };
-  }
-}
-
-export async function selectWeddingVendor(
-  id: string,
-  weddingPlanId: string,
-  category: string,
-  eventId: string | null,
-): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId } });
-    if (!plan) return { success: false, error: "Not found" };
-
-    // Deselect all others in same event + category scope
-    await prisma.weddingVendor.updateMany({
-      where: { weddingPlanId, category, eventId: eventId ?? null },
-      data: { isSelected: false },
-    });
-    await prisma.weddingVendor.update({ where: { id }, data: { isSelected: true } });
-    revalidatePath(`/wedding/${weddingPlanId}`);
-    return { success: true };
-  } catch (e) {
-    console.error("[selectWeddingVendor]", e);
-    return { success: false, error: "Failed to select vendor" };
-  }
-}
-
-export async function deleteWeddingVendor(id: string): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const vendor = await prisma.weddingVendor.findFirst({
-      where: { id },
-      select: { weddingPlan: { select: { userId: true, id: true } } },
-    });
-    if (!vendor || vendor.weddingPlan.userId !== userId) return { success: false, error: "Not found" };
-
-    await prisma.weddingVendor.delete({ where: { id } });
-    revalidatePath(`/wedding/${vendor.weddingPlan.id}`);
-    return { success: true };
-  } catch (e) {
-    console.error("[deleteWeddingVendor]", e);
-    return { success: false, error: "Failed to delete vendor" };
-  }
-}
-
 // ─── WeddingExpense ────────────────────────────────────────────────────────
+// Money in and out of these actions is in major units (rupees); stored in paisas.
 
-export async function createWeddingExpense(weddingPlanId: string, data: {
+type ExpenseInput = {
   name: string;
-  category?: string;
-  eventId?: string;
-  source1CurrencyId?: string;
-  source1Amount?: number;
-  source1Paid?: number;
-  source2CurrencyId?: string;
-  source2Amount?: number;
-  source2Paid?: number;
-  isPaid?: boolean;
-  notes?: string;
-}): Promise<ActionResult> {
+  category: string;
+  eventId: string | null;
+  estimated: number;
+  actual: number | null;
+  paid: number;
+  vendorName: string | null;
+  vendorPhone: string | null;
+  vendorInstagram: string | null;
+  notes: string | null;
+};
+
+const text = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+
+async function ownedExpense(id: string, userId: string) {
+  const expense = await prisma.weddingExpense.findFirst({
+    where: { id, weddingPlan: { userId } },
+    select: { id: true, weddingPlanId: true, estimatedAmount: true, actualAmount: true, paidAmount: true },
+  });
+  return expense;
+}
+
+export async function createWeddingExpense(weddingPlanId: string, data: Partial<ExpenseInput> & { name: string }): Promise<ActionResult> {
   try {
     const userId = await getUserId();
-    const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId } });
+    const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId }, select: { id: true } });
     if (!plan) return { success: false, error: "Not found" };
-
-    const base = await getBaseCurrency();
-    const s1 = data.source1CurrencyId ?? base.id;
-    const s2 = data.source2CurrencyId ?? null;
+    if (!data.name.trim()) return { success: false, error: "Give the expense a name" };
+    if (data.eventId) {
+      const event = await prisma.weddingEvent.findFirst({ where: { id: data.eventId, weddingPlanId } });
+      if (!event) return { success: false, error: "Event not found" };
+    }
 
     await prisma.weddingExpense.create({
       data: {
         weddingPlanId,
-        name: data.name,
+        name: data.name.trim(),
         category: data.category ?? "MISC",
         eventId: data.eventId || null,
-        source1CurrencyId: s1,
-        source1Amount: data.source1Amount ? Math.round(data.source1Amount * 100) : 0,
-        source1Paid: data.source1Paid ? Math.round(data.source1Paid * 100) : null,
-        source2CurrencyId: s2,
-        source2Amount: data.source2Amount ? Math.round(data.source2Amount * 100) : null,
-        source2Paid: data.source2Paid ? Math.round(data.source2Paid * 100) : null,
-        isPaid: data.isPaid ?? false,
-        notes: data.notes || null,
+        estimatedAmount: data.estimated ? toPaisas(data.estimated) : 0,
+        actualAmount: data.actual != null ? toPaisas(data.actual) : null,
+        paidAmount: data.paid ? toPaisas(data.paid) : 0,
+        vendorName: text(data.vendorName),
+        vendorPhone: text(data.vendorPhone),
+        vendorInstagram: text(data.vendorInstagram),
+        notes: text(data.notes),
       },
     });
     revalidatePath(`/wedding/${weddingPlanId}`);
@@ -377,47 +256,37 @@ export async function createWeddingExpense(weddingPlanId: string, data: {
   }
 }
 
-export async function updateWeddingExpense(id: string, data: Partial<{
-  name: string;
-  category: string;
-  eventId: string | null;
-  source1CurrencyId: string;
-  source1Amount: number;
-  source1Paid: number | null;
-  source2CurrencyId: string | null;
-  source2Amount: number | null;
-  source2Paid: number | null;
-  isPaid: boolean;
-  notes: string;
-}>): Promise<ActionResult> {
+/** Partial edit. `actual: null` clears the real cost. A chosen quote owns the estimate and vendor. */
+export async function updateWeddingExpense(id: string, data: Partial<ExpenseInput>): Promise<ActionResult> {
   try {
     const userId = await getUserId();
-    const expense = await prisma.weddingExpense.findFirst({
-      where: { id },
-      select: { weddingPlan: { select: { userId: true, id: true } } },
-    });
-    if (!expense || expense.weddingPlan.userId !== userId) return { success: false, error: "Not found" };
+    const expense = await ownedExpense(id, userId);
+    if (!expense) return { success: false, error: "Not found" };
+    if (data.name !== undefined && !data.name.trim()) return { success: false, error: "Name can't be empty" };
+    if (data.eventId) {
+      const event = await prisma.weddingEvent.findFirst({ where: { id: data.eventId, weddingPlanId: expense.weddingPlanId } });
+      if (!event) return { success: false, error: "Event not found" };
+    }
 
-    const toUnits = (v: number | null | undefined) =>
-      v != null ? Math.round(v * 100) : v === null ? null : undefined;
+    const chosen = await prisma.weddingQuote.findFirst({ where: { expenseId: id, isChosen: true }, select: { id: true } });
 
     await prisma.weddingExpense.update({
       where: { id },
       data: {
-        name: data.name,
-        category: data.category,
-        eventId: data.eventId,
-        isPaid: data.isPaid,
-        notes: data.notes,
-        source1CurrencyId: data.source1CurrencyId,
-        source1Amount: data.source1Amount !== undefined ? Math.round(data.source1Amount * 100) : undefined,
-        source1Paid: toUnits(data.source1Paid),
-        source2CurrencyId: data.source2CurrencyId,
-        source2Amount: toUnits(data.source2Amount),
-        source2Paid: toUnits(data.source2Paid),
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+        ...(data.category !== undefined ? { category: data.category } : {}),
+        ...(data.eventId !== undefined ? { eventId: data.eventId || null } : {}),
+        // With a quote chosen, the estimate is that quote's price - change the quote instead.
+        ...(data.estimated !== undefined && !chosen ? { estimatedAmount: toPaisas(data.estimated) } : {}),
+        ...(data.actual !== undefined ? { actualAmount: data.actual === null ? null : toPaisas(data.actual) } : {}),
+        ...(data.paid !== undefined ? { paidAmount: Math.max(0, toPaisas(data.paid)) } : {}),
+        ...(data.vendorName !== undefined && !chosen ? { vendorName: text(data.vendorName) } : {}),
+        ...(data.vendorPhone !== undefined && !chosen ? { vendorPhone: text(data.vendorPhone) } : {}),
+        ...(data.vendorInstagram !== undefined && !chosen ? { vendorInstagram: text(data.vendorInstagram) } : {}),
+        ...(data.notes !== undefined ? { notes: text(data.notes) } : {}),
       },
     });
-    revalidatePath(`/wedding/${expense.weddingPlan.id}`);
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
     return { success: true };
   } catch (e) {
     console.error("[updateWeddingExpense]", e);
@@ -425,20 +294,184 @@ export async function updateWeddingExpense(id: string, data: Partial<{
   }
 }
 
+/** Settle in full: paid = the cost, and the cost becomes real (actual = estimate if no actual yet). */
+export async function markWeddingExpensePaid(id: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const expense = await ownedExpense(id, userId);
+    if (!expense) return { success: false, error: "Not found" };
+    const cost = expense.actualAmount ?? expense.estimatedAmount;
+    await prisma.weddingExpense.update({ where: { id }, data: { actualAmount: cost, paidAmount: cost } });
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[markWeddingExpensePaid]", e);
+    return { success: false, error: "Failed to mark as paid" };
+  }
+}
+
 export async function deleteWeddingExpense(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId();
-    const expense = await prisma.weddingExpense.findFirst({
-      where: { id },
-      select: { weddingPlan: { select: { userId: true, id: true } } },
-    });
-    if (!expense || expense.weddingPlan.userId !== userId) return { success: false, error: "Not found" };
+    const expense = await ownedExpense(id, userId);
+    if (!expense) return { success: false, error: "Not found" };
 
     await prisma.weddingExpense.delete({ where: { id } });
-    revalidatePath(`/wedding/${expense.weddingPlan.id}`);
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
     return { success: true };
   } catch (e) {
     console.error("[deleteWeddingExpense]", e);
     return { success: false, error: "Failed to delete expense" };
+  }
+}
+
+// ─── WeddingQuote ──────────────────────────────────────────────────────────
+// Several vendors can quote one expense; choosing one sets the expense's vendor
+// and estimate. At most one quote per expense is chosen.
+
+export async function addWeddingQuote(expenseId: string, data: {
+  vendorName: string; amount: number; phone?: string; instagram?: string; notes?: string;
+}): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const expense = await ownedExpense(expenseId, userId);
+    if (!expense) return { success: false, error: "Not found" };
+    if (!data.vendorName.trim()) return { success: false, error: "Enter the vendor's name" };
+    if (!(data.amount >= 0)) return { success: false, error: "Enter the quoted amount" };
+
+    await prisma.weddingQuote.create({
+      data: {
+        expenseId,
+        vendorName: data.vendorName.trim(),
+        amount: toPaisas(data.amount),
+        phone: text(data.phone),
+        instagram: text(data.instagram),
+        notes: text(data.notes),
+      },
+    });
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[addWeddingQuote]", e);
+    return { success: false, error: "Failed to add quote" };
+  }
+}
+
+async function ownedQuote(id: string, userId: string) {
+  return prisma.weddingQuote.findFirst({
+    where: { id, expense: { weddingPlan: { userId } } },
+    include: { expense: { select: { id: true, weddingPlanId: true } } },
+  });
+}
+
+export async function updateWeddingQuote(id: string, data: Partial<{
+  vendorName: string; amount: number; phone: string | null; instagram: string | null; notes: string | null;
+}>): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const quote = await ownedQuote(id, userId);
+    if (!quote) return { success: false, error: "Not found" };
+    if (data.vendorName !== undefined && !data.vendorName.trim()) return { success: false, error: "Enter the vendor's name" };
+
+    const vendorName = data.vendorName?.trim();
+    const amount = data.amount !== undefined ? toPaisas(data.amount) : undefined;
+    const phone = data.phone !== undefined ? text(data.phone) : undefined;
+    const instagram = data.instagram !== undefined ? text(data.instagram) : undefined;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.weddingQuote.update({
+        where: { id },
+        data: {
+          ...(vendorName !== undefined ? { vendorName } : {}),
+          ...(amount !== undefined ? { amount } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+          ...(instagram !== undefined ? { instagram } : {}),
+          ...(data.notes !== undefined ? { notes: text(data.notes) } : {}),
+        },
+      });
+      // The chosen quote drives its expense, so edits to it carry through.
+      if (quote.isChosen) {
+        await tx.weddingExpense.update({
+          where: { id: quote.expenseId },
+          data: {
+            ...(vendorName !== undefined ? { vendorName } : {}),
+            ...(amount !== undefined ? { estimatedAmount: amount } : {}),
+            ...(phone !== undefined ? { vendorPhone: phone } : {}),
+            ...(instagram !== undefined ? { vendorInstagram: instagram } : {}),
+          },
+        });
+      }
+    });
+    revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[updateWeddingQuote]", e);
+    return { success: false, error: "Failed to update quote" };
+  }
+}
+
+export async function chooseWeddingQuote(id: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const quote = await ownedQuote(id, userId);
+    if (!quote) return { success: false, error: "Not found" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.weddingQuote.updateMany({ where: { expenseId: quote.expenseId }, data: { isChosen: false } });
+      await tx.weddingQuote.update({ where: { id }, data: { isChosen: true } });
+      await tx.weddingExpense.update({
+        where: { id: quote.expenseId },
+        data: {
+          vendorName: quote.vendorName,
+          vendorPhone: quote.phone,
+          vendorInstagram: quote.instagram,
+          estimatedAmount: quote.amount,
+        },
+      });
+    });
+    revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[chooseWeddingQuote]", e);
+    return { success: false, error: "Failed to choose quote" };
+  }
+}
+
+/** Un-choose: the expense keeps its estimate but is no longer tied to a vendor. */
+export async function clearWeddingQuoteChoice(expenseId: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const expense = await ownedExpense(expenseId, userId);
+    if (!expense) return { success: false, error: "Not found" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.weddingQuote.updateMany({ where: { expenseId }, data: { isChosen: false } });
+      await tx.weddingExpense.update({ where: { id: expenseId }, data: { vendorName: null, vendorPhone: null, vendorInstagram: null } });
+    });
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[clearWeddingQuoteChoice]", e);
+    return { success: false, error: "Failed to clear choice" };
+  }
+}
+
+export async function deleteWeddingQuote(id: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const quote = await ownedQuote(id, userId);
+    if (!quote) return { success: false, error: "Not found" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.weddingQuote.delete({ where: { id } });
+      if (quote.isChosen) {
+        await tx.weddingExpense.update({ where: { id: quote.expenseId }, data: { vendorName: null, vendorPhone: null, vendorInstagram: null } });
+      }
+    });
+    revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[deleteWeddingQuote]", e);
+    return { success: false, error: "Failed to delete quote" };
   }
 }

@@ -9,7 +9,7 @@ const createSchema = z.object({
   name: z.string().min(1).max(200),
   estimatedCostPaisas: z.number().int().nonnegative().default(0),
   notes: z.string().max(1000).optional(),
-  vendor: z.string().max(100).optional(),
+  actualCostPaisas: z.number().int().nonnegative().optional(),
   dueDate: z.string().optional(),
 });
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         name: d.name,
         estimatedCost: d.estimatedCostPaisas,
         notes: d.notes ?? null,
-        vendor: d.vendor ?? null,
+        actualCost: d.actualCostPaisas ?? null,
         dueDate: d.dueDate ? new Date(d.dueDate) : null,
         order: await nextItemOrder(id),
       },

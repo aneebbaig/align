@@ -143,26 +143,6 @@ export function budgetWarningEmail(categoryName: string, pct: number, spent: num
   return shell(`${categoryName} is at ${pct}% of budget this month.`, body);
 }
 
-export function budgetExceededEmail(categoryName: string, spent: number, allocated: number, symbol = "Rs") {
-  const RED = "#DC2626";
-  const over = spent - allocated;
-  const body = `
-    <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.5px;color:${TEXT};margin:0 0 4px">Budget Exceeded</p>
-    <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:${MUTED};margin:0 0 20px">${categoryName} · over by ${symbol} ${(over / 100).toLocaleString()}</p>
-    ${card(RED, `
-      <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;color:${RED};margin:0 0 12px;text-transform:uppercase;letter-spacing:0.06em">🚨 Over Budget</p>
-      <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:${TEXT};margin:0 0 14px;line-height:1.5">
-        You've exceeded the <strong>${categoryName}</strong> budget. Consider pausing spending in this category or adjusting the budget.
-      </p>
-      ${statTable(
-        row("Spent",   `${symbol} ${(spent / 100).toLocaleString()}`,     RED) +
-        row("Budget",  `${symbol} ${(allocated / 100).toLocaleString()}`) +
-        row("Over by", `${symbol} ${(over / 100).toLocaleString()}`,      RED)
-      )}
-    `)}`;
-  return shell(`${categoryName} budget exceeded by ${symbol} ${(over / 100).toLocaleString()}.`, body);
-}
-
 export function doomSpendingEmail(count: number, total: number, symbol = "Rs") {
   const RED = "#DC2626";
   const body = `

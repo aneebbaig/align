@@ -109,10 +109,33 @@ export async function validateFundingSources(
       if (!pot) return "Savings pot not found";
       if (!currency) return "Currency not found";
       const potUnits = getPotUnits(src.pkrAmount, currency);
-      if ((balance?.amount ?? 0) < potUnits) {
-        return `Insufficient ${currency.code} balance in ${pot.name}. Available: ${currency.symbol} ${((balance?.amount ?? 0) / 100).toLocaleString()}`;
+      // When re-validating an edit, what the old version took from this pot is given back first.
+      const restored = excludeTransactionId
+        ? await potUnitsTakenBy(excludeTransactionId, src.potId, src.currencyId)
+        : 0;
+      const available = (balance?.amount ?? 0) + restored;
+      if (available < potUnits) {
+        return `Insufficient ${currency.code} balance in ${pot.name}. Available: ${currency.symbol} ${(available / 100).toLocaleString()}`;
       }
     }
   }
   return null;
+}
+
+/** How much of a pot's (currency) balance an existing expense currently holds, single or split. */
+async function potUnitsTakenBy(transactionId: string, potId: string, currencyId: string): Promise<number> {
+  const t = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+    select: {
+      fundingSource: true, fundingPotId: true, fundingCurrencyId: true, fundingAmount: true,
+      fundingSources: { select: { source: true, potId: true, currencyId: true, potAmount: true } },
+    },
+  });
+  if (!t) return 0;
+  if (t.fundingSource === "SAVINGS_POT") {
+    return t.fundingPotId === potId && t.fundingCurrencyId === currencyId ? (t.fundingAmount ?? 0) : 0;
+  }
+  return t.fundingSources
+    .filter((r) => r.source === "SAVINGS_POT" && r.potId === potId && r.currencyId === currencyId)
+    .reduce((sum, r) => sum + (r.potAmount ?? 0), 0);
 }

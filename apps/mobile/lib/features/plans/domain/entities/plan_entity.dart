@@ -36,17 +36,17 @@ class PlanItemEntity {
     required this.status,
     this.actualPaisas,
     this.notes,
-    this.vendor,
     this.dueDate,
   });
 
   final String id;
   final String name;
   final int estimatedPaisas;
+  /// The real (market) cost. Estimates are planning-only; a bought item is
+  /// worth this. A pending item may already carry one (a quote).
   final int? actualPaisas;
   final String status; // PENDING | BOOKED | PAID | SKIPPED
   final String? notes;
-  final String? vendor;
   final DateTime? dueDate;
 
   bool get isBought => status == 'PAID';

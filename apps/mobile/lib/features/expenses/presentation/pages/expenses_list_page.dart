@@ -17,7 +17,9 @@ import '../../../../core/widgets/app_icon_box.dart';
 import '../../../../core/widgets/app_list_row.dart';
 import '../../data/repositories/expense_repository_impl.dart';
 import '../../domain/entities/expense_entity.dart';
+import '../../../savings/presentation/providers/savings_provider.dart';
 import '../providers/expenses_list_provider.dart';
+import 'quick_add_expense_page.dart';
 
 class ExpensesListPage extends ConsumerStatefulWidget {
   const ExpensesListPage({this.showAppBar = true, super.key});
@@ -50,11 +52,20 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
     }
   }
 
+  void _edit(ExpenseEntity item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => QuickAddExpensePage(existing: item)),
+    );
+  }
+
   Future<void> _delete(ExpenseEntity item) async {
     try {
       await ref.read(expenseRepositoryProvider).deleteExpense(item.id);
       if (!mounted) return;
       ref.invalidate(expensesListProvider);
+      ref.invalidate(budgetProvider);
+      ref.invalidate(fundingContextProvider);
+      ref.invalidate(savingsProvider); // a pot-funded expense gives its money back
       ref.read(toastServiceProvider).success(context, 'Expense deleted');
     } catch (e) {
       if (!mounted) return;
@@ -142,6 +153,7 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: _ExpenseRow(
                                     item: item,
+                                    onTap: () => _edit(item),
                                     onDelete: () => _delete(item),
                                   ),
                                 ),
@@ -173,15 +185,17 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
 }
 
 class _ExpenseRow extends StatelessWidget {
-  const _ExpenseRow({required this.item, this.onDelete});
+  const _ExpenseRow({required this.item, this.onDelete, this.onTap});
   final ExpenseEntity item;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => AppListRow(
         leading: AppIconBox(icon: item.category.icon.lucideIcon, size: 36),
         title: item.description,
         subtitle: item.category.name,
+        onTap: onTap,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

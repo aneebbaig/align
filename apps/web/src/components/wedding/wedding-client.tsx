@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { createWeddingPlan, deleteWeddingPlan } from "@/actions/wedding";
 import { cn } from "@/lib/utils";
 import { WeddingPlan, PLAN_STATUS_CONFIG, fmt } from "./wedding-types";
+import { sumTotals } from "@/lib/wedding/totals";
 
 export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plans: WeddingPlan[]; baseSymbol?: string }) {
   const router = useRouter();
@@ -65,7 +66,7 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
       <PageHeader
         section="Planning"
         title="Wedding"
-        description="Plan your Pakistani wedding - events, vendors, budget and Haq Mehr all in one place."
+        description="Plan your Pakistani wedding - events, expenses, vendor quotes and Haq Mehr all in one place."
         action={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New Wedding Plan</Button>}
       />
 
@@ -73,19 +74,14 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
         <EmptyState
           icon={Heart}
           title="No wedding plan yet"
-          description="Start planning your big day - add events, compare vendors, track your budget."
+          description="Start planning your big day - list every expense you can imagine, compare vendor quotes, track your budget."
           action={{ label: "Create Wedding Plan", onClick: () => setOpen(true) }}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {plans.map((plan) => {
             const statusCfg = PLAN_STATUS_CONFIG[plan.status] ?? PLAN_STATUS_CONFIG.PLANNING;
-            const totalVendorCost = plan.vendors
-              .filter((v) => v.isSelected)
-              .reduce((s, v) => s + (v.finalAmount ?? v.quotedAmount), 0);
-            const paid = plan.vendors
-              .filter((v) => v.paymentStatus === "FULLY_PAID")
-              .reduce((s, v) => s + (v.finalAmount ?? v.quotedAmount), 0);
+            const totals = sumTotals(plan.expenses);
             const daysUntil = plan.weddingDate
               ? Math.ceil((new Date(plan.weddingDate).getTime() - Date.now()) / 86400000)
               : null;
@@ -124,16 +120,16 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
                         <span className="text-muted-foreground">Budget</span>
                         <span className="font-medium">{fmt(plan.totalBudget, baseSymbol)}</span>
                       </div>
-                      {totalVendorCost > 0 && (
+                      {totals.projected > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Vendors selected</span>
-                          <span className="font-medium">{fmt(totalVendorCost, baseSymbol)}</span>
+                          <span className="text-muted-foreground">Planned</span>
+                          <span className={cn("font-medium", plan.totalBudget > 0 && totals.projected > plan.totalBudget && "text-red-500")}>{fmt(totals.projected, baseSymbol)}</span>
                         </div>
                       )}
-                      {paid > 0 && (
+                      {totals.paid > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Paid so far</span>
-                          <span className="font-medium text-emerald-600">{fmt(paid, baseSymbol)}</span>
+                          <span className="font-medium text-emerald-600">{fmt(totals.paid, baseSymbol)}</span>
                         </div>
                       )}
                       {plan.haqMehr && (
@@ -146,7 +142,7 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
                     <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{plan.events.length} events</span>
                       <span>·</span>
-                      <span>{plan.vendors.length} vendors</span>
+                      <span>{plan.expenses.length} expenses</span>
                     </div>
                   </div>
                 </Link>
@@ -210,7 +206,7 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
         open={!!deleteId}
         onOpenChange={(o) => !o && setDeleteId(null)}
         title="Delete wedding plan?"
-        description="All events and vendors will be deleted. This cannot be undone."
+        description="All events, expenses and quotes will be deleted. This cannot be undone."
         onConfirm={handleDelete}
       />
     </>
