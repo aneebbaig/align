@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { Heart, CalendarDays, Wallet, Pencil } from "lucide-react";
+import { Heart, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,19 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { updateWeddingPlan } from "@/actions/wedding";
 import { cn } from "@/lib/utils";
+import { sumTotals, groupTotals } from "@/lib/wedding/totals";
 import {
-  WeddingPlan, EVENT_TYPES, EVENT_STATUS_CONFIG, PLAN_STATUS_CONFIG, fmt, getEventInfo,
+  WeddingPlan, EVENT_STATUS_CONFIG, PLAN_STATUS_CONFIG, fmt, getEventInfo, getExpenseCategoryLabel,
 } from "./wedding-types";
-
-function StatCard({ label, value, sub, highlight }: { label: string; value: string; sub?: string; highlight?: boolean }) {
-  return (
-    <div className={cn("rounded-xl border p-4", highlight ? "border-pink-200 bg-pink-50 dark:border-pink-900 dark:bg-pink-950/40" : "border-border bg-card")}>
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className={cn("text-xl font-bold", highlight ? "text-pink-600 dark:text-pink-400" : "text-foreground")}>{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 export function WeddingOverviewTab({ plan, baseSymbol = "Rs" }: { plan: WeddingPlan; baseSymbol?: string }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -40,13 +31,13 @@ export function WeddingOverviewTab({ plan, baseSymbol = "Rs" }: { plan: WeddingP
     status: plan.status,
   });
 
-  const selectedVendorCost = plan.vendors
-    .filter((v) => v.isSelected)
-    .reduce((s, v) => s + (v.finalAmount ?? v.quotedAmount), 0);
-  const paid = plan.vendors
-    .filter((v) => v.paymentStatus === "FULLY_PAID")
-    .reduce((s, v) => s + (v.finalAmount ?? v.quotedAmount), 0);
-  const remaining = plan.totalBudget - selectedVendorCost;
+  const totals = sumTotals(plan.expenses);
+  const budget = plan.totalBudget;
+  const remaining = budget - totals.projected;
+  const usedPct = budget > 0 ? Math.min(100, Math.round((totals.projected / budget) * 100)) : 0;
+  const byCategory = [...groupTotals(plan.expenses, (e) => e.category)]
+    .sort((x, y) => y[1].projected - x[1].projected);
+  const byEvent = groupTotals(plan.expenses, (e) => e.eventId ?? "GENERAL");
   const daysUntil = plan.weddingDate
     ? Math.ceil((new Date(plan.weddingDate).getTime() - Date.now()) / 86400000)
     : null;
@@ -104,13 +95,87 @@ export function WeddingOverviewTab({ plan, baseSymbol = "Rs" }: { plan: WeddingP
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total Budget" value={fmt(plan.totalBudget, baseSymbol)} />
-        <StatCard label="Selected Vendors" value={fmt(selectedVendorCost, baseSymbol)} sub={plan.totalBudget > 0 ? `${Math.round((selectedVendorCost / plan.totalBudget) * 100)}% of budget` : undefined} />
-        <StatCard label="Paid So Far" value={fmt(paid, baseSymbol)} highlight />
-        <StatCard label="Haq Mehr" value={plan.haqMehr ? fmt(plan.haqMehr, baseSymbol) : "-"} sub={plan.haqMehrNote ?? undefined} />
+      {/* Total expense */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Total expense (planned)</p>
+            <p className="text-3xl font-bold tabular-nums">{fmt(totals.projected, baseSymbol)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Estimated {fmt(totals.estimated, baseSymbol)} · {totals.priced} of {totals.count} priced for real
+              {totals.priced > 0 && totals.actual !== 0 ? ` (${fmt(totals.actual, baseSymbol)})` : ""}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            <span className="text-muted-foreground">Paid</span>
+            <span className="font-semibold text-emerald-600 tabular-nums text-right">{fmt(totals.paid, baseSymbol)}</span>
+            <span className="text-muted-foreground">Still to pay</span>
+            <span className="font-semibold tabular-nums text-right">{fmt(totals.outstanding, baseSymbol)}</span>
+          </div>
+        </div>
+
+        {budget > 0 ? (
+          <div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className={cn("h-full rounded-full transition-all", remaining < 0 ? "bg-red-500" : usedPct > 85 ? "bg-amber-500" : "bg-pink-500")} style={{ width: `${usedPct}%` }} />
+            </div>
+            <div className="mt-1.5 flex justify-between text-xs">
+              <span className="text-muted-foreground">Budget {fmt(budget, baseSymbol)}</span>
+              <span className={cn("font-medium", remaining < 0 ? "text-red-500" : "text-emerald-600")}>
+                {remaining < 0 ? `${fmt(-remaining, baseSymbol)} over budget` : `${fmt(remaining, baseSymbol)} left`}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Set a total budget (Edit) to see how the plan compares.</p>
+        )}
+        {plan.haqMehr ? (
+          <p className="text-xs text-muted-foreground border-t border-border pt-3">
+            Haq Mehr <span className="font-medium text-pink-600">{fmt(plan.haqMehr, baseSymbol)}</span>{plan.haqMehrNote ? ` · ${plan.haqMehrNote}` : ""} (kept separate from the expenses above)
+          </p>
+        ) : null}
       </div>
+
+      {/* Breakdowns */}
+      {totals.count > 0 && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold mb-3">By event</h3>
+            <div className="space-y-2.5">
+              {[{ key: "GENERAL", name: "Whole wedding", emoji: "💍", allocated: 0 }, ...sortedEvents.map((ev) => ({ key: ev.id, name: ev.name, emoji: getEventInfo(ev.type).emoji, allocated: ev.budgetAllocated }))]
+                .filter((r) => byEvent.has(r.key))
+                .map((r) => {
+                  const t = byEvent.get(r.key)!;
+                  return (
+                    <div key={r.key} className="flex items-center justify-between text-sm gap-3">
+                      <span className="truncate">{r.emoji} {r.name}</span>
+                      <span className="tabular-nums shrink-0">
+                        <span className="font-medium">{fmt(t.projected, baseSymbol)}</span>
+                        {r.allocated > 0 && <span className={cn("ml-1.5 text-xs", t.projected > r.allocated ? "text-red-500" : "text-muted-foreground")}>/ {fmt(r.allocated, baseSymbol)}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold mb-3">By category</h3>
+            <div className="space-y-2.5">
+              {byCategory.map(([cat, t]) => (
+                <div key={cat} className="space-y-1">
+                  <div className="flex justify-between text-sm gap-3">
+                    <span className="truncate">{getExpenseCategoryLabel(cat)}</span>
+                    <span className="font-medium tabular-nums shrink-0">{fmt(t.projected, baseSymbol)}</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full bg-pink-400/70" style={{ width: `${totals.projected > 0 ? (t.projected / totals.projected) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Events timeline */}
       {sortedEvents.length > 0 && (

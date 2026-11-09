@@ -14,7 +14,7 @@ export default async function WeddingPlanPage({ params }: { params: Promise<{ id
 
   return (
     <div className="max-w-5xl mx-auto">
-      <WeddingDetailClient plan={plan as any} currencies={currencies} baseSymbol={baseSymbol} />
+      <WeddingDetailClient plan={plan as any} baseSymbol={baseSymbol} />
     </div>
   );
 }

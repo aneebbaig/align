@@ -9,7 +9,7 @@ export const RESET_GROUPS = [
   { key: "investments", label: "Investments", description: "Investment holdings and your investment plan" },
   { key: "loans", label: "Loans", description: "Loans given/received and their payments" },
   { key: "planners", label: "Planner", description: "Planners and their line items" },
-  { key: "wedding", label: "Wedding Planning", description: "Wedding plan, events, vendors, and expenses" },
+  { key: "wedding", label: "Wedding Planning", description: "Wedding plan, events, expenses, and vendor quotes" },
   { key: "lists", label: "Want & Need Lists", description: "Want-list and need-list items" },
   { key: "tasks", label: "Tasks", description: "Daily and one-time tasks" },
   { key: "projects", label: "Projects", description: "Projects and their tasks" },
