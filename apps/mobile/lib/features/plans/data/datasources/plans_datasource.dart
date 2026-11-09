@@ -94,16 +94,27 @@ class PlansDatasource {
     }
   }
 
+  /// Partial edit. Nullable fields use a `set*` flag so "clear it" (null) is
+  /// distinguishable from "leave it alone".
   Future<void> updateItem({
     required String planId,
     required String itemId,
     String? name,
     int? estimatedCostPaisas,
+    bool setActual = false,
+    int? actualCostPaisas,
+    bool setDueDate = false,
+    DateTime? dueDate,
+    bool setNotes = false,
+    String? notes,
   }) async {
     try {
       await _dio.patch(ApiConstants.planItem(planId, itemId), data: {
         if (name != null) 'name': name,
         if (estimatedCostPaisas != null) 'estimatedCostPaisas': estimatedCostPaisas,
+        if (setActual) 'actualCostPaisas': actualCostPaisas,
+        if (setDueDate) 'dueDate': dueDate?.toIso8601String(),
+        if (setNotes) 'notes': notes,
       });
     } catch (e) {
       throw ErrorHandler.handle(e);
@@ -170,7 +181,6 @@ class PlansDatasource {
         actualPaisas: m['actualCostPaisas'] as int?,
         status: m['status'] as String,
         notes: m['notes'] as String?,
-        vendor: m['vendor'] as String?,
         dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
       );
 

@@ -105,10 +105,10 @@ export async function createPlannerItem(planId: string, data: {
   name: string;
   description?: string;
   estimatedCost: number;
+  actualCost?: number;
   dueDate?: string;
   notes?: string;
   eventGroup?: string;
-  vendor?: string;
 }): Promise<ActionResult> {
   try {
     const userId = await getUserId();
@@ -119,6 +119,7 @@ export async function createPlannerItem(planId: string, data: {
       data: {
         ...data,
         estimatedCost: toPaisas(data.estimatedCost),
+        actualCost: data.actualCost != null ? toPaisas(data.actualCost) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         order: await nextItemOrder(planId),
         planId,
@@ -132,25 +133,37 @@ export async function createPlannerItem(planId: string, data: {
   }
 }
 
+// Money fields are in major units. `actualCost: null` clears the real cost; the
+// estimate is planning-only and the actual cost is what a bought item is worth.
 export async function updatePlannerItem(id: string, data: Partial<{
-  name: string; status: string; actualCost: number; notes: string; vendor: string; eventGroup: string;
+  name: string; status: string; estimatedCost: number; actualCost: number | null;
+  notes: string | null; eventGroup: string | null; dueDate: string | null;
 }>): Promise<ActionResult> {
   try {
     const userId = await getUserId();
     const item = await prisma.planItem.findFirst({
       where: { id },
-      select: { plan: { select: { userId: true } } },
+      select: { actualCost: true, estimatedCost: true, plan: { select: { userId: true } } },
     });
     if (!item || item.plan.userId !== userId) return { success: false, error: "Not found" };
+    if (data.name !== undefined && !data.name.trim()) return { success: false, error: "Name can't be empty" };
 
     await prisma.planItem.update({
       where: { id },
       data: {
-        ...data,
-        // Un-marking (back to PENDING) clears the recorded actual cost.
-        actualCost: data.status === "PENDING"
-          ? null
-          : data.actualCost !== undefined ? toPaisas(data.actualCost) : undefined,
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
+        ...(data.eventGroup !== undefined ? { eventGroup: data.eventGroup || null } : {}),
+        ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
+        ...(data.estimatedCost !== undefined ? { estimatedCost: toPaisas(data.estimatedCost) } : {}),
+        ...(data.actualCost !== undefined ? { actualCost: data.actualCost === null ? null : toPaisas(data.actualCost) } : {}),
+        ...(data.status !== undefined
+          ? {
+              status: data.status,
+              // Buying always records an actual cost (the quote, else the estimate).
+              ...(data.status === "PAID" && data.actualCost === undefined ? { actualCost: item.actualCost ?? item.estimatedCost } : {}),
+            }
+          : {}),
       },
     });
     return { success: true };

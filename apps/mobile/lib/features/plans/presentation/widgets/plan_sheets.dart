@@ -36,18 +36,20 @@ void showEditPlanSheet(BuildContext context, WidgetRef ref, PlanDetailEntity pla
     _sheet(context, _EditPlanSheet(plan: plan));
 
 class _Field extends StatelessWidget {
-  const _Field({required this.controller, required this.hint, this.keyboardType, this.prefix, this.autofocus = false, this.onChanged});
+  const _Field({required this.controller, required this.hint, this.keyboardType, this.prefix, this.autofocus = false, this.onChanged, this.maxLines = 1});
   final TextEditingController controller;
   final String hint;
   final TextInputType? keyboardType;
   final String? prefix;
   final bool autofocus;
   final VoidCallback? onChanged;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: controller,
         autofocus: autofocus,
+        maxLines: maxLines,
         keyboardType: keyboardType,
         textCapitalization: TextCapitalization.sentences,
         style: AppTextStyles.bodyMedium,
@@ -199,7 +201,11 @@ class _TypeTab extends StatelessWidget {
       );
 }
 
-// ── Add / edit item ──────────────────────────────────────────────────────────
+// ── Add item / edit item details ─────────────────────────────────────────────
+//
+// Adding takes the two things a plan starts with: a name and an estimate.
+// Editing here is for everything that isn't on the tile: due date and notes.
+// (Name, estimate and actual cost are edited in place on the tile itself.)
 
 class _ItemSheet extends ConsumerStatefulWidget {
   const _ItemSheet({required this.planId, this.existing});
@@ -211,35 +217,61 @@ class _ItemSheet extends ConsumerStatefulWidget {
 
 class _ItemSheetState extends ConsumerState<_ItemSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _cost = TextEditingController(
-      text: widget.existing != null ? (widget.existing!.estimatedPaisas / 100).toStringAsFixed(0) : '');
+  late final _cost = TextEditingController();
+  late final _notes = TextEditingController(text: widget.existing?.notes ?? '');
+  late DateTime? _due = widget.existing?.dueDate;
   bool _loading = false;
 
-  bool get _canSubmit => _name.text.trim().isNotEmpty && _toPaisas(_cost.text) != null;
+  bool get _editing => widget.existing != null;
+  bool get _canSubmit => _editing || (_name.text.trim().isNotEmpty && _toPaisas(_cost.text) != null);
 
   @override
   void dispose() {
     _name.dispose();
     _cost.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
+  Future<void> _pickDue() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _due ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(primary: AppColors.primary, surface: AppColors.card, onSurface: AppColors.foreground),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _due = picked);
+  }
+
   Future<void> _submit() async {
-    final paisas = _toPaisas(_cost.text);
-    if (paisas == null || _name.text.trim().isEmpty) return;
+    if (!_canSubmit) return;
     setState(() => _loading = true);
     try {
       HapticFeedback.mediumImpact();
       final ds = ref.read(plansDatasourceProvider);
-      if (widget.existing == null) {
-        await ds.addItem(planId: widget.planId, name: _name.text.trim(), estimatedCostPaisas: paisas);
+      if (!_editing) {
+        await ds.addItem(planId: widget.planId, name: _name.text.trim(), estimatedCostPaisas: _toPaisas(_cost.text)!);
       } else {
-        await ds.updateItem(planId: widget.planId, itemId: widget.existing!.id, name: _name.text.trim(), estimatedCostPaisas: paisas);
+        await ds.updateItem(
+          planId: widget.planId,
+          itemId: widget.existing!.id,
+          setDueDate: true,
+          dueDate: _due,
+          setNotes: true,
+          notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        );
       }
       ref.invalidate(planDetailProvider(widget.planId));
       ref.invalidate(plansProvider);
       if (mounted) {
-        ref.read(toastServiceProvider).success(context, widget.existing == null ? 'Item added' : 'Saved');
+        ref.read(toastServiceProvider).success(context, _editing ? 'Saved' : 'Item added');
         Navigator.pop(context);
       }
     } catch (e) {
@@ -252,6 +284,7 @@ class _ItemSheetState extends ConsumerState<_ItemSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final due = _due;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
@@ -259,18 +292,53 @@ class _ItemSheetState extends ConsumerState<_ItemSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Header(
-            title: widget.existing == null ? 'Add item' : 'Edit item',
+            title: _editing ? widget.existing!.name : 'Add item',
             onSubmit: _submit,
             canSubmit: _canSubmit,
             loading: _loading,
-            submit: widget.existing == null ? 'Add' : 'Save',
+            submit: _editing ? 'Save' : 'Add',
           ),
           const SizedBox(height: 16),
-          _Field(controller: _name, hint: 'Item name', autofocus: widget.existing == null, onChanged: () => setState(() {})),
-          const SizedBox(height: 12),
-          _Field(controller: _cost, hint: 'Estimated cost', prefix: 'Rs ',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              onChanged: () => setState(() {})),
+          if (!_editing) ...[
+            _Field(controller: _name, hint: 'Item name', autofocus: true, onChanged: () => setState(() {})),
+            const SizedBox(height: 12),
+            _Field(controller: _cost, hint: 'Estimated cost', prefix: 'Rs ',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: () => setState(() {})),
+          ] else ...[
+            GestureDetector(
+              onTap: _pickDue,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.event_outlined, size: 16, color: AppColors.mutedForeground),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      due == null ? 'Due date (optional)' : '${due.day}/${due.month}/${due.year}',
+                      style: AppTextStyles.bodyMedium.copyWith(color: due == null ? AppColors.mutedForeground : AppColors.foreground),
+                    ),
+                  ),
+                  if (due != null)
+                    GestureDetector(
+                      onTap: () => setState(() => _due = null),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(Icons.close, size: 16, color: AppColors.mutedForeground),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _Field(controller: _notes, hint: 'Notes - quotes, who to call...', maxLines: 3),
+          ],
         ],
       ),
     );

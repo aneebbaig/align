@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
+import { planTotals } from "@/lib/plans/totals";
 
 // Plans (formerly Planner) for the Flutter client. A plan is a project you work
 // toward — FIXED (one target cost) or ITEMIZED (a checklist you buy over time).
@@ -19,11 +20,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       data: plans.map((p) => {
-        const totalEstimated = p.items.reduce((s, i) => s + i.estimatedCost, 0);
-        const totalPaid = p.items.reduce(
-          (s, i) => s + (i.actualCost ?? (i.status === "PAID" ? i.estimatedCost : 0)),
-          0,
-        );
+        const totals = planTotals(p.items, p.planType === "FIXED" ? p.estimatedTotalCost : null);
         const paidCount = p.items.filter((i) => i.status === "PAID").length;
         return {
           id: p.id,
@@ -34,8 +31,8 @@ export async function GET(req: NextRequest) {
           status: p.status,
           targetDate: p.targetDate ? p.targetDate.toISOString() : null,
           // FIXED plans carry the target directly; ITEMIZED derive it from items.
-          totalEstimatedPaisas: p.planType === "FIXED" ? p.estimatedTotalCost : totalEstimated,
-          totalPaidPaisas: totalPaid,
+          totalEstimatedPaisas: totals.estimated,
+          totalPaidPaisas: totals.paid,
           itemCount: p.items.length,
           paidCount,
         };

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, GripVertical, Plus, Trash2, CheckCircle, Clock, Tag, Store, CheckCircle2, AlertTriangle, TrendingUp, Info } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, CheckCircle, Clock, Tag, CheckCircle2, AlertTriangle, TrendingUp, Info, MoreHorizontal, Pencil, Loader2, Check } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -18,11 +18,14 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { createPlannerItem, updatePlannerItem, deletePlannerItem, updatePlannerStatus, deletePlanner, logPlanItemExpense, markPlanItemBought, reorderPlannerItems } from "@/actions/plan";
 import { cn } from "@/lib/utils";
+import { InlineText, InlineAmount } from "@/components/shared/inline-fields";
+import { planTotals } from "@/lib/plans/totals";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface PlanItem {
   id: string; planId: string; name: string; description: string | null;
   estimatedCost: number; actualCost: number | null; status: string;
-  dueDate: Date | null; notes: string | null; eventGroup: string | null; vendor: string | null;
+  dueDate: Date | null; notes: string | null; eventGroup: string | null;
 }
 interface Plan {
   id: string; name: string; description: string | null; coverColor: string;
@@ -105,6 +108,98 @@ function SortableItems({ items, onReorder, renderItem }: {
   );
 }
 
+function PlanItemRow({ item, handle, baseSymbol, busy, onSaved, onBought, onLogged, onUndo, onEdit, onDelete }: {
+  item: PlanItem; handle?: React.ReactNode; baseSymbol: string; busy: boolean;
+  onSaved: () => void; onBought: () => void; onLogged: () => void; onUndo: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const fade = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (fade.current) clearTimeout(fade.current); }, []);
+
+  async function save(patch: Parameters<typeof updatePlannerItem>[1]) {
+    setState("saving");
+    const result = await updatePlannerItem(item.id, patch);
+    if (!result.success) {
+      setState("error");
+      toast.error(result.error ?? "Couldn't save");
+      return;
+    }
+    setState("saved");
+    if (fade.current) clearTimeout(fade.current);
+    fade.current = setTimeout(() => setState("idle"), 1500);
+    onSaved();
+  }
+
+  const bought = item.status === "PAID";
+  const diff = item.actualCost !== null && item.estimatedCost > 0 ? item.actualCost - item.estimatedCost : 0;
+
+  return (
+    <div className={cn("p-3 rounded-lg border border-border bg-background", item.status === "SKIPPED" && "opacity-50")}>
+      <div className="flex items-center gap-2">
+        {handle}
+        <InlineText
+          ariaLabel="Item name"
+          value={item.name}
+          onSave={(name) => save({ name })}
+          className={cn("flex-1 min-w-0 text-sm font-medium text-foreground", bought && "text-muted-foreground")}
+        />
+        <span className="w-4 shrink-0" aria-live="polite">
+          {state === "saving" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          {state === "saved" && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+          {state === "error" && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+        </span>
+        {bought ? (
+          <button
+            onClick={onUndo}
+            disabled={busy}
+            className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-muted-foreground transition-colors shrink-0"
+            title="Bought — click to undo"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Bought
+          </button>
+        ) : (
+          <div className="flex items-center gap-1 shrink-0">
+            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={onBought} title="Mark as bought without logging an expense">
+              Mark bought
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={onLogged} title="Mark bought and log a real expense">
+              Buy &amp; log
+            </Button>
+          </div>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground shrink-0" aria-label="Item actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit details</DropdownMenuItem>
+            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="mt-2 flex items-center gap-x-5 gap-y-1.5 flex-wrap pl-6">
+        <InlineAmount label="Estimate" symbol={baseSymbol} valuePaisas={item.estimatedCost} onSave={(v) => save({ estimatedCost: v ?? 0 })} />
+        <InlineAmount label="Actual" symbol={baseSymbol} valuePaisas={item.actualCost} optional onSave={(v) => save({ actualCost: v })} />
+        {diff !== 0 && (
+          <span className={cn("text-xs font-medium", diff > 0 ? "text-red-500" : "text-emerald-600")}>
+            {diff > 0 ? "▲" : "▼"} {baseSymbol} {(Math.abs(diff) / 100).toLocaleString()} {diff > 0 ? "over" : "under"} estimate
+          </span>
+        )}
+      </div>
+
+      {(item.dueDate || item.eventGroup || item.notes) && (
+        <div className="mt-1.5 pl-6 text-xs text-muted-foreground flex items-center gap-x-3 gap-y-0.5 flex-wrap">
+          {item.dueDate && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{format(new Date(item.dueDate), "d MMM yyyy")}</span>}
+          {item.notes && <span className="italic">{item.notes}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }: { plan: Plan; financialPosition: FinancialPosition; baseSymbol?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -114,16 +209,16 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
   const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
 
   const [newItem, setNewItem] = useState({
-    name: "", estimatedCost: "", dueDate: "", notes: "", eventGroup: "", vendor: "",
+    name: "", estimatedCost: "", dueDate: "", notes: "", eventGroup: "",
   });
+  const [draft, setDraft] = useState({ dueDate: "", eventGroup: "", notes: "" });
 
-  const totalEstimated = plan.items.reduce((s, i) => s + i.estimatedCost, 0);
-  // A paid item counts toward "actually paid" even if no actual cost was
-  // entered — fall back to its estimate rather than showing 0.
-  const totalActual = plan.items.reduce(
-    (s, i) => s + (i.actualCost ?? (i.status === "PAID" ? i.estimatedCost : 0)),
-    0,
-  );
+  // Estimates are planning only; a bought item is worth its actual cost.
+  const totals = planTotals(plan.items);
+  const totalEstimated = totals.estimated;
+  const totalActual = totals.paid;
+  const stillToPay = totals.remaining;
+  const quotedCount = plan.items.filter((i) => i.status !== "PAID" && i.actualCost !== null).length;
   const paidCount = plan.items.filter((i) => i.status === "PAID").length;
   const pct = plan.items.length > 0 ? Math.round((paidCount / plan.items.length) * 100) : 0;
 
@@ -157,12 +252,11 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
         dueDate: newItem.dueDate || undefined,
         notes: newItem.notes || undefined,
         eventGroup: newItem.eventGroup || undefined,
-        vendor: newItem.vendor || undefined,
       });
       if (result.success) {
         toast.success("Item added");
         setAddOpen(false);
-        setNewItem({ name: "", estimatedCost: "", dueDate: "", notes: "", eventGroup: "", vendor: "" });
+        setNewItem({ name: "", estimatedCost: "", dueDate: "", notes: "", eventGroup: "" });
         router.refresh();
       } else {
         toast.error(result.error ?? "Failed");
@@ -238,74 +332,42 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
     router.push("/plans");
   }
 
-  function ItemRow({ item, handle }: { item: PlanItem; handle?: React.ReactNode }) {
-    return (
-      <div className={cn("p-3 rounded-lg border border-border bg-background", item.status === "SKIPPED" && "opacity-50")}>
-        <div className="flex items-start gap-3">
-          {handle}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-foreground">{item.name}</span>
-              {item.vendor && (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Store className="h-3 w-3" />{item.vendor}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-              <span>Est: {baseSymbol} {(item.estimatedCost / 100).toLocaleString()}</span>
-              {item.actualCost !== null && (
-                <span className="text-emerald-600 font-medium">Paid: {baseSymbol} {(item.actualCost / 100).toLocaleString()}</span>
-              )}
-              {item.dueDate && (
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{format(new Date(item.dueDate), "d MMM yyyy")}</span>
-              )}
-            </div>
-            {item.notes && <p className="text-xs text-muted-foreground mt-0.5 italic">{item.notes}</p>}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {item.status === "PAID" ? (
-              <button
-                onClick={() => handleStatusChange(item.id, "PENDING")}
-                disabled={isPending}
-                className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-muted-foreground transition-colors"
-                title="Bought — click to undo"
-              >
-                <CheckCircle2 className="h-4 w-4" /> Bought
-              </button>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs"
-                  disabled={isPending}
-                  onClick={() => handleMarkBought(item.id)}
-                  title="Mark as bought without logging an expense"
-                >
-                  Mark bought
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  disabled={isPending}
-                  onClick={() => handleLogExpense(item.id)}
-                  title="Mark bought and log a real expense"
-                >
-                  Buy &amp; log
-                </Button>
-              </>
-            )}
-            <button onClick={() => setDeleteItemId(item.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-1">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  function openEdit(item: PlanItem) {
+    setDraft({
+      dueDate: item.dueDate ? format(new Date(item.dueDate), "yyyy-MM-dd") : "",
+      eventGroup: item.eventGroup ?? "",
+      notes: item.notes ?? "",
+    });
+    setEditItem(item);
   }
+
+  async function handleSaveDetails() {
+    if (!editItem) return;
+    startTransition(async () => {
+      const result = await updatePlannerItem(editItem.id, {
+        dueDate: draft.dueDate || null,
+        eventGroup: draft.eventGroup.trim() || null,
+        notes: draft.notes.trim() || null,
+      });
+      if (result.success) { toast.success("Item updated"); setEditItem(null); router.refresh(); }
+      else toast.error(result.error ?? "Failed");
+    });
+  }
+
+  const renderRow = (item: PlanItem, handle: React.ReactNode) => (
+    <PlanItemRow
+      item={item}
+      handle={handle}
+      baseSymbol={baseSymbol}
+      busy={isPending}
+      onSaved={() => router.refresh()}
+      onBought={() => handleMarkBought(item.id)}
+      onLogged={() => handleLogExpense(item.id)}
+      onUndo={() => handleStatusChange(item.id, "PENDING")}
+      onEdit={() => openEdit(item)}
+      onDelete={() => setDeleteItemId(item.id)}
+    />
+  );
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -369,7 +431,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
 
       {/* Affordability Panel */}
       {totalEstimated > 0 && (() => {
-        const remaining = totalEstimated - totalActual;
+        const remaining = stillToPay;
         const canAfford = financialPosition.liquidAvailable >= remaining;
         // Clamp to 0-100: you can't cover a negative share (liquid in the red = 0% covered).
         const coveragePct = remaining > 0
@@ -401,7 +463,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
               <div>
-                <div className="text-xs text-muted-foreground">Still to pay</div>
+                <div className="text-xs text-muted-foreground">Still to pay{quotedCount > 0 ? ` (${quotedCount} quoted)` : ""}</div>
                 <div className="text-base font-bold text-foreground">{baseSymbol} {(remaining / 100).toLocaleString()}</div>
               </div>
               <div>
@@ -458,7 +520,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                   <span className="text-xs text-muted-foreground">· {baseSymbol} {(items.reduce((s, i) => s + i.estimatedCost, 0) / 100).toLocaleString()} est.</span>
                 </div>
                 <div className="pl-2 border-l-2 border-muted">
-                  <SortableItems items={items} onReorder={handleReorder} renderItem={(item, handle) => <ItemRow item={item} handle={handle} />} />
+                  <SortableItems items={items} onReorder={handleReorder} renderItem={renderRow} />
                 </div>
               </div>
             ))}
@@ -471,7 +533,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Other</span>
                   </div>
                 )}
-                <SortableItems items={ungrouped} onReorder={handleReorder} renderItem={(item, handle) => <ItemRow item={item} handle={handle} />} />
+                <SortableItems items={ungrouped} onReorder={handleReorder} renderItem={renderRow} />
               </div>
             )}
           </div>
@@ -497,23 +559,17 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
                 <Input type="date" value={newItem.dueDate} onChange={(e) => setNewItem((p) => ({ ...p, dueDate: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Event Group (optional)</Label>
-                <Input
-                  list={`groups-${plan.id}`}
-                  value={newItem.eventGroup}
-                  onChange={(e) => setNewItem((p) => ({ ...p, eventGroup: e.target.value }))}
-                  placeholder="e.g. Phase 1"
-                />
-                <datalist id={`groups-${plan.id}`}>
-                  {suggestedGroups.map((g) => <option key={g} value={g} />)}
-                </datalist>
-              </div>
-              <div>
-                <Label>Vendor / Supplier (optional)</Label>
-                <Input value={newItem.vendor} onChange={(e) => setNewItem((p) => ({ ...p, vendor: e.target.value }))} placeholder="e.g. Pearl Continental" />
-              </div>
+            <div>
+              <Label>Event Group (optional)</Label>
+              <Input
+                list={`groups-${plan.id}`}
+                value={newItem.eventGroup}
+                onChange={(e) => setNewItem((p) => ({ ...p, eventGroup: e.target.value }))}
+                placeholder="e.g. Phase 1"
+              />
+              <datalist id={`groups-${plan.id}`}>
+                {suggestedGroups.map((g) => <option key={g} value={g} />)}
+              </datalist>
             </div>
             <div>
               <Label>Notes (optional)</Label>
@@ -521,6 +577,37 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
             </div>
             <Button className="w-full" onClick={handleAddItem} disabled={isPending}>
               {isPending ? "Adding..." : "Add Item"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit details: everything that isn't the name or a price (those edit on the tile) */}
+      <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit details{editItem ? ` · ${editItem.name}` : ""}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Due date</Label>
+                <Input type="date" value={draft.dueDate} onChange={(e) => setDraft((p) => ({ ...p, dueDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Event group</Label>
+                <Input
+                  list={`groups-${plan.id}`}
+                  value={draft.eventGroup}
+                  onChange={(e) => setDraft((p) => ({ ...p, eventGroup: e.target.value }))}
+                  placeholder="e.g. Phase 1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea rows={3} value={draft.notes} onChange={(e) => setDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Quotation comparison, who to call..." />
+            </div>
+            <Button className="w-full" onClick={handleSaveDetails} disabled={isPending}>
+              {isPending ? "Saving..." : "Save"}
             </Button>
           </div>
         </DialogContent>
