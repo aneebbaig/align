@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sumTotals, paymentStatus, balanceOf, varianceOf, cheapestQuote, quoteSpread, groupTotals } from "./totals";
+import { sumTotals, paymentStatus, balanceOf, varianceOf, cheapestQuote, quoteSpread, groupTotals, budgetStatus, tippingExpense, unallocated } from "./totals";
 
 const row = (estimatedAmount: number, actualAmount: number | null = null, paidAmount = 0, eventId: string | null = null, category = "MISC") =>
   ({ eventId, category, estimatedAmount, actualAmount, paidAmount });
@@ -41,5 +41,28 @@ describe("wedding totals", () => {
     expect(cheapestQuote([q("a", 5), q("b", 3), q("c", 9)])?.id).toBe("b");
     expect(cheapestQuote([q("a", 3), q("b", 3), q("c", 9)])).toBeNull();
     expect(quoteSpread([q("a", 5), q("b", 3), q("c", 9)])).toBe(6);
+  });
+
+  it("classifies budget status", () => {
+    expect(budgetStatus(100, 0).state).toBe("none");
+    expect(budgetStatus(500, 1000).state).toBe("ok");
+    expect(budgetStatus(850, 1000).state).toBe("close");
+    expect(budgetStatus(1000, 1000).state).toBe("close"); // exactly on budget is not over
+    const over = budgetStatus(1450, 1000);
+    expect([over.state, over.overBy, over.left]).toEqual(["over", 450, 0]);
+    expect(budgetStatus(700, 1000).left).toBe(300);
+  });
+  it("finds the expense that tips an event over budget", () => {
+    const r = (id: string, est: number, act: number | null = null) => ({ id, ...row(est, act) });
+    const rows = [r("a", 100), r("b", 150, 200), r("c", 100)];
+    expect(tippingExpense(rows, 250)).toEqual({ id: "b", overBy: 50 });
+    expect(tippingExpense(rows, 1000)).toBeNull();
+    expect(tippingExpense(rows, 0)).toBeNull();
+    // a single expense bigger than the whole budget: over by its own cost at most
+    expect(tippingExpense([r("x", 500)], 100)).toEqual({ id: "x", overBy: 400 });
+  });
+  it("computes the budget left unallocated", () => {
+    expect(unallocated(1000, [{ budgetAllocated: 300 }, { budgetAllocated: 200 }])).toBe(500);
+    expect(unallocated(1000, [{ budgetAllocated: 700 }, { budgetAllocated: 600 }])).toBe(-300);
   });
 });

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Heart, CalendarDays, Trash2 } from "lucide-react";
+import { Plus, Heart, Trash2, MoreHorizontal, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,7 +17,10 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { createWeddingPlan, deleteWeddingPlan } from "@/actions/wedding";
 import { cn } from "@/lib/utils";
-import { WeddingPlan, PLAN_STATUS_CONFIG, fmt } from "./wedding-types";
+import { WeddingPlan, PLAN_STATUS_CONFIG, fmt, fmtShort } from "./wedding-types";
+import { BudgetMeter } from "./budget-meter";
+import { countdown } from "./plan-header";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { sumTotals } from "@/lib/wedding/totals";
 
 export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plans: WeddingPlan[]; baseSymbol?: string }) {
@@ -80,78 +83,60 @@ export function WeddingClient({ plans: initialPlans, baseSymbol = "Rs" }: { plan
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {plans.map((plan) => {
-            const statusCfg = PLAN_STATUS_CONFIG[plan.status] ?? PLAN_STATUS_CONFIG.PLANNING;
             const totals = sumTotals(plan.expenses);
-            const daysUntil = plan.weddingDate
-              ? Math.ceil((new Date(plan.weddingDate).getTime() - Date.now()) / 86400000)
-              : null;
+            const cd = countdown(plan.weddingDate);
+            const events = [...plan.events].sort((x, y) => x.order - y.order);
+            const next = events.filter((e) => e.date && differenceInCalendarDays(new Date(e.date), new Date()) >= 0)
+              .sort((x, y) => new Date(x.date as Date).getTime() - new Date(y.date as Date).getTime())[0];
+            const overEvents = events.filter((e) => e.budgetAllocated > 0 && sumTotals(plan.expenses.filter((x) => x.eventId === e.id)).projected > e.budgetAllocated);
 
             return (
               <div key={plan.id} className="relative group">
-                <Link href={`/wedding/${plan.id}`} className="block bg-card border border-border rounded-xl overflow-hidden hover:shadow-md hover:border-pink-300/50 transition-all">
-                  <div className="h-2 bg-gradient-to-r from-pink-400 to-rose-400" />
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-950 flex items-center justify-center shrink-0">
-                          <Heart className="h-4 w-4 text-pink-500" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-foreground">{plan.brideName} & {plan.groomName}</div>
-                          {plan.weddingDate && (
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {format(new Date(plan.weddingDate), "d MMM yyyy")}
-                              {daysUntil !== null && daysUntil > 0 && (
-                                <span className={cn("ml-1.5 font-medium", daysUntil < 30 ? "text-amber-500" : "text-muted-foreground")}>
-                                  ({daysUntil}d to go)
-                                </span>
-                              )}
-                              {daysUntil !== null && daysUntil <= 0 && (
-                                <span className="ml-1.5 text-emerald-500 font-medium">({formatDistanceToNow(new Date(plan.weddingDate), { addSuffix: true })})</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                <Link href={`/wedding/${plan.id}`} className="block bg-card border border-border rounded-xl p-5 hover:border-foreground/15 transition-colors space-y-3">
+                  <div className="flex items-start justify-between gap-3 pr-8">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-950 flex items-center justify-center shrink-0"><Heart className="h-4 w-4 text-pink-500" /></div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-foreground truncate">{plan.brideName} &amp; {plan.groomName}</div>
+                        {plan.weddingDate && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {format(new Date(plan.weddingDate), "d MMM yyyy")}
+                            {cd && <span className={cn("ml-1.5", cd.tone)}>· {cd.text}</span>}
+                          </div>
+                        )}
                       </div>
-                      <Badge className={cn("text-xs shrink-0", statusCfg.badge)}>{statusCfg.label}</Badge>
                     </div>
-                    <div className="space-y-1.5 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Budget</span>
-                        <span className="font-medium">{fmt(plan.totalBudget, baseSymbol)}</span>
-                      </div>
-                      {totals.projected > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Planned</span>
-                          <span className={cn("font-medium", plan.totalBudget > 0 && totals.projected > plan.totalBudget && "text-red-500")}>{fmt(totals.projected, baseSymbol)}</span>
-                        </div>
-                      )}
-                      {totals.paid > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Paid so far</span>
-                          <span className="font-medium text-emerald-600">{fmt(totals.paid, baseSymbol)}</span>
-                        </div>
-                      )}
-                      {plan.haqMehr && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Haq Mehr</span>
-                          <span className="font-medium text-pink-600">{fmt(plan.haqMehr, baseSymbol)}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{plan.events.length} events</span>
-                      <span>·</span>
-                      <span>{plan.expenses.length} expenses</span>
-                    </div>
+                    {plan.status === "DONE" && <Badge className={cn("text-xs shrink-0", PLAN_STATUS_CONFIG.DONE.badge)}>Done</Badge>}
                   </div>
+
+                  <div className="space-y-1.5">
+                    <BudgetMeter size="sm" shortCopy projected={totals.projected} paid={totals.paid} budget={plan.totalBudget} symbol={baseSymbol} />
+                    <p className="text-xs text-muted-foreground tabular-nums" title={`Planned ${fmt(totals.projected, baseSymbol)}${plan.totalBudget > 0 ? ` of ${fmt(plan.totalBudget, baseSymbol)}` : ""}`}>
+                      {fmtShort(totals.projected, baseSymbol)} planned{plan.totalBudget > 0 ? ` of ${fmtShort(plan.totalBudget, baseSymbol)}` : ""}{totals.paid > 0 ? ` · ${fmtShort(totals.paid, baseSymbol)} paid` : ""}
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {plan.events.length} events · {plan.expenses.length} expenses{next ? ` · Next: ${next.name} ${format(new Date(next.date as Date), "d MMM")}` : ""}
+                  </p>
+                  {overEvents.length > 0 && (
+                    <p className="flex items-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      {overEvents.slice(0, 2).map((e) => `${e.name} over by ${fmtShort(sumTotals(plan.expenses.filter((x) => x.eventId === e.id)).projected - e.budgetAllocated, baseSymbol)}`).join(" · ")}
+                      {overEvents.length > 2 ? ` · +${overEvents.length - 2} more` : ""}
+                    </p>
+                  )}
                 </Link>
-                <button
-                  onClick={(e) => { e.preventDefault(); setDeleteId(plan.id); }}
-                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="absolute top-3.5 right-3 h-8 w-8 text-muted-foreground" aria-label="Plan actions" onClick={(e) => e.stopPropagation()}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteId(plan.id)}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete plan</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             );
           })}

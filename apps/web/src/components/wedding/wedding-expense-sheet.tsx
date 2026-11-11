@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Pencil, Phone, Trash2, Wallet, X, AtSign } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,11 @@ import {
   chooseWeddingQuote, clearWeddingQuoteChoice, deleteWeddingQuote,
 } from "@/actions/wedding";
 import { evaluateAmount } from "@/lib/amount-expr";
-import { cheapestQuote, quoteSpread, costOf } from "@/lib/wedding/totals";
+import { budgetStatus, cheapestQuote, quoteSpread, costOf, unallocated } from "@/lib/wedding/totals";
 import { cn } from "@/lib/utils";
-import { WeddingExpense, WeddingEvent, EXPENSE_CATEGORIES, fmt } from "./wedding-types";
+import { BudgetMeter, BUDGET_TONE, budgetCopy } from "./budget-meter";
+import { GENERAL } from "./event-picker";
+import { WeddingExpense, WeddingEvent, EXPENSE_CATEGORIES, fmt, getEventInfo } from "./wedding-types";
 
 /** "" -> null (blank), a number or sum -> its value, anything else -> undefined (invalid). */
 function parseMoney(text: string): number | null | undefined {
@@ -27,7 +29,6 @@ function parseMoney(text: string): number | null | undefined {
   return r.ok ? r.value : undefined;
 }
 
-const GENERAL = "GENERAL";
 const asText = (paisas: number) => (paisas ? String(paisas / 100) : "");
 
 // ─── quotes ──────────────────────────────────────────────────────────────────
@@ -81,7 +82,7 @@ function Quotes({ expense, baseSymbol, onChanged }: { expense: WeddingExpense; b
       {quotes.length > 0 && (
         <ul className="space-y-2">
           {quotes.map((q) => (
-            <li key={q.id} className={cn("rounded-lg border p-3", q.isChosen ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20" : "border-border")}>
+            <li key={q.id} className={cn("rounded-lg border p-3", q.isChosen ? "ring-1 ring-emerald-500/40 bg-emerald-50/60 dark:bg-emerald-950/20" : "")}>
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -139,13 +140,13 @@ function Quotes({ expense, baseSymbol, onChanged }: { expense: WeddingExpense; b
 
 // ─── body ────────────────────────────────────────────────────────────────────
 
-function SheetBody({ expense, events, baseSymbol, onChanged }: {
-  expense: WeddingExpense; events: WeddingEvent[]; baseSymbol: string; onChanged: () => void;
+function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initialSection, onChanged }: {
+  expense: WeddingExpense; events: WeddingEvent[]; expenses: WeddingExpense[]; totalBudget: number; baseSymbol: string;
+  initialSection?: "payment" | "quotes"; onChanged: () => void;
 }) {
   const chosen = expense.quotes.find((q) => q.isChosen);
   const [d, setD] = useState({
     category: expense.category,
-    eventId: expense.eventId ?? GENERAL,
     vendorName: expense.vendorName ?? "",
     vendorPhone: expense.vendorPhone ?? "",
     vendorInstagram: expense.vendorInstagram ?? "",
@@ -155,6 +156,25 @@ function SheetBody({ expense, events, baseSymbol, onChanged }: {
   const [saving, setSaving] = useState(false);
   const set = (patch: Partial<typeof d>) => setD((p) => ({ ...p, ...patch }));
   const cost = costOf(expense);
+  const quotesRef = useRef<HTMLDivElement>(null);
+  const paymentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const target = initialSection === "payment" ? paymentRef.current : initialSection === "quotes" ? quotesRef.current : null;
+    target?.scrollIntoView({ block: "start" });
+  }, [initialSection]);
+
+  const eventId = expense.eventId ?? GENERAL;
+  const event = events.find((e) => e.id === expense.eventId) ?? null;
+  // The meter for the event this expense sits in, so a changed price or quote shows its effect.
+  const inEvent = expenses.filter((e) => e.eventId === expense.eventId);
+  const eventProjected = inEvent.reduce((s, e) => s + costOf(e), 0);
+  const eventBudget = event ? event.budgetAllocated : totalBudget > 0 ? Math.max(0, unallocated(totalBudget, events)) : 0;
+
+  async function moveTo(value: string) {
+    const result = await updateWeddingExpense(expense.id, { eventId: value === GENERAL ? null : value });
+    if (result.success) { toast.success("Moved"); onChanged(); } else toast.error(result.error ?? "Failed");
+  }
 
   async function save() {
     const paid = parseMoney(d.paid);
@@ -162,7 +182,6 @@ function SheetBody({ expense, events, baseSymbol, onChanged }: {
     setSaving(true);
     const result = await updateWeddingExpense(expense.id, {
       category: d.category,
-      eventId: d.eventId === GENERAL ? null : d.eventId,
       vendorName: d.vendorName, vendorPhone: d.vendorPhone, vendorInstagram: d.vendorInstagram,
       paid: paid ?? 0,
       notes: d.notes,
@@ -178,49 +197,28 @@ function SheetBody({ expense, events, baseSymbol, onChanged }: {
 
   return (
     <div className="space-y-6 overflow-y-auto pb-6 -mr-2 pr-2">
-      <section className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Category</Label>
-            <Select value={d.category} onValueChange={(v) => set({ category: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{EXPENSE_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Event</Label>
-            <Select value={d.eventId} onValueChange={(v) => set({ eventId: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={GENERAL}>Whole wedding</SelectItem>
-                {events.map((ev) => <SelectItem key={ev.id} value={ev.id}>{ev.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div>
-          <Label>Vendor</Label>
-          {chosen ? (
-            <p className="text-sm rounded-md bg-muted/50 px-3 py-2">
-              {chosen.vendorName} <span className="text-xs text-muted-foreground">· from the quote you chose</span>
+      <section className="space-y-2">
+        <Label>Event</Label>
+        <Select value={eventId} onValueChange={moveTo}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={GENERAL}>💍 Whole wedding</SelectItem>
+            {events.map((ev) => <SelectItem key={ev.id} value={ev.id}>{getEventInfo(ev.type).emoji} {ev.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {eventBudget > 0 && (
+          <div className="space-y-1">
+            <BudgetMeter projected={eventProjected} paid={inEvent.reduce((s, e) => s + e.paidAmount, 0)} budget={eventBudget} symbol={baseSymbol} />
+            <p className={cn("text-xs font-medium", BUDGET_TONE[budgetStatus(eventProjected, eventBudget).state].text)}>
+              {event ? event.name : "Whole wedding"}: {budgetCopy(eventProjected, eventBudget, baseSymbol)}
             </p>
-          ) : (
-            <div className="grid grid-cols-5 gap-2">
-              <Input className="col-span-5" placeholder="Who is it with? (optional)" value={d.vendorName} onChange={(e) => set({ vendorName: e.target.value })} />
-              <Input className="col-span-2" placeholder="Phone" value={d.vendorPhone} onChange={(e) => set({ vendorPhone: e.target.value })} />
-              <Input className="col-span-3" placeholder="Instagram" value={d.vendorInstagram} onChange={(e) => set({ vendorInstagram: e.target.value })} />
-            </div>
-          )}
-        </div>
-
-        <div>
-          <Label>Notes</Label>
-          <Textarea rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Anything to remember..." />
-        </div>
+          </div>
+        )}
       </section>
 
-      <section className="space-y-2">
+      <div ref={quotesRef} className="scroll-mt-2"><Quotes expense={expense} baseSymbol={baseSymbol} onChanged={onChanged} /></div>
+
+      <section ref={paymentRef} className="space-y-2 scroll-mt-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Payment</h3>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={payInFull}><Wallet className="h-3.5 w-3.5" />Pay in full</Button>
@@ -231,16 +229,40 @@ function SheetBody({ expense, events, baseSymbol, onChanged }: {
         </div>
       </section>
 
-      <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save details"}</Button>
+      <section className="space-y-3">
+        <div>
+          <Label>Vendor</Label>
+          {chosen ? (
+            <p className="text-sm rounded-md bg-muted/50 px-3 py-2">{chosen.vendorName} <span className="text-xs text-muted-foreground">· from the quote you chose</span></p>
+          ) : (
+            <div className="grid grid-cols-5 gap-2">
+              <Input className="col-span-5" placeholder="Who is it with? (optional)" value={d.vendorName} onChange={(e) => set({ vendorName: e.target.value })} />
+              <Input className="col-span-2" placeholder="Phone" value={d.vendorPhone} onChange={(e) => set({ vendorPhone: e.target.value })} />
+              <Input className="col-span-3" placeholder="Instagram" value={d.vendorInstagram} onChange={(e) => set({ vendorInstagram: e.target.value })} />
+            </div>
+          )}
+        </div>
+        <div>
+          <Label>Notes</Label>
+          <Textarea rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Anything to remember..." />
+        </div>
+        <div>
+          <Label>Category</Label>
+          <Select value={d.category} onValueChange={(v) => set({ category: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{EXPENSE_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </section>
 
-      <hr className="border-border" />
-      <Quotes expense={expense} baseSymbol={baseSymbol} onChanged={onChanged} />
+      <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save payment & details"}</Button>
     </div>
   );
 }
 
-export function ExpenseSheet({ expense, events, baseSymbol, onClose, onChanged }: {
-  expense: WeddingExpense | null; events: WeddingEvent[]; baseSymbol: string; onClose: () => void; onChanged: () => void;
+export function ExpenseSheet({ expense, events, expenses, totalBudget, baseSymbol, initialSection, onClose, onChanged }: {
+  expense: WeddingExpense | null; events: WeddingEvent[]; expenses: WeddingExpense[]; totalBudget: number; baseSymbol: string;
+  initialSection?: "payment" | "quotes"; onClose: () => void; onChanged: () => void;
 }) {
   return (
     <Sheet open={!!expense} onOpenChange={(o) => !o && onClose()}>
@@ -248,7 +270,9 @@ export function ExpenseSheet({ expense, events, baseSymbol, onClose, onChanged }
         <SheetHeader>
           <SheetTitle className="truncate pr-8">{expense?.name ?? ""}</SheetTitle>
         </SheetHeader>
-        {expense && <SheetBody key={expense.id} expense={expense} events={events} baseSymbol={baseSymbol} onChanged={onChanged} />}
+        {expense && (
+          <SheetBody key={expense.id} expense={expense} events={events} expenses={expenses} totalBudget={totalBudget} baseSymbol={baseSymbol} initialSection={initialSection} onChanged={onChanged} />
+        )}
       </SheetContent>
     </Sheet>
   );

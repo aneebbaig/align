@@ -84,3 +84,41 @@ export function quoteSpread(quotes: QuoteLike[]): number {
   const amounts = quotes.map((q) => q.amount);
   return Math.max(...amounts) - Math.min(...amounts);
 }
+
+// ─── budget status ───────────────────────────────────────────────────────────
+
+export type BudgetState = "none" | "ok" | "close" | "over";
+/** Amber from this share of the budget used. */
+export const CLOSE_AT = 0.85;
+
+export function budgetStatus(projected: number, budget: number): { state: BudgetState; pct: number; left: number; overBy: number } {
+  if (budget <= 0) return { state: "none", pct: 0, left: 0, overBy: 0 };
+  const pct = projected / budget;
+  return {
+    state: projected > budget ? "over" : pct >= CLOSE_AT ? "close" : "ok",
+    pct,
+    left: Math.max(0, budget - projected),
+    overBy: Math.max(0, projected - budget),
+  };
+}
+
+/**
+ * Walk expenses in display order; the one whose running total first crosses the
+ * budget is what tips it over. Pass the rows in exactly the order they render.
+ */
+export function tippingExpense<T extends CostRow & { id: string }>(rows: T[], budget: number): { id: string; overBy: number } | null {
+  if (budget <= 0) return null;
+  let run = 0;
+  for (const r of rows) {
+    const before = run;
+    run += costOf(r);
+    if (before <= budget && run > budget) return { id: r.id, overBy: Math.min(run - budget, costOf(r)) };
+  }
+  return null;
+}
+
+export const allocatedTotal = (events: { budgetAllocated: number }[]) => events.reduce((s, e) => s + e.budgetAllocated, 0);
+
+/** Total budget not yet set aside for an event (negative = events add up to more than the total). */
+export const unallocated = (totalBudget: number, events: { budgetAllocated: number }[]) =>
+  totalBudget - allocatedTotal(events);

@@ -118,6 +118,15 @@ export function fmt(n: number, symbol = "Rs") {
   return symbol + " " + (n / 100).toLocaleString("en-PK", { minimumFractionDigits: 0 });
 }
 
+/** Compact money for tight spots: Rs 1.2M, Rs 345k. The full value belongs in a title. */
+export function fmtShort(n: number, symbol = "Rs") {
+  const v = Math.abs(n) / 100;
+  const sign = n < 0 ? "-" : "";
+  if (v >= 1_000_000) return `${sign}${symbol} ${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (v >= 10_000) return `${sign}${symbol} ${Math.round(v / 1000)}k`;
+  return `${sign}${symbol} ${v.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+}
+
 export function getEventInfo(type: string) {
   return EVENT_TYPES.find((e) => e.value === type) ?? EVENT_TYPES[EVENT_TYPES.length - 1];
 }

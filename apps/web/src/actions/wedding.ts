@@ -115,13 +115,14 @@ export async function createWeddingEvent(weddingPlanId: string, data: {
   notes?: string;
   responsibleParty?: string;
   order?: number;
-}): Promise<ActionResult> {
+  status?: string;
+}): Promise<ActionResult<{ id: string }>> {
   try {
     const userId = await getUserId();
     const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId } });
     if (!plan) return { success: false, error: "Not found" };
 
-    await prisma.weddingEvent.create({
+    const created = await prisma.weddingEvent.create({
       data: {
         weddingPlanId,
         type: data.type,
@@ -133,10 +134,11 @@ export async function createWeddingEvent(weddingPlanId: string, data: {
         notes: data.notes || null,
         responsibleParty: data.responsibleParty ?? "JOINT",
         order: data.order ?? 0,
+        status: data.status ?? "PLANNED",
       },
     });
     revalidatePath(`/wedding/${weddingPlanId}`);
-    return { success: true };
+    return { success: true, data: { id: created.id } };
   } catch (e) {
     console.error("[createWeddingEvent]", e);
     return { success: false, error: "Failed to add event" };
