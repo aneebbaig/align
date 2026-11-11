@@ -454,30 +454,6 @@ class _ItemRowState extends State<_ItemRow> {
     if (paisas != widget.item.actualPaisas) _run(() => widget.onSave(setActual: true, actual: paisas));
   }
 
-  void _buyMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.popover,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: const Icon(Icons.receipt_long_outlined, color: AppColors.primary, size: 20),
-            title: const Text('Buy & log expense', style: AppTextStyles.bodyMedium),
-            subtitle: const Text('Marks it bought and books an expense', style: AppTextStyles.bodySmall),
-            onTap: () { Navigator.pop(ctx); widget.onBuy(true); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.check_circle_outline, color: AppColors.foreground, size: 20),
-            title: const Text('Mark bought only', style: AppTextStyles.bodyMedium),
-            subtitle: const Text('No expense is logged', style: AppTextStyles.bodySmall),
-            onTap: () { Navigator.pop(ctx); widget.onBuy(false); },
-          ),
-        ]),
-      ),
-    );
-  }
-
   Widget _amountField(String label, TextEditingController c, FocusNode f, bool bad, {required String hint, required VoidCallback onChanged}) {
     return Expanded(
       child: TextField(
@@ -525,12 +501,28 @@ class _ItemRowState extends State<_ItemRow> {
           Row(
             children: [
               widget.dragHandle,
+              // Quick toggle: tick = bought (no expense), tap again to undo.
+              IconButton(
+                onPressed: item.isBought ? widget.onUndo : () => widget.onBuy(false),
+                tooltip: item.isBought ? 'Mark not bought' : 'Mark bought',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: Icon(
+                  item.isBought ? Icons.check_circle : Icons.radio_button_unchecked,
+                  size: 22,
+                  color: item.isBought ? AppColors.success : AppColors.mutedForeground,
+                ),
+              ),
               Expanded(
                 child: TextField(
                   controller: _name,
                   focusNode: _nameFocus,
                   textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyMedium.copyWith(color: item.isBought ? AppColors.mutedForeground : AppColors.foreground),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: item.isBought ? AppColors.mutedForeground : AppColors.foreground,
+                    decoration: item.isBought ? TextDecoration.lineThrough : null,
+                  ),
                   decoration: const InputDecoration(isDense: true, border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 6)),
                   onChanged: (_) {
                     _nameTimer?.cancel();
@@ -548,31 +540,37 @@ class _ItemRowState extends State<_ItemRow> {
                 },
               ),
               const SizedBox(width: 4),
-              if (item.isBought)
-                TextButton.icon(
-                  onPressed: widget.onUndo,
-                  icon: const Icon(Icons.check_circle, size: 16, color: AppColors.success),
-                  label: const Text('Bought', style: TextStyle(color: AppColors.success)),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
-                )
-              else
-                OutlinedButton(
-                  onPressed: _buyMenu,
+              if (!item.isBought)
+                OutlinedButton.icon(
+                  onPressed: () => widget.onBuy(true),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 15),
+                  label: const Text('Log'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: const Text('Buy'),
                 ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, size: 18, color: AppColors.mutedForeground),
                 padding: EdgeInsets.zero,
                 color: AppColors.popover,
-                onSelected: (v) => v == 'edit' ? widget.onEdit() : widget.onDelete(),
+                onSelected: (v) {
+                  switch (v) {
+                    case 'edit':
+                      widget.onEdit();
+                    case 'bought':
+                      widget.onBuy(false);
+                    default:
+                      widget.onDelete();
+                  }
+                },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'edit', child: Text('Edit details', style: AppTextStyles.bodyMedium)),
+                  if (!item.isBought)
+                    const PopupMenuItem(value: 'bought', child: Text('Mark bought (no expense)', style: AppTextStyles.bodyMedium)),
                   PopupMenuItem(value: 'delete', child: Text('Delete', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.destructive))),
                 ],
               ),
@@ -580,7 +578,7 @@ class _ItemRowState extends State<_ItemRow> {
           ),
           const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.only(left: 28, right: 6),
+            padding: const EdgeInsets.only(left: 60, right: 6),
             child: Row(
               children: [
                 _amountField('Estimate', _est, _estFocus, _estBad, hint: '0', onChanged: () {
@@ -597,7 +595,7 @@ class _ItemRowState extends State<_ItemRow> {
           ),
           if (diff != 0 || item.dueDate != null || (item.notes ?? '').isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(left: 28, top: 8, right: 6),
+              padding: const EdgeInsets.only(left: 60, top: 8, right: 6),
               child: Wrap(
                 spacing: 12,
                 runSpacing: 2,

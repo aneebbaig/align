@@ -97,6 +97,9 @@ export function CategoryCombobox({ categories, value, type, onChange, onCreated,
         align="start"
         className="p-1 w-[var(--radix-popover-trigger-width)] max-h-64 overflow-y-auto"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        // The list is portalled outside the dialog, whose scroll lock would swallow the wheel.
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
         onInteractOutside={(e) => { if (e.target === inputRef.current) e.preventDefault(); else { setTyping(false); setQuery(""); } }}
       >
         {matches.map((c, i) => (

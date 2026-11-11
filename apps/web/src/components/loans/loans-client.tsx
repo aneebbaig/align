@@ -26,16 +26,8 @@ import { SplitFunding, FundingSelectContent, type FundingOption } from "@/compon
 import { FormSection, MoreOptions } from "@/components/shared/form-section";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
+import { LoanCard, type Loan, type LoanPayment } from "./loan-card";
 
-interface LoanPayment {
-  id: string; kind: string; amount: number; date: Date; notes: string | null; transactionId: string | null;
-  transaction: { fundingSource: string; fundingPotId: string | null; budgetMonth: number; budgetYear: number } | null;
-}
-interface Loan {
-  id: string; personName: string; description: string | null; type: string;
-  principalAmount: number; remainingAmount: number; date: Date; dueDate: Date | null;
-  notes: string | null; status: string; transactionId: string | null; payments: LoanPayment[];
-}
 interface Summary { totalGiven: number; totalReceived: number; netPosition: number; }
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
 interface PotBalance { amount: number; currency: CurrencyLite; }
@@ -281,143 +273,6 @@ export function LoansClient({
     setDeleteLoanData(null);
   }
 
-  function LoanCard({ loan }: { loan: Loan }) {
-    const paidAmount = loan.principalAmount - loan.remainingAmount;
-    const pct = Math.round((paidAmount / loan.principalAmount) * 100);
-    const isGiven = loan.type === "GIVEN";
-    const isExpanded = expanded === loan.id;
-
-    return (
-      <div className={cn("bg-card border rounded-xl overflow-hidden", isGiven ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-900")}>
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", isGiven ? "bg-emerald-100" : "bg-red-100")}>
-              {isGiven ? <TrendingUp className="h-5 w-5 text-emerald-600" /> : <TrendingDown className="h-5 w-5 text-red-600" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-foreground">{loan.personName}</span>
-                <Badge className={cn("text-xs", STATUS_BADGE[loan.status])}>{loan.status.replace("_", " ")}</Badge>
-                <Badge variant="outline" className={cn("text-xs", isGiven ? "text-emerald-600" : "text-red-600")}>
-                  {isGiven ? "I lent" : "I borrowed"}
-                </Badge>
-              </div>
-              {loan.description && <p className="text-xs text-muted-foreground mt-0.5">{loan.description}</p>}
-              <div className="flex items-center gap-4 mt-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground text-xs">Remaining </span>
-                  <span className={cn("font-bold", isGiven ? "text-emerald-600" : "text-red-600")}>
-                    {baseSymbol} {(loan.remainingAmount / 100).toLocaleString()}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground text-xs">of </span>
-                  <span className="text-muted-foreground">{baseSymbol} {(loan.principalAmount / 100).toLocaleString()}</span>
-                </div>
-                {loan.dueDate && (
-                  <div className="text-xs text-muted-foreground">Due: {format(new Date(loan.dueDate), "d MMM yyyy")}</div>
-                )}
-              </div>
-              {!isLoanClosed(loan.status) && (
-                <div className="mt-2">
-                  <Progress value={pct} className="h-1.5" />
-                  <span className="text-xs text-muted-foreground">{pct}% paid back</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actions: one horizontal row. The main step first, the rest quieter, rare ones in the menu. */}
-          <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap items-center gap-2">
-            {!isLoanClosed(loan.status) && (
-              <>
-                <Button size="sm" className="h-8" onClick={() => setPayOpen(loan.id)}>
-                  Record payment
-                </Button>
-                <Button size="sm" variant="outline" className="h-8" onClick={() => openEntry(loan, "TOP_UP")}>
-                  <PlusCircle className="h-3.5 w-3.5" />{isGiven ? "Lend more" : "Borrow more"}
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/40" onClick={() => handleMarkPaid(loan)}>
-                  <CheckCircle className="h-3.5 w-3.5" />Mark paid
-                </Button>
-              </>
-            )}
-            {isLoanClosed(loan.status) && (
-              <Button size="sm" variant="outline" className="h-8" onClick={() => openEntry(loan, "TOP_UP")}>
-                <PlusCircle className="h-3.5 w-3.5" />{isGiven ? "Lend more" : "Borrow more"}
-              </Button>
-            )}
-
-            <div className="ml-auto flex items-center gap-1">
-              <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setExpanded(isExpanded ? null : loan.id)}>
-                {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                History
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" aria-label="More actions">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {!isLoanClosed(loan.status) && (
-                    <DropdownMenuItem onClick={() => openEntry(loan, "WRITE_OFF")}>
-                      <Ban className="h-3.5 w-3.5 mr-2" />{isGiven ? "Write off" : "Mark as forgiven"}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteLoanData({ id: loan.id, personName: loan.personName })}>
-                    <Trash2 className="h-3.5 w-3.5 mr-2" />Delete loan
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-
-        {isExpanded && (
-          <div className="border-t border-border bg-muted/30 px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">History</span>
-            </div>
-            {loan.payments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No payments recorded yet</p>
-            ) : (
-              <div className="space-y-1.5">
-                {loan.payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <span className="text-muted-foreground text-xs">{format(new Date(p.date), "d MMM yyyy")}</span>
-                      {p.notes && <span className="text-muted-foreground text-xs ml-2">· {p.notes}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={cn("font-medium",
-                        p.kind === "TOP_UP" ? "text-amber-600" : p.kind === "WRITE_OFF" ? "text-muted-foreground" : "text-emerald-600")}>
-                        {p.kind === "TOP_UP" ? "Added +" : p.kind === "WRITE_OFF" ? (isGiven ? "Written off " : "Forgiven ") : "+"}{baseSymbol} {(p.amount / 100).toLocaleString()}
-                      </span>
-                      {p.transaction && p.kind === "PAYMENT" && (
-                        <button onClick={() => openEditPayment(loan.id, p)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5" title="Edit payment">
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      )}
-                      <button onClick={() => setDeletePaymentId(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-0.5" title="Delete payment">
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-2 pt-2 border-t border-border flex justify-between text-xs text-muted-foreground">
-              <span>Started: {format(new Date(loan.date), "d MMM yyyy")}</span>
-              {loan.notes && <span>{loan.notes}</span>}
-            </div>
-
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <>
       <PageHeader
@@ -459,7 +314,20 @@ export function LoansClient({
           {activeLoans.length === 0 ? (
             <EmptyState icon={AlertCircle} title="No active loans" description="Add a loan to start tracking money you've lent or borrowed." action={{ label: "Add Loan", onClick: () => setCreateOpen(true) }} />
           ) : (
-            activeLoans.map((loan) => <LoanCard key={loan.id} loan={loan} />)
+            activeLoans.map((loan) => <LoanCard
+                key={loan.id}
+                loan={loan}
+                baseSymbol={baseSymbol}
+                expanded={expanded === loan.id}
+                onToggle={() => setExpanded(expanded === loan.id ? null : loan.id)}
+                onPay={() => setPayOpen(loan.id)}
+                onMarkPaid={() => handleMarkPaid(loan)}
+                onTopUp={() => openEntry(loan, "TOP_UP")}
+                onWriteOff={() => openEntry(loan, "WRITE_OFF")}
+                onDelete={() => setDeleteLoanData({ id: loan.id, personName: loan.personName })}
+                onEditPayment={(p) => openEditPayment(loan.id, p)}
+                onDeletePayment={(id) => setDeletePaymentId(id)}
+              />)
           )}
         </TabsContent>
 
@@ -467,7 +335,20 @@ export function LoansClient({
           {closedLoans.length === 0 ? (
             <EmptyState icon={CheckCircle} title="No closed loans" description="Paid and written-off loans will appear here." />
           ) : (
-            closedLoans.map((loan) => <LoanCard key={loan.id} loan={loan} />)
+            closedLoans.map((loan) => <LoanCard
+                key={loan.id}
+                loan={loan}
+                baseSymbol={baseSymbol}
+                expanded={expanded === loan.id}
+                onToggle={() => setExpanded(expanded === loan.id ? null : loan.id)}
+                onPay={() => setPayOpen(loan.id)}
+                onMarkPaid={() => handleMarkPaid(loan)}
+                onTopUp={() => openEntry(loan, "TOP_UP")}
+                onWriteOff={() => openEntry(loan, "WRITE_OFF")}
+                onDelete={() => setDeleteLoanData({ id: loan.id, personName: loan.personName })}
+                onEditPayment={(p) => openEditPayment(loan.id, p)}
+                onDeletePayment={(id) => setDeletePaymentId(id)}
+              />)
           )}
         </TabsContent>
       </Tabs>

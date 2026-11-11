@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, GripVertical, Plus, Trash2, CheckCircle, Clock, Tag, CheckCircle2, AlertTriangle, TrendingUp, Info, MoreHorizontal, Pencil, Loader2, Check } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, CheckCircle, Tag, CheckCircle2, AlertTriangle, TrendingUp, Info, MoreHorizontal, Pencil, Loader2, Check, Circle, Receipt } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { createPlannerItem, updatePlannerItem, deletePlannerItem, updatePlannerStatus, deletePlanner, logPlanItemExpense, markPlanItemBought, reorderPlannerItems } from "@/actions/plan";
 import { cn } from "@/lib/utils";
 import { InlineText, InlineAmount } from "@/components/shared/inline-fields";
+import { DueChip } from "@/components/shared/due-chip";
 import { planTotals } from "@/lib/plans/totals";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -87,6 +88,7 @@ function SortableItems({ items, onReorder, renderItem }: {
   renderItem: (item: PlanItem, handle: React.ReactNode) => React.ReactNode;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const dndId = useId(); // stable across server and client, so several lists on one page hydrate cleanly
   function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
@@ -96,9 +98,9 @@ function SortableItems({ items, onReorder, renderItem }: {
     onReorder(arrayMove(items, from, to).map((i) => i.id));
   }
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
+        <div className="divide-y divide-border/60">
           {items.map((item) => (
             <SortableRow key={item.id} id={item.id}>{(handle) => renderItem(item, handle)}</SortableRow>
           ))}
@@ -107,6 +109,11 @@ function SortableItems({ items, onReorder, renderItem }: {
     </DndContext>
   );
 }
+
+// One grid shared by the group header, every row and the group footer, so the money columns line up.
+const ROW_GRID = "grid grid-cols-[1.25rem_1.25rem_minmax(0,1fr)_auto] sm:grid-cols-[1.25rem_1.25rem_minmax(0,1fr)_7rem_7rem_9.5rem] items-start gap-x-2 gap-y-1 px-3";
+// Controls that stay out of the way until you point at, or tab into, the row (always on for touch).
+const REVEAL = "sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity";
 
 function PlanItemRow({ item, handle, baseSymbol, busy, onSaved, onBought, onLogged, onUndo, onEdit, onDelete }: {
   item: PlanItem; handle?: React.ReactNode; baseSymbol: string; busy: boolean;
@@ -131,41 +138,71 @@ function PlanItemRow({ item, handle, baseSymbol, busy, onSaved, onBought, onLogg
   }
 
   const bought = item.status === "PAID";
+  const skipped = item.status === "SKIPPED";
   const diff = item.actualCost !== null && item.estimatedCost > 0 ? item.actualCost - item.estimatedCost : 0;
 
   return (
-    <div className={cn("p-3 rounded-lg border border-border bg-background", item.status === "SKIPPED" && "opacity-50")}>
-      <div className="flex items-center gap-2">
-        {handle}
-        <InlineText
-          ariaLabel="Item name"
-          value={item.name}
-          onSave={(name) => save({ name })}
-          className={cn("flex-1 min-w-0 text-sm font-medium text-foreground", bought && "text-muted-foreground")}
-        />
+    <div
+      className={cn("group py-2 hover:bg-muted/40 transition-colors", ROW_GRID, skipped && "opacity-50")}
+      onKeyDown={(e) => { if (e.altKey && e.key === "Enter" && !bought) { e.preventDefault(); onLogged(); } }}
+    >
+      <div className={cn("pt-1", REVEAL)}>{handle}</div>
+
+      <button
+        type="button"
+        onClick={bought ? onUndo : onBought}
+        disabled={busy}
+        aria-label={bought ? "Mark not bought" : "Mark bought"}
+        title={bought ? "Bought - click to undo" : "Mark bought (no expense logged)"}
+        className="mt-1 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {bought ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Circle className="h-5 w-5" />}
+      </button>
+
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <InlineText
+            ariaLabel="Item name"
+            value={item.name}
+            onSave={(name) => save({ name })}
+            className={cn("flex-1 min-w-0 text-sm font-medium text-foreground", bought && "line-through decoration-muted-foreground/40 text-muted-foreground")}
+          />
+          {skipped && <span className="text-[11px] text-muted-foreground">Skipped</span>}
+        </div>
+        <button type="button" onClick={onEdit} className="mt-0.5 flex items-center gap-x-2 gap-y-0.5 flex-wrap text-left text-xs text-muted-foreground hover:text-foreground">
+          {item.dueDate && <DueChip date={item.dueDate} />}
+          {item.notes && <span className="truncate max-w-[16rem] italic">{item.notes}</span>}
+          {!item.dueDate && !item.notes && <span className={REVEAL}>+ date / note</span>}
+        </button>
+      </div>
+
+      {/* Money: on phones the two amounts sit on their own line; from sm up they become the columns */}
+      <div className="col-span-full flex gap-3 pl-[1.75rem] sm:pl-0 sm:contents">
+        <div className="flex-1 sm:flex-none">
+          <span className="sm:hidden text-[11px] text-muted-foreground">Estimate</span>
+          <InlineAmount variant="bare" label="Estimate" symbol={baseSymbol} valuePaisas={item.estimatedCost} onSave={(v) => save({ estimatedCost: v ?? 0 })} />
+        </div>
+        <div className="flex-1 sm:flex-none">
+          <span className="sm:hidden text-[11px] text-muted-foreground">Actual</span>
+          <InlineAmount variant="bare" label="Actual cost" symbol={baseSymbol} valuePaisas={item.actualCost} optional onSave={(v) => save({ actualCost: v })} />
+          {diff !== 0 && (
+            <p className={cn("text-[11px] tabular-nums text-right pr-2 -mt-0.5", diff > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+              {diff > 0 ? "+" : "−"}{baseSymbol} {(Math.abs(diff) / 100).toLocaleString()}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-1 pt-0.5 sm:order-last">
         <span className="w-4 shrink-0" aria-live="polite">
           {state === "saving" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
           {state === "saved" && <Check className="h-3.5 w-3.5 text-emerald-600" />}
           {state === "error" && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
         </span>
-        {bought ? (
-          <button
-            onClick={onUndo}
-            disabled={busy}
-            className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-muted-foreground transition-colors shrink-0"
-            title="Bought — click to undo"
-          >
-            <CheckCircle2 className="h-4 w-4" /> Bought
-          </button>
-        ) : (
-          <div className="flex items-center gap-1 shrink-0">
-            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={onBought} title="Mark as bought without logging an expense">
-              Mark bought
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={onLogged} title="Mark bought and log a real expense">
-              Buy &amp; log
-            </Button>
-          </div>
+        {!bought && (
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={onLogged} title="Mark bought and book a real expense (Alt+Enter)" aria-label="Log expense">
+            <Receipt className="h-3.5 w-3.5" /><span className="hidden sm:inline">Log expense</span>
+          </Button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -175,27 +212,43 @@ function PlanItemRow({ item, handle, baseSymbol, busy, onSaved, onBought, onLogg
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit details</DropdownMenuItem>
+            {!bought && <DropdownMenuItem onClick={onBought}><CheckCircle2 className="h-3.5 w-3.5 mr-2" />Mark bought (no expense)</DropdownMenuItem>}
             <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-2 flex items-center gap-x-5 gap-y-1.5 flex-wrap pl-6">
-        <InlineAmount label="Estimate" symbol={baseSymbol} valuePaisas={item.estimatedCost} onSave={(v) => save({ estimatedCost: v ?? 0 })} />
-        <InlineAmount label="Actual" symbol={baseSymbol} valuePaisas={item.actualCost} optional onSave={(v) => save({ actualCost: v })} />
-        {diff !== 0 && (
-          <span className={cn("text-xs font-medium", diff > 0 ? "text-red-500" : "text-emerald-600")}>
-            {diff > 0 ? "▲" : "▼"} {baseSymbol} {(Math.abs(diff) / 100).toLocaleString()} {diff > 0 ? "over" : "under"} estimate
-          </span>
-        )}
+/** Group title with the Estimate / Actual column labels. */
+function GroupHeader({ title, boughtCount, count, icon }: { title: string; boughtCount: number; count: number; icon?: React.ReactNode }) {
+  return (
+    <div className={cn("py-2 border-b border-border/60 bg-muted/20 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70 items-center", ROW_GRID)}>
+      <div className="col-span-4 sm:col-span-3 flex items-center gap-1.5 min-w-0">
+        {icon}<span className="truncate">{title}</span>
+        <span className="font-normal normal-case tracking-normal text-muted-foreground">· {boughtCount}/{count} bought</span>
       </div>
+      <div className="hidden sm:block text-right pr-2">Estimate</div>
+      <div className="hidden sm:block text-right pr-2">Actual</div>
+      <div className="hidden sm:block" />
+    </div>
+  );
+}
 
-      {(item.dueDate || item.eventGroup || item.notes) && (
-        <div className="mt-1.5 pl-6 text-xs text-muted-foreground flex items-center gap-x-3 gap-y-0.5 flex-wrap">
-          {item.dueDate && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{format(new Date(item.dueDate), "d MMM yyyy")}</span>}
-          {item.notes && <span className="italic">{item.notes}</span>}
-        </div>
-      )}
+function GroupFooter({ items, baseSymbol }: { items: PlanItem[]; baseSymbol: string }) {
+  const est = items.reduce((s, i) => s + i.estimatedCost, 0);
+  const actualItems = items.filter((i) => i.actualCost !== null);
+  const act = actualItems.reduce((s, i) => s + (i.actualCost ?? 0), 0);
+  const money = (n: number) => `${baseSymbol} ${(n / 100).toLocaleString()}`;
+  return (
+    <div className={cn("py-2 border-t border-border/60 text-xs font-semibold tabular-nums items-center", ROW_GRID)}>
+      <div className="col-span-4 sm:col-span-3 text-muted-foreground font-medium">
+        Total <span className="sm:hidden">· est {money(est)}{actualItems.length > 0 ? ` · actual ${money(act)}` : ""}</span>
+      </div>
+      <div className="hidden sm:block text-right pr-2">{money(est)}</div>
+      <div className="hidden sm:block text-right pr-2 text-muted-foreground">{actualItems.length > 0 ? money(act) : "—"}</div>
+      <div className="hidden sm:block" />
     </div>
   );
 }
@@ -286,7 +339,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
   async function handleMarkBought(itemId: string) {
     startTransition(async () => {
       const result = await markPlanItemBought(itemId);
-      if (result.success) toast.success("Marked as bought");
+      if (result.success) toast.success("Marked as bought", { action: { label: "Undo", onClick: () => handleStatusChange(itemId, "PENDING") } });
       else toast.error(result.error ?? "Failed");
       router.refresh();
     });
@@ -501,39 +554,29 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs" }:
       })()}
 
       {/* Items */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-foreground">Items & Checklist</h3>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-foreground">Items &amp; Checklist</h3>
           <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5" />Add Item</Button>
         </div>
 
         {plan.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No items yet. Add your first expense item!</p>
+          <p className="text-sm text-muted-foreground text-center py-8 bg-card border border-dashed border-border rounded-xl">No items yet. Add your first expense item!</p>
         ) : (
           <div className="space-y-4">
-            {/* Grouped items */}
             {Object.entries(grouped).map(([group, items]) => (
-              <div key={group}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group}</span>
-                  <span className="text-xs text-muted-foreground">· {baseSymbol} {(items.reduce((s, i) => s + i.estimatedCost, 0) / 100).toLocaleString()} est.</span>
-                </div>
-                <div className="pl-2 border-l-2 border-muted">
-                  <SortableItems items={items} onReorder={handleReorder} renderItem={renderRow} />
-                </div>
+              <div key={group} className="bg-card border border-border rounded-xl overflow-hidden">
+                <GroupHeader title={group} icon={<Tag className="h-3 w-3 shrink-0" />} count={items.length} boughtCount={items.filter((i) => i.status === "PAID").length} />
+                <SortableItems items={items} onReorder={handleReorder} renderItem={renderRow} />
+                <GroupFooter items={items} baseSymbol={baseSymbol} />
               </div>
             ))}
 
-            {/* Ungrouped items */}
             {ungrouped.length > 0 && (
-              <div>
-                {Object.keys(grouped).length > 0 && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Other</span>
-                  </div>
-                )}
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <GroupHeader title={Object.keys(grouped).length > 0 ? "Other" : "Items"} count={ungrouped.length} boughtCount={ungrouped.filter((i) => i.status === "PAID").length} />
                 <SortableItems items={ungrouped} onReorder={handleReorder} renderItem={renderRow} />
+                <GroupFooter items={ungrouped} baseSymbol={baseSymbol} />
               </div>
             )}
           </div>
