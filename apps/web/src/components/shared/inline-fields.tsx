@@ -44,14 +44,16 @@ export function InlineText({ value, onSave, className, placeholder, ariaLabel }:
       }}
       onBlur={flush}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className={cn("bg-transparent rounded px-1.5 -mx-1.5 py-0.5 outline-none border border-transparent hover:border-border focus:border-primary focus:bg-background transition-colors", className)}
+      className={cn("bg-transparent rounded px-1.5 -mx-1.5 py-0.5 outline-none ring-1 ring-inset ring-transparent hover:ring-border focus:ring-primary focus:bg-background transition-colors", className)}
     />
   );
 }
 
 /** Like InlineText for money: accepts a number or a sum ("35+67"). `null` = empty. */
-export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, hint, onSave }: {
+export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, hint, variant = "labeled", onSave }: {
   label: string; symbol: string; valuePaisas: number | null; optional?: boolean;
+  /** "bare": no visible label or symbol, right-aligned - for money columns under a shared header. */
+  variant?: "labeled" | "bare";
   /** Shown but not editable (e.g. an estimate that follows a chosen quote). */
   disabled?: boolean; hint?: string;
   onSave: (majorOrNull: number | null) => void;
@@ -86,10 +88,38 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
     const nextPaisas = next === null ? null : Math.round(next * 100);
     if (nextPaisas !== latest.current.valuePaisas) latest.current.onSave(next);
   }
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText(e.target.value);
+    dirty.current = true;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, SAVE_DELAY_MS);
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); };
+
+  if (variant === "bare") {
+    return (
+      <div title={hint} className={cn("rounded-md ring-1 ring-inset px-2 h-8 w-full flex items-center transition-colors focus-within:ring-primary focus-within:bg-background",
+        invalid ? "ring-destructive" : "ring-transparent hover:ring-border", disabled && "opacity-70")}>
+        <input
+          aria-label={label}
+          inputMode="decimal"
+          autoComplete="off"
+          disabled={disabled}
+          value={text}
+          placeholder={optional ? "—" : "0"}
+          onChange={onChange}
+          onBlur={flush}
+          onKeyDown={onKeyDown}
+          className="w-full min-w-0 bg-transparent outline-none text-sm font-medium text-foreground text-right tabular-nums whitespace-nowrap placeholder:text-muted-foreground/40 placeholder:font-normal"
+        />
+      </div>
+    );
+  }
+
   return (
     <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title={hint}>
       <span className="shrink-0 w-11">{label}</span>
-      <span className={cn("flex items-center gap-1 rounded-md border px-2 h-7 w-32 bg-background focus-within:border-primary", invalid ? "border-destructive" : "border-border", disabled && "bg-muted/50")}>
+      <span className={cn("flex items-center gap-1 rounded-md ring-1 ring-inset px-2 h-7 w-32 bg-background focus-within:ring-primary", invalid ? "ring-destructive" : "ring-border", disabled && "bg-muted/50")}>
         <span className="shrink-0 text-muted-foreground/70">{symbol}</span>
         <input
           aria-label={label}
