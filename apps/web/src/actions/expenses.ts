@@ -16,6 +16,7 @@ import { MAX_FUNDING_SOURCES } from "@/lib/constants";
 import { validateFundingSources, getFundingContextForMonth, getPotUnits } from "@/lib/expenses/funding";
 import { updateTransactionCore } from "@/lib/expenses/update";
 import { deleteTransactionCore } from "@/lib/expenses/delete";
+import { loadQuickPicks } from "@/lib/expenses/quick-picks-data";
 
 // ─── internal helpers ─────────────────────────────────────────────────────────
 
@@ -71,6 +72,13 @@ export async function getExpenseFundingContext(month: number, year: number) {
   const user = await getAuthenticatedUser({});
   return getFundingContextForMonth(user.id, month, year);
 }
+
+/** What the add form offers as one-tap shortcuts (see src/lib/expenses/quick-picks-data.ts). */
+export async function getQuickPicks(type: "EXPENSE" | "INCOME") {
+  return loadQuickPicks(await getUserId(), type);
+}
+
+export type QuickPicks = Awaited<ReturnType<typeof getQuickPicks>>;
 
 // ─── createTransaction ────────────────────────────────────────────────────────
 

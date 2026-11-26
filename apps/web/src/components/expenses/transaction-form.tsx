@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,10 @@ import { SplitFunding, FundingSelectContent, type FundingOption } from "@/compon
 import { FormSection, MoreOptions } from "@/components/shared/form-section";
 import { addToWantList } from "@/actions/want-list";
 import { cn, getMonthName } from "@/lib/utils";
+import { DayStrip } from "@/components/shared/day-strip";
+import { LAST_ENTRY_DATE_KEY, readLastUsed, rememberEntryDate } from "@/lib/day-strip";
+import { matchDescriptions } from "@/lib/expenses/quick-picks";
+import type { QuickPicks } from "@/actions/expenses";
 import { evaluateAmount } from "@/lib/amount-expr";
 import { CategoryCombobox } from "@/components/shared/category-combobox";
 
@@ -76,6 +80,10 @@ interface Props {
   // funding figures can be refetched for that period instead of showing a stale number.
   currentPeriod?: { month: number; year: number };
   dateFormat?: string;
+  // One-tap shortcuts for new entries (repeats, top categories, description autocomplete).
+  quickPicks?: QuickPicks;
+  // True once amount, description, category or notes differ from where the form started.
+  onDirtyChange?: (dirty: boolean) => void;
   onSuccess: () => void;
 }
 
@@ -183,7 +191,7 @@ function restoreFunding(ctx: NonNullable<Props["fundingContext"]>, t: NonNullabl
 
 export function TransactionForm({
   defaultType, categories, transaction, budgetByCategoryId = {},
-  currencies = [], fundingContext, currentPeriod, dateFormat = "dd/MM/yyyy", onSuccess,
+  currencies = [], fundingContext, currentPeriod, dateFormat = "dd/MM/yyyy", quickPicks, onDirtyChange, onSuccess,
 }: Props) {
   const baseCurrency = currencies.find((c) => c.isBase) ?? { id: "", code: "PKR", symbol: "Rs", rateToBase: 1, isBase: true };
   const [loading, setLoading] = useState(false);
@@ -194,7 +202,14 @@ export function TransactionForm({
   // Categories added from the picker while this form is open.
   const [createdCategories, setCreatedCategories] = useState<Props["categories"]>([]);
   const allCategories = [...categories, ...createdCategories];
-  const [impulseCheck, setImpulseCheck] = useState<{ data: FormValues } | null>(null);
+  const [impulseCheck, setImpulseCheck] = useState<{ data: FormValues; again: boolean } | null>(null);
+  const isNew = !transaction;
+  // A recent date from the last entry saved (within 30 min) - offered as a chip, never preselected.
+  const [lastUsedDate] = useState<string | null>(() => (isNew && typeof window !== "undefined" ? readLastUsed(window.localStorage.getItem(LAST_ENTRY_DATE_KEY), new Date()) : null));
+  const [showFundingControls, setShowFundingControls] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
+  const [descActive, setDescActive] = useState(-1);
+  const amountRef = useRef<HTMLInputElement | null>(null);
   const [incomeCurrencyId, setIncomeCurrencyId] = useState(transaction?.nativeCurrencyId ?? baseCurrency.id);
   const [nativeRate, setNativeRate] = useState(
     transaction?.nativeCurrencyId && transaction.nativeAmount
@@ -224,7 +239,7 @@ export function TransactionForm({
   const [fetchedFundingContext, setFetchedFundingContext] = useState<Props["fundingContext"]>();
   const [fundingContextLoading, setFundingContextLoading] = useState(false);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, watch, clearErrors, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       amount: transaction ? String((transaction.nativeCurrencyId && transaction.nativeAmount ? transaction.nativeAmount : transaction.amount) / 100) : "",
@@ -239,7 +254,10 @@ export function TransactionForm({
     },
   });
 
+  const amountReg = register("amount");
+  const descReg = register("description");
   const watchedAmount = watch("amount");
+  const watchedDescription = watch("description") ?? "";
   const amountPreview = watchedAmount?.trim() ? evaluateAmount(watchedAmount) : null;
   const watchedDate = watch("date");
   const budget = selectedCategory && defaultType === "EXPENSE" ? budgetByCategoryId[selectedCategory] : null;
@@ -263,6 +281,53 @@ export function TransactionForm({
     ? restoreFunding(rawFundingContext, transaction)
     : rawFundingContext;
   const fundingOptions = buildFundingOptions(liveFundingContext, baseCurrency.symbol);
+  // The "count it in that month" choice only matters when the date is in another period.
+  const dateInOtherPeriod = !!homePeriod && !!watchedDate && (() => {
+    const p = monthYearFromDateStr(watchedDate);
+    return p.month !== homePeriod.month || p.year !== homePeriod.year;
+  })();
+  const incomeLeft = liveFundingContext?.monthlyIncomeAvailable ?? 0;
+  const incomeEnough = incomeLeft > 0 && Math.round(amountOf(watchedAmount) * 100) <= incomeLeft;
+  const fundingCollapsed = isNew && !useSplit && singleFundingValue === "INCOME" && incomeEnough && !showFundingControls;
+  const topCategories = (quickPicks?.topCategoryIds ?? [])
+    .map((id) => allCategories.find((c) => c.id === id))
+    .filter((c): c is Props["categories"][number] => !!c);
+  const watchedNotes = watch("notes") ?? "";
+  const initial = useRef({
+    amount: transaction ? String((transaction.nativeCurrencyId && transaction.nativeAmount ? transaction.nativeAmount : transaction.amount) / 100) : "",
+    description: transaction?.description ?? "",
+    categoryId: transaction?.categoryId ?? "",
+    notes: transaction?.notes ?? "",
+  }).current;
+  const dirty = watchedAmount !== initial.amount || watchedDescription !== initial.description
+    || selectedCategory !== initial.categoryId || watchedNotes !== initial.notes;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  const descMatches = isNew && descOpen ? matchDescriptions(quickPicks?.descriptions ?? [], watchedDescription) : [];
+
+  function chooseCategory(id: string) {
+    setValue("categoryId", id, { shouldValidate: true });
+    setSelectedCategory(id);
+  }
+
+  function applyRepeat(p: NonNullable<QuickPicks>["repeats"][number]) {
+    setValue("description", p.description);
+    if (allCategories.some((c) => c.id === p.categoryId)) chooseCategory(p.categoryId);
+    setValue("amount", String(p.lastAmount / 100), { shouldValidate: true });
+    if (defaultType === "INCOME") { setIncomeCurrencyId(baseCurrency.id); setNativeRate(baseCurrency.rateToBase); }
+    if (defaultType === "EXPENSE" && p.fundingSource === "SAVINGS_POT" && p.fundingPotId && p.fundingCurrencyId) {
+      const value = `POT:${p.fundingPotId}:${p.fundingCurrencyId}`;
+      if (fundingOptions.some((o) => o.value === value)) { setUseSplit(false); setSingleFundingValue(value); }
+    }
+    setTimeout(() => { amountRef.current?.focus(); amountRef.current?.select(); }, 0);
+  }
+
+  function chooseDescription(d: { description: string; categoryId: string }) {
+    setValue("description", d.description);
+    if (!selectedCategory && allCategories.some((c) => c.id === d.categoryId)) chooseCategory(d.categoryId);
+    setDescOpen(false);
+    setDescActive(-1);
+  }
 
   useEffect(() => {
     if (defaultType !== "EXPENSE" || owned || !fundingContext || !targetPeriod || isCurrentPeriod) return;
@@ -296,7 +361,7 @@ export function TransactionForm({
     return data.description?.trim() || allCategories.find((c) => c.id === data.categoryId)?.name || (defaultType === "INCOME" ? "Income" : "Expense");
   }
 
-  async function submitTransaction(data: FormValues) {
+  async function submitTransaction(data: FormValues, again = false) {
     setLoading(true);
     try {
       const rawAmount = amountOf(data.amount);
@@ -336,26 +401,38 @@ export function TransactionForm({
 
       if (transaction) {
         const result = await updateTransaction(transaction.id, { ...base, amount: pkrAmount });
-        if (result.success) { toast.success("Transaction updated"); onSuccess(); }
+        if (result.success) { toast.success("Saved"); onSuccess(); }
         else toast.error(result.error ?? "Something went wrong");
         return;
       }
 
       const result = await createTransaction(base);
-      if (result.success) { toast.success("Transaction added"); onSuccess(); }
+      if (result.success) {
+        rememberEntryDate(data.date, new Date());
+        toast.success(`Added ${descriptionFor(data)} · ${selectedCurrency.symbol} ${rawAmount.toLocaleString()}`);
+        if (again) {
+          // Fresh entry, same date and funding.
+          setValue("amount", ""); setValue("description", ""); setValue("notes", ""); setValue("categoryId", "");
+          setSelectedCategory("");
+          clearErrors();
+          setTimeout(() => amountRef.current?.focus(), 0);
+        } else {
+          onSuccess();
+        }
+      }
       else toast.error(result.error ?? "Something went wrong");
     } finally {
       setLoading(false);
     }
   }
 
-  async function onSubmit(data: FormValues) {
+  async function onSubmit(data: FormValues, again = false) {
     const amount = amountOf(data.amount);
     if (!transaction && defaultType === "EXPENSE" && amount >= IMPULSE_THRESHOLD) {
-      setImpulseCheck({ data });
+      setImpulseCheck({ data, again });
       return;
     }
-    await submitTransaction(data);
+    await submitTransaction(data, again);
   }
 
   async function handleParkInWantList() {
@@ -391,7 +468,7 @@ export function TransactionForm({
           </p>
         </div>
         <div className="space-y-3">
-          <Button type="button" className="w-full" onClick={() => { setImpulseCheck(null); submitTransaction(impulseCheck.data); }} disabled={loading}>
+          <Button type="button" className="w-full" onClick={() => { const { data, again } = impulseCheck; setImpulseCheck(null); submitTransaction(data, again); }} disabled={loading}>
             <CheckCircle className="h-4 w-4 mr-2" />Yes, it was planned - record it
           </Button>
           <Button type="button" variant="outline" className="w-full border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleParkInWantList} disabled={loading}>
@@ -409,7 +486,33 @@ export function TransactionForm({
   // ─── main form ─────────────────────────────────────────────────────────────
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form
+      onSubmit={handleSubmit((d) => onSubmit(d, false))}
+      onKeyDown={(e) => {
+        // Ctrl/Cmd+Enter: save and add another (new entries only).
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && isNew && !loading) {
+          e.preventDefault();
+          void handleSubmit((d) => onSubmit(d, true))();
+        }
+      }}
+      className="space-y-4 min-w-0"
+    >
+
+      {isNew && quickPicks && quickPicks.repeats.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {quickPicks.repeats.map((p) => (
+            <button
+              key={`${p.categoryId}:${p.description}`}
+              type="button"
+              onClick={() => applyRepeat(p)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs hover:bg-muted transition-colors"
+            >
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.categoryColor }} />
+              {p.description} · {baseCurrency.symbol} {(p.lastAmount / 100).toLocaleString()}
+            </button>
+          ))}
+        </div>
+      )}
 
       {owned && (
         <div className="rounded-lg bg-muted/50 border border-border px-4 py-3 text-xs text-muted-foreground">
@@ -434,7 +537,7 @@ export function TransactionForm({
                 </div>
               )}
             </div>
-            <Input id="amount" type="text" inputMode="decimal" autoComplete="off" autoFocus={!transaction} disabled={owned} placeholder="0.00 or a sum like 35+67" className="text-lg font-semibold" {...register("amount")} />
+            <Input id="amount" type="text" inputMode="decimal" autoComplete="off" autoFocus={!transaction} disabled={owned} placeholder="0.00 or a sum like 35+67" className="text-lg font-semibold" {...amountReg} ref={(el) => { amountReg.ref(el); amountRef.current = el; }} />
             {errors.amount ? (
               <p className="text-xs text-destructive">{errors.amount.message}</p>
             ) : amountPreview?.ok && amountPreview.isExpression ? (
@@ -454,16 +557,42 @@ export function TransactionForm({
         </FormSection>
       )}
 
+      <DayStrip
+        value={watchedDate}
+        onChange={(d) => setValue("date", d, { shouldDirty: true })}
+        lastUsed={lastUsedDate}
+        lang={dateFormatToLang(dateFormat)}
+      />
+
       {/* What: category, then an optional description */}
       <FormSection title="What">
         <div className="space-y-1">
           <Label>Category</Label>
+          {isNew && topCategories.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pb-1">
+              {topCategories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={selectedCategory === c.id}
+                  onClick={() => chooseCategory(c.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                    selectedCategory === c.id ? "border-primary bg-primary/10 text-foreground font-medium" : "border-border bg-muted/40 hover:bg-muted",
+                  )}
+                >
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
           <CategoryCombobox
             categories={allCategories}
             value={selectedCategory}
             type={defaultType}
             invalid={!!errors.categoryId}
-            onChange={(id) => { setValue("categoryId", id, { shouldValidate: true }); setSelectedCategory(id); }}
+            onChange={chooseCategory}
             onCreated={(c) => setCreatedCategories((prev) => [...prev, c])}
           />
           {errors.categoryId && <p className="text-xs text-destructive">{errors.categoryId.message}</p>}
@@ -482,20 +611,50 @@ export function TransactionForm({
 
         <div className="space-y-1">
           <Label htmlFor="description">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-          <Input id="description" placeholder="What was this for?" {...register("description")} />
+          <div className="relative">
+            <Input
+              id="description"
+              placeholder="What was this for?"
+              autoComplete="off"
+              {...descReg}
+              onChange={(e) => { void descReg.onChange(e); setDescOpen(true); setDescActive(-1); }}
+              onFocus={() => setDescOpen(true)}
+              onBlur={(e) => { void descReg.onBlur(e); setDescOpen(false); }}
+              onKeyDown={(e) => {
+                if (descMatches.length === 0) return;
+                if (e.key === "ArrowDown") { e.preventDefault(); setDescActive((a) => Math.min(a + 1, descMatches.length - 1)); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); setDescActive((a) => Math.max(a - 1, 0)); }
+                else if (e.key === "Enter" && descActive >= 0 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); chooseDescription(descMatches[descActive]); }
+                else if (e.key === "Escape") { e.stopPropagation(); setDescOpen(false); }
+              }}
+            />
+            {descMatches.length > 0 && (
+              <ul role="listbox" className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-popover p-1 shadow-md">
+                {descMatches.map((m, i) => (
+                  <li
+                    key={m.description}
+                    role="option"
+                    aria-selected={i === descActive}
+                    onMouseDown={(e) => { e.preventDefault(); chooseDescription(m); }}
+                    onMouseEnter={() => setDescActive(i)}
+                    className={cn("cursor-pointer rounded px-2 py-1.5 text-sm", i === descActive && "bg-muted")}
+                  >
+                    {m.description}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
         </div>
       </FormSection>
 
       {/* When: date + budget-period checkbox, right next to each other */}
       {(
-        <FormSection title="When">
-          <div className="space-y-1">
-            <Label htmlFor="date">Date</Label>
-            <Input id="date" type="date" lang={dateFormatToLang(dateFormat)} {...register("date")} />
-          </div>
-          {!owned && (
+        !owned && (dateInOtherPeriod || fileUnderDateBudget) && <FormSection title="When">
+          {!owned && (dateInOtherPeriod || fileUnderDateBudget) && (
             <BudgetPeriodOverride
+              compact
               date={watchedDate}
               checked={fileUnderDateBudget}
               onChange={setFileUnderDateBudget}
@@ -510,7 +669,12 @@ export function TransactionForm({
       {defaultType === "EXPENSE" && fundingContext && !owned && (
         <FormSection title="Funding">
           <div className={cn("space-y-2 transition-opacity", fundingContextLoading && "opacity-60")}>
-            {!useSplit ? (
+            {fundingCollapsed ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span>Paid from income · {baseCurrency.symbol} {fmtMoney(incomeLeft)} left</span>
+                <button type="button" onClick={() => setShowFundingControls(true)} className="text-xs text-primary hover:underline font-medium">Change</button>
+              </div>
+            ) : !useSplit ? (
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Label>Pay from</Label>
@@ -520,9 +684,11 @@ export function TransactionForm({
                   </button>
                 </div>
                 <FundingSelect value={singleFundingValue} onChange={setSingleFundingValue} options={fundingOptions} />
-                <p className="text-xs text-muted-foreground px-1">
-                  Choosing a savings pot deducts immediately and is reversed if you delete this expense.
-                </p>
+                {(!isNew || singleFundingValue !== "INCOME") && (
+                  <p className="text-xs text-muted-foreground px-1">
+                    Choosing a savings pot deducts immediately and is reversed if you delete this expense.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -581,7 +747,7 @@ export function TransactionForm({
       </MoreOptions>
 
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : transaction ? "Save Changes" : "Add Transaction"}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : transaction ? "Save changes" : defaultType === "INCOME" ? "Add income" : "Add expense"}
       </Button>
     </form>
   );

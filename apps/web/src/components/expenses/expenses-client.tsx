@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Plus, Search, X, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { TransactionList } from "@/components/expenses/transaction-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import type { QuickPicks } from "@/actions/expenses";
 
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
 interface Transaction {
@@ -45,6 +47,7 @@ export function ExpensesClient({
   lastPeriod,
   thisMonthSpent = 0,
   budgetTotal = 0,
+  quickPicks,
 }: {
   transactions: Transaction[];
   categories: Category[];
@@ -55,9 +58,13 @@ export function ExpensesClient({
   lastPeriod: { month: number; year: number };
   thisMonthSpent?: number;
   budgetTotal?: number;
+  quickPicks?: QuickPicks;
 }) {
   const [open, setOpen] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const openNew = useCallback(() => { setEditingTx(null); setOpen(true); }, []);
+  useAddShortcut(open, openNew);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [filterPeriod, setFilterPeriod] = useState(THIS_PERIOD);
@@ -122,7 +129,7 @@ export function ExpensesClient({
         section="Money Flow"
         title="Expenses"
         action={
-          <Button onClick={() => { setEditingTx(null); setOpen(true); }}>
+          <Button title="Add expense (Press N)" onClick={() => { setEditingTx(null); setOpen(true); }}>
             <Plus className="h-4 w-4" />Add Expense
           </Button>
         }
@@ -153,7 +160,7 @@ export function ExpensesClient({
           <div className="bg-card px-5 py-4">
             <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5",
               monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
-              Available
+              Left from income
             </p>
             <div className={cn("text-xl font-bold tabnum",
               monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
@@ -231,9 +238,14 @@ export function ExpensesClient({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onEscapeKeyDown={(e) => { if (formDirty) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (formDirty) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (formDirty) e.preventDefault(); }}
+        >
           <DialogHeader>
-            <DialogTitle>{editingTx ? "Edit Expense" : "Add Expense"}</DialogTitle>
+            <DialogTitle>{editingTx ? "Edit expense" : "Add expense"}</DialogTitle>
           </DialogHeader>
           <TransactionForm
             defaultType="EXPENSE"
@@ -244,6 +256,8 @@ export function ExpensesClient({
             fundingContext={fundingContext}
             currentPeriod={currentPeriod}
             dateFormat={dateFormat}
+            quickPicks={quickPicks}
+            onDirtyChange={setFormDirty}
             onSuccess={() => setOpen(false)}
           />
         </DialogContent>

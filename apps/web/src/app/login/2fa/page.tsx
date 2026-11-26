@@ -25,7 +25,7 @@ export default function TwoFactorPage() {
       toast.error(useBackup ? "Invalid backup code" : "Invalid authentication code");
       return;
     }
-    router.push("/dashboard");
+    router.push("/expenses");
     router.refresh();
   }
 

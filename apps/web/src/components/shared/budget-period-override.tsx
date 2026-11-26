@@ -22,6 +22,7 @@ export function BudgetPeriodOverride({
   onChange,
   affectsFunding = false,
   otherwise,
+  compact = false,
 }: {
   date: string;
   checked: boolean;
@@ -31,6 +32,8 @@ export function BudgetPeriodOverride({
   affectsFunding?: boolean;
   /** Replaces the "Otherwise files under the current open period" line (e.g. when editing). */
   otherwise?: string;
+  /** One line, "Count it in {Month Year}'s budget", with no explanation underneath. */
+  compact?: boolean;
 }) {
   const { month, year } = date ? monthYearFromDateStr(date) : { month: 0, year: 0 };
 
@@ -43,15 +46,19 @@ export function BudgetPeriodOverride({
         className="mt-0.5"
       />
       <Label htmlFor="periodOverride" className="cursor-pointer text-sm font-normal leading-snug">
-        {month ? (
+        {compact ? (
+          month ? <>Count it in {getMonthName(month)} {year}&apos;s budget</> : "Count it in this date's budget"
+        ) : month ? (
           <>File under {getMonthName(month)} {year}&apos;s budget</>
         ) : (
           "File under this date's budget month"
         )}
-        <span className="block text-xs text-muted-foreground">
-          {otherwise ?? "Otherwise files under the current open period"}
-          {affectsFunding && month ? ` - income figures below reflect ${getMonthName(month)} ${year}` : ""}
-        </span>
+        {!compact && (
+          <span className="block text-xs text-muted-foreground">
+            {otherwise ?? "Otherwise files under the current open period"}
+            {affectsFunding && month ? ` - income figures below reflect ${getMonthName(month)} ${year}` : ""}
+          </span>
+        )}
       </Label>
     </div>
   );

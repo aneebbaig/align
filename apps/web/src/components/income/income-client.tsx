@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Plus, Search, X, Filter, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { TransactionList } from "@/components/expenses/transaction-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import type { QuickPicks } from "@/actions/expenses";
 
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
 interface Transaction {
@@ -37,6 +39,7 @@ export function IncomeClient({
   monthlyAvailable = 0,
   currentPeriod,
   lastPeriod,
+  quickPicks,
 }: {
   transactions: Transaction[];
   categories: Category[];
@@ -46,9 +49,13 @@ export function IncomeClient({
   monthlyAvailable?: number;
   currentPeriod: { month: number; year: number };
   lastPeriod: { month: number; year: number };
+  quickPicks?: QuickPicks;
 }) {
   const [open, setOpen] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const openNew = useCallback(() => { setEditingTx(null); setOpen(true); }, []);
+  useAddShortcut(open, openNew);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [filterPeriod, setFilterPeriod] = useState(THIS_PERIOD);
@@ -166,7 +173,7 @@ export function IncomeClient({
               </div>
             )}
           </div>
-          <Button onClick={() => { setEditingTx(null); setOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button title="Add income (Press N)" onClick={() => { setEditingTx(null); setOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700">
             <Plus className="h-4 w-4" />Add Income
           </Button>
         </div>
@@ -240,9 +247,14 @@ export function IncomeClient({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onEscapeKeyDown={(e) => { if (formDirty) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (formDirty) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (formDirty) e.preventDefault(); }}
+        >
           <DialogHeader>
-            <DialogTitle>{editingTx ? "Edit Income" : "Add Income"}</DialogTitle>
+            <DialogTitle>{editingTx ? "Edit income" : "Add income"}</DialogTitle>
           </DialogHeader>
           <TransactionForm
             defaultType="INCOME"
@@ -250,6 +262,9 @@ export function IncomeClient({
             transaction={editingTx}
             dateFormat={dateFormat}
             currencies={currencies}
+            currentPeriod={currentPeriod}
+            quickPicks={quickPicks}
+            onDirtyChange={setFormDirty}
             onSuccess={() => setOpen(false)}
           />
         </DialogContent>
