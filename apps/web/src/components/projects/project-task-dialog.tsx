@@ -99,7 +99,7 @@ export function ProjectTaskDialog({
           <DialogTitle>Task</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="min-w-0 space-y-4">
           <div className="space-y-1">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
@@ -116,7 +116,7 @@ export function ProjectTaskDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label>Status</Label>
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -127,7 +127,7 @@ export function ProjectTaskDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger><SelectValue /></SelectTrigger>

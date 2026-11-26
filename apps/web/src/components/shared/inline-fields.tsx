@@ -49,11 +49,66 @@ export function InlineText({ value, onSave, className, placeholder, ariaLabel }:
   );
 }
 
+/**
+ * A title that reads as plain text; clicking it turns it into an input.
+ * Enter or blur saves, Esc cancels, empty is rejected (reverts). Clicks never
+ * bubble, so it is safe inside a link or a clickable card.
+ */
+export function EditableTitle({ value, onSave, className, ariaLabel }: {
+  value: string; onSave: (v: string) => void; className?: string; ariaLabel: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value);
+  const done = useRef(false);
+
+  function finish(save: boolean) {
+    if (done.current) return;
+    done.current = true;
+    setEditing(false);
+    const v = text.trim();
+    if (save && v && v !== value) onSave(v);
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        aria-label={`Edit ${ariaLabel}`}
+        title="Click to rename"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); done.current = false; setText(value); setEditing(true); }}
+        className={cn("block max-w-full truncate text-left rounded px-1.5 -mx-1.5 hover:bg-muted/60 transition-colors", className)}
+      >
+        {value}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      aria-label={ariaLabel}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onBlur={() => finish(true)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      }}
+      className={cn("w-full min-w-0 bg-background rounded px-1.5 -mx-1.5 py-0 outline-none ring-1 ring-inset ring-primary", className)}
+    />
+  );
+}
+
 /** Like InlineText for money: accepts a number or a sum ("35+67"). `null` = empty. */
 export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, hint, variant = "labeled", onSave }: {
   label: string; symbol: string; valuePaisas: number | null; optional?: boolean;
-  /** "bare": no visible label or symbol, right-aligned - for money columns under a shared header. */
-  variant?: "labeled" | "bare";
+  /**
+   * "bare": no visible label or symbol, right-aligned - for money columns under a shared header.
+   * "boxed": the same, but drawn as an input (border and background at rest) so it reads as editable.
+   */
+  variant?: "labeled" | "bare" | "boxed";
   /** Shown but not editable (e.g. an estimate that follows a chosen quote). */
   disabled?: boolean; hint?: string;
   onSave: (majorOrNull: number | null) => void;
@@ -102,10 +157,12 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
   };
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); };
 
-  if (variant === "bare") {
+  if (variant === "bare" || variant === "boxed") {
+    const boxed = variant === "boxed";
     return (
       <div title={hint} className={cn("rounded-md ring-1 ring-inset px-2 h-8 w-full flex items-center transition-colors focus-within:ring-primary focus-within:bg-background",
-        invalid ? "ring-destructive" : "ring-transparent hover:ring-border", disabled && "opacity-70")}>
+        invalid ? "ring-destructive" : boxed ? "ring-input bg-background hover:ring-foreground/30" : "ring-transparent hover:ring-border",
+        disabled && (boxed ? "bg-muted/50 opacity-80" : "opacity-70"))}>
         <input
           aria-label={label}
           inputMode="decimal"

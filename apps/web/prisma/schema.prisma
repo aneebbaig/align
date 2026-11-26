@@ -650,7 +650,7 @@ model WeddingPlan {
   brideName   String
   groomName   String
   weddingDate DateTime?
-  totalBudget Int       @default(0) // paisas
+  totalBudget Int       @default(0) // DEPRECATED - the budget is the sum of the events' budgetAllocated; no longer read or written
   haqMehr     Int? // paisas
   haqMehrNote String? // e.g. "50 tola gold + Rs 500k cash"
   notes       String?
@@ -723,7 +723,7 @@ model WeddingVendor {
 model WeddingExpense {
   id              String   @id @default(cuid())
   weddingPlanId   String
-  eventId         String? // null = general expense (spans whole wedding)
+  eventId         String // every expense belongs to an event
   name            String // e.g. "Bridal dress", "Fireworks", "Photographer"
   category        String   @default("MISC") // see EXPENSE_CATEGORIES in wedding-types.ts
   estimatedAmount Int      @default(0) // the plan: follows the chosen quote, or typed in by hand
@@ -750,7 +750,7 @@ model WeddingExpense {
   source2Paid       Int?
 
   weddingPlan     WeddingPlan    @relation(fields: [weddingPlanId], references: [id], onDelete: Cascade)
-  event           WeddingEvent?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  event           WeddingEvent   @relation(fields: [eventId], references: [id], onDelete: NoAction)
   source1Currency Currency?      @relation("WeddingExpenseSource1Currency", fields: [source1CurrencyId], references: [id], onDelete: Restrict)
   source2Currency Currency?      @relation("WeddingExpenseSource2Currency", fields: [source2CurrencyId], references: [id], onDelete: Restrict)
   quotes          WeddingQuote[]
@@ -809,7 +809,7 @@ model ProjectTask {
   id          String    @id @default(cuid())
   title       String
   description String?
-  status      String    @default("TODO") // TODO | IN_PROGRESS | REVIEW | DONE
+  status      String    @default("TODO") // BUG | TODO | IN_PROGRESS | REVIEW | DONE
   priority    String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
   dueDate     DateTime?
   order       Int       @default(0)

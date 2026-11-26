@@ -12,10 +12,9 @@ export default async function WeddingPlanPage({ params, searchParams }: { params
   const [plan, currencies] = await Promise.all([getWeddingPlan(id), getCurrencies()]);
   if (!plan) notFound();
 
-  // Old links: /wedding/[id]?event=<id|GENERAL> now lives on its own page.
-  if (event) {
-    const target = event === "GENERAL" ? "general" : plan.events.some((e) => e.id === event) ? event : null;
-    if (target) redirect(`/wedding/${id}/${target}${expense ? `?expense=${encodeURIComponent(expense)}` : ""}`);
+  // Old links: /wedding/[id]?event=<id> now lives on its own page.
+  if (event && plan.events.some((e) => e.id === event)) {
+    redirect(`/wedding/${id}/${event}${expense ? `?expense=${encodeURIComponent(expense)}` : ""}`);
   }
 
   const baseSymbol = currencies.find((c) => c.isBase)?.symbol ?? "Rs";

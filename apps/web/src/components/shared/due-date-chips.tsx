@@ -41,7 +41,7 @@ export function DueDateChips({
 
   return (
     <div className="space-y-2 min-w-0 max-w-full">
-      <div role="radiogroup" aria-label="Due date" className={cn("flex gap-1.5 overflow-x-auto pb-1", compact && "pb-0")}>
+      <div role="radiogroup" aria-label="Due date" className={cn("flex flex-wrap gap-1.5 pb-1", compact && "pb-0")}>
         {options.map((o) => (
           <button
             key={o.label}

@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, MoreHorizontal, Pencil, Plus, Receipt, Play, Check } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, ChevronRight, MoreHorizontal, Pencil, Plus, Receipt, Play, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { InlineAmount } from "@/components/shared/inline-fields";
+import { EditableTitle, InlineAmount } from "@/components/shared/inline-fields";
 import { LogExpensePopover } from "@/components/plans/log-expense-popover";
 import type { ComboCategory } from "@/components/shared/category-combobox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -151,9 +151,9 @@ function GroupChip({ group, groups, onChange }: { group: string | null; groups: 
   );
 }
 
-function ItemRow({ item, handle, sym, busy, groups, categories, onToggle, onOpen, onSaveCost, onSetGroup, onChanged }: {
+function ItemRow({ item, handle, sym, busy, groups, categories, onToggle, onOpen, onRename, onSaveCost, onSetGroup, onChanged }: {
   item: PlanItem; handle: React.ReactNode; sym: string; busy: boolean; groups: string[]; categories: ComboCategory[];
-  onToggle: () => void; onOpen: () => void;
+  onToggle: () => void; onOpen: () => void; onRename: (name: string) => void;
   onSaveCost: (field: "estimatedCost" | "actualCost", value: number | null) => void;
   onSetGroup: (g: string | null) => void; onChanged: () => void;
 }) {
@@ -168,24 +168,27 @@ function ItemRow({ item, handle, sym, busy, groups, categories, onToggle, onOpen
       onKeyDown={(e) => { if (e.key === "Enter" && e.altKey && !bought) { e.preventDefault(); setLogOpen(true); } }}
     >
       <div className={cn("w-5 shrink-0", REVEAL)}>{handle}</div>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={busy}
-        aria-label={bought ? "Mark not bought" : "Mark bought"}
-        title={bought ? "Bought - click to undo" : "Mark bought (no expense logged)"}
-        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {bought ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Circle className="h-5 w-5" />}
-      </button>
       <div className="flex-1 min-w-0 py-2.5">
-        <button type="button" onClick={onOpen} className="block w-full text-left">
-          <span className={cn("block font-medium truncate", bought && "line-through decoration-muted-foreground/40 text-muted-foreground")}>
-            {item.name}
-            {skipped && <span className="ml-2 text-xs font-normal text-muted-foreground">Skipped</span>}
-          </span>
-        </button>
-        <div className="mt-0.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={busy}
+            aria-label={bought ? "Mark not bought" : "Mark bought"}
+            title={bought ? "Bought - click to undo" : "Mark bought (no expense logged)"}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {bought ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Circle className="h-5 w-5" />}
+          </button>
+          <EditableTitle
+            value={item.name}
+            ariaLabel={`name of ${item.name}`}
+            onSave={onRename}
+            className={cn("font-medium", bought && "line-through decoration-muted-foreground/40 text-muted-foreground")}
+          />
+          {skipped && <span className="text-xs font-normal text-muted-foreground shrink-0">Skipped</span>}
+        </div>
+        <div className="mt-0.5 pl-7 flex items-center gap-x-2 gap-y-1 flex-wrap text-xs text-muted-foreground">
           <GroupChip group={item.eventGroup} groups={groups} onChange={onSetGroup} />
           {hasSub && item.dueDate && (bought ? <span>Due {format(new Date(item.dueDate), "d MMM")}</span> : <DueChip date={item.dueDate} />)}
           {item.notes && <span className="truncate max-w-[14rem]">{item.notes}</span>}
@@ -211,6 +214,9 @@ function ItemRow({ item, handle, sym, busy, groups, categories, onToggle, onOpen
             </Button>
           </LogExpensePopover>
         )}
+        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label={`Open details for ${item.name}`} title="Details" onClick={onOpen}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
@@ -516,6 +522,14 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs", c
     });
   }
 
+  function renameItem(itemId: string, name: string) {
+    startTransition(async () => {
+      const r = await updatePlannerItem(itemId, { name });
+      if (!r.success) toast.error(r.error ?? "Failed");
+      refresh();
+    });
+  }
+
   function setItemGroup(itemId: string, group: string | null) {
     startTransition(async () => {
       const r = await updatePlannerItem(itemId, { eventGroup: group });
@@ -570,6 +584,7 @@ export function PlanDetailClient({ plan, financialPosition, baseSymbol = "Rs", c
       onChanged={refresh}
       onToggle={() => (item.status === "PAID" ? setItemStatus(item.id, "PENDING") : markBought(item.id))}
       onOpen={() => setItemParam(item.id)}
+      onRename={(name) => renameItem(item.id, name)}
     />
   );
 

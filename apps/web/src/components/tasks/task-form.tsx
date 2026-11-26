@@ -87,7 +87,7 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {/* Type selector - show when creating, or always show when editing */}
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <Label>Task Type</Label>
         <Select onValueChange={setTaskType} defaultValue={taskType}>
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -98,18 +98,18 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
         </Select>
       </div>
 
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <Label>Task</Label>
         <Input placeholder="What needs to be done?" {...register("title", { required: true })} />
       </div>
 
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <Label>Details (optional)</Label>
         <Textarea rows={2} placeholder="Additional info..." {...register("description")} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label>Priority</Label>
           <Select onValueChange={setPriority} defaultValue={priority}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -121,7 +121,7 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label>Category</Label>
           <Select onValueChange={setCategory} defaultValue={category}>
             <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
@@ -134,11 +134,11 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
 
       {taskType !== "DAILY" && (
         <div className="space-y-3">
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label>Due Date</Label>
             <DueDateChips value={dueDate} onChange={setDueDate} />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label>Due Time</Label>
             <Input type="time" {...register("dueTime")} />
           </div>

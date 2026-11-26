@@ -88,16 +88,16 @@ export function LoansClient({
 
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-px bg-border rounded-xl overflow-hidden border border-border mb-6">
-        <div className="bg-background px-5 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50 mb-1.5">Owed to me</p>
+        <div className="bg-card px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">Owed to me</p>
           <p className="text-xl font-bold text-emerald-500 tabnum">{baseSymbol} {(summary.totalGiven / 100).toLocaleString()}</p>
         </div>
-        <div className="bg-background px-5 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50 mb-1.5">I owe</p>
+        <div className="bg-card px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">I owe</p>
           <p className="text-xl font-bold text-red-500 tabnum">{baseSymbol} {(summary.totalReceived / 100).toLocaleString()}</p>
         </div>
-        <div className="bg-background px-5 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50 mb-1.5">
+        <div className="bg-card px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">
             {summary.netPosition === 0 ? "All square" : summary.netPosition < 0 ? "Net – you owe" : "Net – owed to you"}
           </p>
           <p className={cn("text-xl font-bold tabnum", summary.netPosition < 0 ? "text-red-500" : summary.netPosition > 0 ? "text-emerald-500" : "text-foreground")}>

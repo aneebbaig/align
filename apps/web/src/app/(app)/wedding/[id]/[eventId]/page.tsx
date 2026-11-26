@@ -10,12 +10,13 @@ export default async function WeddingEventPage({ params }: { params: Promise<{ i
   const { id, eventId } = await params;
   const [plan, currencies] = await Promise.all([getWeddingPlan(id), getCurrencies()]);
   if (!plan) notFound();
-  if (eventId !== "general" && !plan.events.some((e) => e.id === eventId)) notFound();
+  const event = plan.events.find((e) => e.id === eventId);
+  if (!event) notFound();
   const baseSymbol = currencies.find((c) => c.isBase)?.symbol ?? "Rs";
 
   return (
     <div className="max-w-3xl mx-auto">
-      <EventPage plan={plan} eventId={eventId} baseSymbol={baseSymbol} />
+      <EventPage plan={plan} event={event} baseSymbol={baseSymbol} />
     </div>
   );
 }

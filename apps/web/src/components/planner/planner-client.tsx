@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, MoreHorizontal, Plus, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, Minus, Plus, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,9 @@ import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { cn } from "@/lib/utils";
 import type { SerializedPlanner } from "@/lib/planner/store";
+import {
+  addMonthAfter, addMonthBefore, removeFirstMonth, removeLastMonth, type MonthRange,
+} from "@/lib/planner/months";
 import { lineForm, settingsForm } from "@/lib/planner/forms";
 import {
   plannerAddGoal, plannerAddLine, plannerDeleteGoal, plannerDeleteLine, plannerRemoveOverride,
@@ -43,6 +46,17 @@ async function report(p: Promise<{ success: boolean; error?: string }>, ok?: str
   if (!r.success) toast.error(r.error ?? "Failed");
   else if (ok) toast.success(ok);
   return r.success;
+}
+
+const EDGE_BTN = "h-5 w-5 rounded-full border border-border bg-background text-muted-foreground flex items-center justify-center shrink-0 hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-opacity opacity-100 sm:opacity-0 group-hover/table:opacity-100 focus-visible:opacity-100";
+
+function EdgeButton({ kind, label, disabled, onClick }: { kind: "add" | "remove"; label: string; disabled: boolean; onClick: () => void }) {
+  const Icon = kind === "add" ? Plus : Minus;
+  return (
+    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className={EDGE_BTN}>
+      <Icon className="h-3 w-3" />
+    </button>
+  );
 }
 
 // One line cell: shows the amount; click to set it for this month or onward.
@@ -285,6 +299,19 @@ export function PlannerClient({ planner, baseSymbol }: { planner: SerializedPlan
   const last = rows[rows.length - 1];
   useAddShortcut(lineDialog.open || settingsOpen, () => setLineDialog({ open: true, line: null }));
 
+  const range: MonthRange = { startMonth: settings.startMonth, startYear: settings.startYear, months: settings.months };
+
+  async function changeRange(next: MonthRange | null, dropped?: Row) {
+    if (!next) return;
+    const ok = await report(plannerUpdateSettings(next));
+    if (ok && dropped && (dropped.goals.length > 0 || dropped.cells.some((c) => c.isOverride))) {
+      toast(`Removed ${monthLabel(dropped.month, dropped.year)}`, {
+        description: "Its changes and goals are kept if you undo.",
+        action: { label: "Undo", onClick: () => { void report(plannerUpdateSettings(range)); } },
+      });
+    }
+  }
+
   function move(line: Line, dir: -1 | 1) {
     const ids = lines.map((l) => l.id);
     const i = ids.indexOf(line.id);
@@ -321,7 +348,7 @@ export function PlannerClient({ planner, baseSymbol }: { planner: SerializedPlan
       <p className="mt-4 mb-2 text-xs text-muted-foreground">
         {`Starting cash ${baseSymbol} ${rs(settings.startingCashPaisas)} · USD rate ${settings.usdRate} · ${monthLabel(settings.startMonth, settings.startYear)} → ${last ? monthLabel(last.month, last.year) : ""} (${settings.months} months)`}
       </p>
-      <div className="rounded-xl border border-border overflow-x-auto">
+      <div className="group/table rounded-xl border border-border overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/60 text-xs font-semibold text-muted-foreground">
@@ -354,12 +381,28 @@ export function PlannerClient({ planner, baseSymbol }: { planner: SerializedPlan
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {rows.map((row, idx) => {
+              const isFirst = idx === 0;
+              const isLast = idx === rows.length - 1;
               const hasGoals = row.goals.length > 0;
               return (
                 <tr key={`${row.year}-${row.month}`} className={cn("border-t border-border", hasGoals ? "bg-amber-50 dark:bg-amber-950/30" : "bg-card")}>
                   <td className={cn("sticky left-0 z-10 px-3 py-2 font-semibold whitespace-nowrap", hasGoals ? "bg-amber-50 dark:bg-amber-950/30 italic" : "bg-card")}>
-                    {monthLabel(row.month, row.year)}
+                    <div className="flex items-center gap-2">
+                      <span>{monthLabel(row.month, row.year)}</span>
+                      {(isFirst || isLast) && (
+                        <span className="flex items-center gap-1">
+                          {isFirst && (<>
+                            <EdgeButton kind="add" label={`Add month before ${monthLabel(row.month, row.year)}`} disabled={!addMonthBefore(range)} onClick={() => changeRange(addMonthBefore(range))} />
+                            <EdgeButton kind="remove" label={`Remove ${monthLabel(row.month, row.year)}`} disabled={!removeFirstMonth(range)} onClick={() => changeRange(removeFirstMonth(range), row)} />
+                          </>)}
+                          {isLast && (<>
+                            <EdgeButton kind="add" label={`Add month after ${monthLabel(row.month, row.year)}`} disabled={!addMonthAfter(range)} onClick={() => changeRange(addMonthAfter(range))} />
+                            <EdgeButton kind="remove" label={`Remove ${monthLabel(row.month, row.year)}`} disabled={!removeLastMonth(range)} onClick={() => changeRange(removeLastMonth(range), row)} />
+                          </>)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {lines.map((line) => (
                     <td key={line.id} className="p-0 whitespace-nowrap"><LineCell line={line} row={row} baseSymbol={baseSymbol} /></td>

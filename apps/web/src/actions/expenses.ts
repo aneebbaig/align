@@ -13,7 +13,7 @@ import { getBaseCurrency } from "@/lib/currency-helpers";
 import { revalidateTransactionPaths } from "@/lib/revalidate";
 import { sendEmail, budgetWarningEmail, doomSpendingEmail } from "@/lib/email";
 import { MAX_FUNDING_SOURCES } from "@/lib/constants";
-import { validateFundingSources, getFundingContextForMonth, getPotUnits } from "@/lib/expenses/funding";
+import { validateFundingSources, getFundingContextForMonth, getPotUnits, getIncomeLeftThisMonth } from "@/lib/expenses/funding";
 import { updateTransactionCore } from "@/lib/expenses/update";
 import { deleteTransactionCore } from "@/lib/expenses/delete";
 import { loadQuickPicks } from "@/lib/expenses/quick-picks-data";
@@ -71,6 +71,11 @@ export async function getTransactions(filters?: {
 export async function getExpenseFundingContext(month: number, year: number) {
   const user = await getAuthenticatedUser({});
   return getFundingContextForMonth(user.id, month, year);
+}
+
+export async function getIncomeLeftThisMonthAction(month: number, year: number) {
+  const user = await getAuthenticatedUser({});
+  return getIncomeLeftThisMonth(user.id, month, year);
 }
 
 /** What the add form offers as one-tap shortcuts (see src/lib/expenses/quick-picks-data.ts). */

@@ -16,10 +16,9 @@ import {
   chooseWeddingQuote, clearWeddingQuoteChoice, deleteWeddingQuote, deleteWeddingExpense,
 } from "@/actions/wedding";
 import { evaluateAmount } from "@/lib/amount-expr";
-import { budgetStatus, cheapestQuote, quoteSpread, costOf, unallocated, varianceOf } from "@/lib/wedding/totals";
+import { budgetStatus, cheapestQuote, quoteSpread, costOf, varianceOf } from "@/lib/wedding/totals";
 import { cn } from "@/lib/utils";
 import { BudgetMeter, BUDGET_TONE, budgetCopy } from "./budget-meter";
-import { GENERAL } from "./wedding-types";
 import { WeddingExpense, WeddingEvent, EXPENSE_CATEGORIES, fmt, getEventInfo } from "./wedding-types";
 
 /** "" -> null (blank), a number or sum -> its value, anything else -> undefined (invalid). */
@@ -152,7 +151,7 @@ const fieldsOf = (e: WeddingExpense) => ({
   name: e.name,
   estimate: asText(e.estimatedAmount),
   actual: e.actualAmount === null ? "" : String(e.actualAmount / 100),
-  eventId: e.eventId ?? GENERAL,
+  eventId: e.eventId,
   category: e.category,
   paid: asText(e.paidAmount),
   vendorName: e.vendorName ?? "",
@@ -161,8 +160,8 @@ const fieldsOf = (e: WeddingExpense) => ({
   notes: e.notes ?? "",
 });
 
-function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initialSection, onChanged, onClose }: {
-  expense: WeddingExpense; events: WeddingEvent[]; expenses: WeddingExpense[]; totalBudget: number; baseSymbol: string;
+function SheetBody({ expense, events, expenses, baseSymbol, initialSection, onChanged, onClose }: {
+  expense: WeddingExpense; events: WeddingEvent[]; expenses: WeddingExpense[]; baseSymbol: string;
   initialSection?: "payment" | "quotes"; onChanged: () => void; onClose: () => void;
 }) {
   const chosen = expense.quotes.find((q) => q.isChosen);
@@ -189,9 +188,9 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
 
   // The meter for the event picked in the form, so you see its effect before saving.
   const event = events.find((e) => e.id === d.eventId) ?? null;
-  const inEvent = expenses.filter((e) => e.eventId === (event?.id ?? null) && e.id !== expense.id);
+  const inEvent = expenses.filter((e) => e.eventId === d.eventId && e.id !== expense.id);
   const eventProjected = inEvent.reduce((s, e) => s + costOf(e), 0) + cost;
-  const eventBudget = event ? event.budgetAllocated : totalBudget > 0 ? Math.max(0, unallocated(totalBudget, events)) : 0;
+  const eventBudget = event?.budgetAllocated ?? 0;
 
   async function save() {
     const estimate = parseMoney(d.estimate);
@@ -205,7 +204,7 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
     const result = await updateWeddingExpense(expense.id, {
       name: d.name,
       category: d.category,
-      eventId: d.eventId === GENERAL ? null : d.eventId,
+      eventId: d.eventId,
       ...(chosen ? {} : { estimated: estimate ?? 0, vendorName: d.vendorName, vendorPhone: d.vendorPhone, vendorInstagram: d.vendorInstagram }),
       actual,
       paid: paid ?? 0,
@@ -213,7 +212,7 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
     });
     setSaving(false);
     if (!result.success) { toast.error(result.error ?? "Failed"); return; }
-    toast.success(moved ? `Moved to ${d.eventId === GENERAL ? "Whole wedding" : event?.name ?? "event"}` : "Saved");
+    toast.success(moved ? `Moved to ${event?.name ?? "event"}` : "Saved");
     onChanged();
   }
 
@@ -256,7 +255,6 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
           <Select value={d.eventId} onValueChange={(v) => set({ eventId: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={GENERAL}>💍 Whole wedding</SelectItem>
               {events.map((ev) => <SelectItem key={ev.id} value={ev.id}>{getEventInfo(ev.type).emoji} {ev.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -264,7 +262,7 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
             <div className="space-y-1 pt-1">
               <BudgetMeter projected={eventProjected} paid={0} budget={eventBudget} symbol={baseSymbol} />
               <p className={cn("text-xs font-medium", BUDGET_TONE[budgetStatus(eventProjected, eventBudget).state].text)}>
-                {event ? event.name : "Whole wedding"}: {budgetCopy(eventProjected, eventBudget, baseSymbol)}
+                {event?.name}: {budgetCopy(eventProjected, eventBudget, baseSymbol)}
               </p>
             </div>
           )}
@@ -321,8 +319,8 @@ function SheetBody({ expense, events, expenses, totalBudget, baseSymbol, initial
   );
 }
 
-export function ExpenseSheet({ expense, events, expenses, totalBudget, baseSymbol, initialSection, onClose, onChanged }: {
-  expense: WeddingExpense | null; events: WeddingEvent[]; expenses: WeddingExpense[]; totalBudget: number; baseSymbol: string;
+export function ExpenseSheet({ expense, events, expenses, baseSymbol, initialSection, onClose, onChanged }: {
+  expense: WeddingExpense | null; events: WeddingEvent[]; expenses: WeddingExpense[]; baseSymbol: string;
   initialSection?: "payment" | "quotes"; onClose: () => void; onChanged: () => void;
 }) {
   return (
@@ -332,7 +330,7 @@ export function ExpenseSheet({ expense, events, expenses, totalBudget, baseSymbo
           <SheetTitle className="truncate pr-8">{expense?.name ?? ""}</SheetTitle>
         </SheetHeader>
         {expense && (
-          <SheetBody key={expense.id} expense={expense} events={events} expenses={expenses} totalBudget={totalBudget} baseSymbol={baseSymbol} initialSection={initialSection} onChanged={onChanged} onClose={onClose} />
+          <SheetBody key={expense.id} expense={expense} events={events} expenses={expenses} baseSymbol={baseSymbol} initialSection={initialSection} onChanged={onChanged} onClose={onClose} />
         )}
       </SheetContent>
     </Sheet>

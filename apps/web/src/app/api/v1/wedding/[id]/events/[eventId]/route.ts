@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { removeWeddingEvent } from "@/lib/wedding/delete-event";
 import { requireBearerAuth } from "@/lib/v1-auth";
-import { notFound, paisas, readJson, serverError, text } from "../../../_shared";
+import { fail, notFound, paisas, readJson, serverError, text } from "../../../_shared";
 
 type Ctx = { params: Promise<{ id: string; eventId: string }> };
 
@@ -49,15 +50,21 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 }
 
+// ?moveTo=<eventId> moves the event's expenses first; ?deleteExpenses=1 deletes them with it.
+// An event that still has expenses and neither option is refused with 409.
 export async function DELETE(req: NextRequest, { params }: Ctx) {
   const auth = await requireBearerAuth(req);
   if (auth instanceof NextResponse) return auth;
   const { id, eventId } = await params;
   try {
-    const deleted = await prisma.weddingEvent.deleteMany({
-      where: { id: eventId, weddingPlanId: id, weddingPlan: { userId: auth.id } },
+    const q = req.nextUrl.searchParams;
+    const result = await removeWeddingEvent(id, eventId, auth.id, {
+      moveTo: q.get("moveTo") || undefined,
+      deleteExpenses: q.get("deleteExpenses") === "1",
     });
-    if (deleted.count === 0) return notFound();
+    if (result === "not_found") return notFound();
+    if (result === "bad_target") return fail("Pick another event of this wedding to move the expenses to", 400);
+    if (result === "has_expenses") return fail("This event has expenses - move them to another event or delete them too", 409);
     return NextResponse.json({ data: { id: eventId } });
   } catch {
     return serverError();

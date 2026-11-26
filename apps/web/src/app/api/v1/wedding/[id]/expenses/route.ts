@@ -7,7 +7,7 @@ import { expenseFields, fail, notFound, ownedPlan, readJson, serverError, text }
 const createSchema = z.object({
   name: expenseFields.name,
   category: expenseFields.category.default("MISC"),
-  eventId: expenseFields.eventId.optional(),
+  eventId: expenseFields.eventId,
   estimatedAmount: expenseFields.estimatedAmount.default(0),
   actualAmount: expenseFields.actualAmount.optional(),
   paidAmount: expenseFields.paidAmount.default(0),
@@ -26,16 +26,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!r.ok) return r.res;
     const d = r.data;
     if (!(await ownedPlan(id, auth.id))) return notFound();
-    if (d.eventId) {
-      const event = await prisma.weddingEvent.findFirst({ where: { id: d.eventId, weddingPlanId: id }, select: { id: true } });
-      if (!event) return fail("Event not found", 400);
-    }
+    const event = await prisma.weddingEvent.findFirst({ where: { id: d.eventId, weddingPlanId: id }, select: { id: true } });
+    if (!event) return fail("Event not found", 400);
     const created = await prisma.weddingExpense.create({
       data: {
         weddingPlanId: id,
         name: d.name,
         category: d.category,
-        eventId: d.eventId || null,
+        eventId: d.eventId,
         estimatedAmount: d.estimatedAmount,
         actualAmount: d.actualAmount ?? null,
         paidAmount: d.paidAmount,
