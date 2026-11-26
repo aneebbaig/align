@@ -15,6 +15,7 @@ import {
   recordInvestmentMovement, ensureCategoryInvestment, InvestmentMovementError,
 } from "@/lib/investment-contributions";
 import type { ContributionType } from "@/lib/investment-math";
+import { getIncomeAvailableForMonth } from "@/lib/expenses/funding";
 import { ActionResult } from "@/types";
 
 export interface CurrencyAvailability {
@@ -36,15 +37,12 @@ export async function getIncomeAvailableForPot(): Promise<{
   const userPotIds = (await prisma.savingsPot.findMany({ where: { userId }, select: { id: true } })).map((p) => p.id);
   const currencies = await getCurrencies();
 
-  const [monthIncomeTx, incomeFundedExpenses, existingPotDeposits] = await Promise.all([
+  const [monthIncomeTx, baseAvailable, existingPotDeposits] = await Promise.all([
     prisma.transaction.findMany({
       where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
       select: { amount: true, nativeCurrencyId: true, nativeAmount: true },
     }),
-    prisma.transaction.aggregate({
-      where: { userId, type: "EXPENSE", fundingSource: "INCOME", budgetMonth: month, budgetYear: year },
-      _sum: { amount: true },
-    }),
+    getIncomeAvailableForMonth(userId, month, year),
     prisma.savingsPotEntry.findMany({
       where: { potId: { in: userPotIds }, sourceType: "INCOME", budgetMonth: month, budgetYear: year },
       select: { amount: true, currencyId: true },
@@ -52,12 +50,11 @@ export async function getIncomeAvailableForPot(): Promise<{
   ]);
 
   const totalBaseIncome = monthIncomeTx.reduce((s, t) => s + t.amount, 0);
-  const baseExpenses = incomeFundedExpenses._sum.amount ?? 0;
 
   const perCurrency: CurrencyAvailability[] = currencies.map((c) => {
     const deposits = existingPotDeposits.filter((e) => e.currencyId === c.id).reduce((s, e) => s + e.amount, 0);
     const available = c.isBase
-      ? totalBaseIncome - baseExpenses - deposits
+      ? baseAvailable
       : monthIncomeTx.filter((t) => t.nativeCurrencyId === c.id).reduce((s, t) => s + (t.nativeAmount ?? 0), 0) - deposits;
     return { currencyId: c.id, code: c.code, symbol: c.symbol, isBase: c.isBase, available: Math.max(0, available) };
   });
@@ -124,30 +121,23 @@ export async function addMoneyToPot(
     if (sourceType === "INCOME") {
       const userPotIds = (await prisma.savingsPot.findMany({ where: { userId }, select: { id: true } })).map((p) => p.id);
 
-      const [monthIncomeTx, incomeFundedExpenses, existingPotDeposits] = await Promise.all([
-        prisma.transaction.findMany({
-          where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
-          select: { amount: true, nativeCurrencyId: true, nativeAmount: true },
-        }),
-        prisma.transaction.aggregate({
-          where: { userId, type: "EXPENSE", fundingSource: "INCOME", budgetMonth: month, budgetYear: year },
-          _sum: { amount: true },
-        }),
-        prisma.savingsPotEntry.findMany({
-          where: { potId: { in: userPotIds }, sourceType: "INCOME", budgetMonth: month, budgetYear: year },
-          select: { amount: true, currencyId: true },
-        }),
-      ]);
-
-      const deposits = existingPotDeposits.filter((e) => e.currencyId === currencyId).reduce((s, e) => s + e.amount, 0);
       if (currency.isBase) {
-        const totalIncome = monthIncomeTx.reduce((s, t) => s + t.amount, 0);
-        const expenses = incomeFundedExpenses._sum.amount ?? 0;
-        const available = totalIncome - expenses - deposits;
+        const available = await getIncomeAvailableForMonth(userId, month, year);
         if (available < amountInUnits) {
-          return { success: false, error: `Insufficient income available this month: ${currency.symbol} ${(Math.max(0, available) / 100).toLocaleString()}` };
+          return { success: false, error: `Insufficient income available: ${currency.symbol} ${(Math.max(0, available) / 100).toLocaleString()}` };
         }
       } else {
+        const [monthIncomeTx, existingPotDeposits] = await Promise.all([
+          prisma.transaction.findMany({
+            where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
+            select: { nativeCurrencyId: true, nativeAmount: true },
+          }),
+          prisma.savingsPotEntry.findMany({
+            where: { potId: { in: userPotIds }, sourceType: "INCOME", budgetMonth: month, budgetYear: year, currencyId },
+            select: { amount: true },
+          }),
+        ]);
+        const deposits = existingPotDeposits.reduce((s, e) => s + e.amount, 0);
         const nativeIncome = monthIncomeTx.filter((t) => t.nativeCurrencyId === currencyId).reduce((s, t) => s + (t.nativeAmount ?? 0), 0);
         const available = nativeIncome - deposits;
         if (available < amountInUnits) {

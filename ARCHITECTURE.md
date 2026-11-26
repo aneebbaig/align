@@ -29,7 +29,8 @@ Worth repeating from the contributing guide: route `params` are async here, so `
 
 This is the part to understand before changing anything financial. The whole app runs on a zero-based model: money can't appear or move without a declared source.
 
-- Income only enters through the income page, and it raises that month's "ready to assign".
+- Income only enters through the income page, and it raises that month's "ready to assign". Unspent income carries forward: a period's available income is what earlier periods left unspent (an overspent period carries nothing, never less than zero) plus its own, and spending in a past period must also fit every later running total (`src/lib/budget/carryover.ts`).
+- The budget is household-wide (income, spending, carry-over and the open period are summed or shared across the household's users), while funding checks and pots stay per person.
 - Every expense is funded from something real: monthly income or a savings pot. A pot-funded expense deducts from the pot and writes a ledger row in the same transaction. Editing or deleting one reverses the old movement first.
 - Pots hold a separate balance per currency. Putting money in requires a source (income, or a transfer from another pot), and it's checked against what income is actually left. Transfers move both sides in one transaction. There's no standalone withdraw; you spend from a pot by making an expense funded by it.
 - Investments track what you put in and what they're worth. Adding money raises both; withdrawing lowers only the current value, and gain counts what was taken out (current + withdrawn − invested). Either can book an expense/income entry, or not.

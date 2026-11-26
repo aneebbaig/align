@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getBaseCurrency, getCurrencies } from "@/lib/currency-helpers";
+import { computeCarry, periodKey, type PeriodNet } from "@/lib/budget/carryover";
 
 // Shared by the "use server" expense actions (web) and the v1 bearer-auth API
 // routes (mobile) - kept out of actions/expenses.ts since that file is
@@ -31,41 +32,73 @@ export function incomePkrForTransaction(t: {
   return t.amount; // INCOME - full amount
 }
 
+/** Net unspent base-currency income of every period the user has data in. */
+export async function getPeriodNets(
+  userId: string,
+  opts?: { excludeTransactionId?: string },
+): Promise<PeriodNet[]> {
+  const excludeId = opts?.excludeTransactionId;
+  const userPotIds = (await prisma.savingsPot.findMany({ where: { userId }, select: { id: true } })).map((p) => p.id);
+  const base = await getBaseCurrency();
+  const notExcluded = excludeId ? { id: { not: excludeId } } : {};
+
+  const [incomeRows, expenseTxns, potRows] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ["budgetMonth", "budgetYear"],
+      where: { userId, type: "INCOME", ...notExcluded },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.findMany({
+      where: { userId, type: "EXPENSE", ...notExcluded },
+      select: {
+        amount: true, fundingSource: true, budgetMonth: true, budgetYear: true,
+        fundingSources: { select: { source: true, pkrAmount: true } },
+      },
+    }),
+    prisma.savingsPotEntry.groupBy({
+      by: ["budgetMonth", "budgetYear"],
+      where: {
+        potId: { in: userPotIds }, sourceType: "INCOME", currencyId: base.id,
+        budgetMonth: { not: null }, budgetYear: { not: null },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const nets = new Map<number, number>();
+  const add = (month: number, year: number, delta: number) => {
+    const key = periodKey({ month, year });
+    nets.set(key, (nets.get(key) ?? 0) + delta);
+  };
+  for (const r of incomeRows) add(r.budgetMonth, r.budgetYear, r._sum.amount ?? 0);
+  for (const t of expenseTxns) add(t.budgetMonth, t.budgetYear, -incomePkrForTransaction(t));
+  for (const r of potRows) {
+    if (r.budgetMonth == null || r.budgetYear == null) continue;
+    add(r.budgetMonth, r.budgetYear, -(r._sum.amount ?? 0));
+  }
+  return [...nets].map(([key, net]) => ({ key, net }));
+}
+
+/** Income a period can still use: its own unspent income plus what earlier
+ * periods left, and never more than every later running total allows. */
 export async function getIncomeAvailableForMonth(
   userId: string,
   month: number,
   year: number,
   excludeTransactionId?: string,
 ): Promise<number> {
-  const userPotIds = (await prisma.savingsPot.findMany({ where: { userId }, select: { id: true } })).map((p) => p.id);
-  const base = await getBaseCurrency();
+  const nets = await getPeriodNets(userId, { excludeTransactionId });
+  return computeCarry(nets, { month, year }).available;
+}
 
-  const [income, expenseTxns, incomePotDeposits] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: {
-        userId, type: "INCOME", budgetMonth: month, budgetYear: year,
-        ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
-      },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        userId, type: "EXPENSE", budgetMonth: month, budgetYear: year,
-        ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
-      },
-      select: { amount: true, fundingSource: true, fundingSources: { select: { source: true, pkrAmount: true } } },
-    }),
-    prisma.savingsPotEntry.findMany({
-      where: { potId: { in: userPotIds }, sourceType: "INCOME", budgetMonth: month, budgetYear: year, currencyId: base.id },
-      select: { amount: true },
-    }),
-  ]);
-
-  const totalIncome = income._sum.amount ?? 0;
-  const incomeFundedExpenses = expenseTxns.reduce((sum, t) => sum + incomePkrForTransaction(t), 0);
-  const potDeposits = incomePotDeposits.reduce((s, e) => s + e.amount, 0);
-
-  return totalIncome - incomeFundedExpenses - potDeposits;
+/** For the budget UI: what earlier periods carry in, and what is usable now. */
+export async function getIncomeCarry(
+  userId: string,
+  month: number,
+  year: number,
+): Promise<{ carryIn: number; available: number }> {
+  const { carryIn, available } = computeCarry(await getPeriodNets(userId), { month, year });
+  return { carryIn, available };
 }
 
 /** Income-available + pot balances for a target period - shared by the "use

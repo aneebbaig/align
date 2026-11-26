@@ -25,6 +25,7 @@ interface BudgetCategory {
 interface UnbudgetedExpense {
   id: string; description: string; amount: number; categoryId: string;
   category: { name: string; color: string };
+  user?: { name: string };
 }
 
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
@@ -40,6 +41,8 @@ interface BudgetData {
   budget: { id: string; totalBudget: number } | null;
   totalSpent: number;
   totalIncome: number;
+  carriedOver: number;
+  householdSize?: number;
   unbudgetedExpenses: UnbudgetedExpense[];
   unbudgetedTotal: number;
   spendingByCategory: Record<string, number>;
@@ -100,9 +103,11 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
   // Live ready-to-assign based on current inputs (in paisas)
   const liveAssigned = Object.values(allocations).reduce((sum, v) => sum + (parseFloat(v) || 0) * 100, 0);
   const liveSavings = Object.values(savingsAllocs).reduce((sum, v) => sum + (parseFloat(v) || 0) * 100, 0);
-  const liveReadyToAssign = budgetData.totalIncome - liveAssigned - liveSavings;
+  const liveReadyToAssign = budgetData.totalIncome + budgetData.carriedOver - liveAssigned - liveSavings;
 
+  const multiHousehold = (budgetData.householdSize ?? 1) > 1;
   const hasIncome = budgetData.totalIncome > 0;
+  const showReadyToAssign = hasIncome || budgetData.carriedOver !== 0;
 
   useDebouncedSave(async () => {
     setIsSaving(true);
@@ -140,10 +145,10 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
     startTransition(async () => {
       const result = await startNewBudgetPeriod();
       if (result.success && result.period) {
-        const surplus = result.reconciledSurplus ?? 0;
+        const carried = result.carriedOver ?? 0;
         toast.success(
           `Started ${getMonthName(result.period.month)} ${result.period.year}` +
-          (surplus > 0 ? ` · ${baseSymbol} ${fmt(surplus)} leftover, now counted as accumulated savings` : ""),
+          (carried > 0 ? ` · ${baseSymbol} ${fmt(carried)} carried over from earlier months` : ""),
         );
         setConfirmNewMonth(false);
         router.push(`/budget?month=${result.period.month}&year=${result.period.year}`);
@@ -181,7 +186,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
       </div>
 
       {/* ── Ready to Assign ── */}
-      {hasIncome && (
+      {showReadyToAssign && (
         <div className={cn(
           "rounded-xl border px-5 py-4",
           rtaNegative ? "bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-700" :
@@ -201,7 +206,8 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
                 {rtaNegative ? "-" : ""}{baseSymbol} {fmt(Math.abs(liveReadyToAssign))}
               </div>
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                <span>Income {baseSymbol} {fmt(budgetData.totalIncome)}</span>
+                <span>{multiHousehold ? "Household income" : "Income"} {baseSymbol} {fmt(budgetData.totalIncome)}</span>
+                {budgetData.carriedOver !== 0 && <><span>·</span><span>Carried over {baseSymbol} {fmt(budgetData.carriedOver)}</span></>}
                 <span>·</span>
                 <span>Categories {baseSymbol} {fmt(liveAssigned)}</span>
                 {liveSavings > 0 && <><span>·</span><span>Savings {baseSymbol} {fmt(liveSavings)}</span></>}
@@ -223,7 +229,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3">
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">
-              <TrendingUp className="h-3.5 w-3.5" />Income
+              <TrendingUp className="h-3.5 w-3.5" />{multiHousehold ? "Household income" : "Income"}
             </div>
             <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{baseSymbol} {fmt(budgetData.totalIncome)}</div>
           </div>
@@ -315,7 +321,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
           <span className="text-xs text-muted-foreground">Auto-saves as you type</span>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Assign income to spending categories. <span className="font-medium">Available</span> = last month&apos;s leftover + assigned − spent.
+          Assign income to spending categories. <span className="font-medium">Available</span> = assigned − spent. Unspent income carries into next month&apos;s Ready to Assign.
         </p>
         {liveAssigned > 0 && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/15 rounded-lg px-4 py-2.5 mb-4">
@@ -408,6 +414,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tx.category.color }} />
                 <span className="text-sm text-foreground flex-1">{tx.description}</span>
                 <span className="text-xs text-muted-foreground">{tx.category.name}</span>
+                {multiHousehold && tx.user?.name && <span className="text-xs text-muted-foreground">{tx.user.name}</span>}
                 <span className="text-sm font-semibold text-red-600">-{baseSymbol} {fmt(tx.amount)}</span>
               </div>
             ))}
@@ -422,7 +429,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
         open={confirmNewMonth}
         onOpenChange={setConfirmNewMonth}
         title="Start new budget month?"
-        description={`New income and expenses will be filed under ${getMonthName(upcoming.month)} ${upcoming.year} from now on - regardless of the calendar date. Do this when your salary for the new month arrives.`}
+        description={`New income and expenses will be filed under ${getMonthName(upcoming.month)} ${upcoming.year} from now on - regardless of the calendar date. Do this when your salary for the new month arrives.${multiHousehold ? " This starts the month for everyone in the household." : ""}`}
         confirmLabel="Start New Month"
         onConfirm={handleStartNewMonth}
         loading={isPending}

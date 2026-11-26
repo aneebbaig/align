@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { creditPot, type PotEntryPeriod } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
-import { fetchMonthIncomeIntegrityData, baseIntegrity } from "@/lib/income-helpers";
+import { fetchMonthIncomeIntegrityData } from "@/lib/income-helpers";
+import { getPeriodNets } from "@/lib/expenses/funding";
+import { incomeChangeDeficit, periodKey } from "@/lib/budget/carryover";
 
 // Deleting a transaction, shared by the web action and the v1 (mobile) DELETE
 // routes so both give pot money back and both refuse to strand spending.
@@ -19,15 +21,15 @@ export async function deleteTransactionCore(
 
   const period: PotEntryPeriod = { budgetMonth: existing.budgetMonth, budgetYear: existing.budgetYear };
 
-  // Income can't go if that month's expenses and deposits were funded from it.
+  // Income can't go if expenses and deposits (this month or later) were funded from it.
   if (existing.type === "INCOME") {
     const integrity = await fetchMonthIncomeIntegrityData(userId, existing.budgetMonth, existing.budgetYear);
-    const base = baseIntegrity(integrity);
-    const remainingIncome = base.totalIncome - existing.amount;
-    if (remainingIncome < base.expenses + base.potDeposits) {
-      const deficit = base.expenses + base.potDeposits - remainingIncome;
+    const before = await getPeriodNets(userId);
+    const after = await getPeriodNets(userId, { excludeTransactionId: existing.id });
+    const deficit = incomeChangeDeficit(before, after, periodKey({ month: existing.budgetMonth, year: existing.budgetYear }));
+    if (deficit > 0) {
       const baseCurrency = await getBaseCurrency();
-      return { error: `Cannot delete - ${baseCurrency.symbol} ${(deficit / 100).toLocaleString()} in expenses/savings this month depend on this income. Remove those first.` };
+      return { error: `Cannot delete - ${baseCurrency.symbol} ${(deficit / 100).toLocaleString()} already spent or saved from this income (this month or later). Remove those first.` };
     }
     if (existing.nativeCurrencyId && (existing.nativeAmount ?? 0) > 0) {
       const native = integrity.perCurrency.find((c) => c.currencyId === existing.nativeCurrencyId);

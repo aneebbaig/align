@@ -10,7 +10,6 @@ import { getCurrentPeriod } from "@/lib/month";
 import { toPaisas, toLocalDate } from "@/lib/utils";
 import { creditPot, debitPot, type PotEntryPeriod } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
-import { fetchMonthIncomeIntegrityData, baseIntegrity } from "@/lib/income-helpers";
 import { revalidateTransactionPaths } from "@/lib/revalidate";
 import { sendEmail, budgetWarningEmail, doomSpendingEmail } from "@/lib/email";
 import { MAX_FUNDING_SOURCES } from "@/lib/constants";
