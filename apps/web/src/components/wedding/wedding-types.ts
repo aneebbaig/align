@@ -134,3 +134,15 @@ export function getEventInfo(type: string) {
 export function getExpenseCategoryLabel(value: string) {
   return EXPENSE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
 }
+
+/** One order for expenses everywhere - the row that "tips an event over budget" is judged in exactly this order. */
+export function orderExpenses<T extends { id: string; createdAt: Date | string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id));
+}
+
+export function orderEvents<T extends { order: number; date: Date | string | null }>(events: T[]): T[] {
+  return [...events].sort((a, b) => a.order - b.order || (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
+}
+
+/** Sentinel for "no event" in pickers. */
+export const GENERAL = "GENERAL";

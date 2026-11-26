@@ -1,6 +1,5 @@
 "use client";
 
-import { AlertOctagon, AlertTriangle, CircleCheck } from "lucide-react";
 import { budgetStatus, type BudgetState } from "@/lib/wedding/totals";
 import { cn } from "@/lib/utils";
 import { fmt, fmtShort } from "./wedding-types";
@@ -12,8 +11,6 @@ export const BUDGET_TONE: Record<BudgetState, { bar: string; text: string; pill:
   none:  { bar: "bg-muted-foreground/40", text: "text-muted-foreground",          pill: "bg-muted" },
 };
 
-const ICON: Record<BudgetState, typeof CircleCheck | null> = { ok: CircleCheck, close: AlertTriangle, over: AlertOctagon, none: null };
-
 /** The one-line verdict: "Rs 120,000 left" / "Rs 45,000 over" / "No budget set". */
 export function budgetCopy(projected: number, budget: number, symbol: string, compact = false) {
   const b = budgetStatus(projected, budget);
@@ -22,18 +19,6 @@ export function budgetCopy(projected: number, budget: number, symbol: string, co
   if (b.state === "over") return `${m(b.overBy, symbol)} over`;
   if (b.state === "close") return `${m(b.left, symbol)} left · ${Math.round(b.pct * 100)}%`;
   return `${m(b.left, symbol)} left`;
-}
-
-/** A small pill with the verdict - for headers and chips. */
-export function BudgetPill({ projected, budget, symbol, compact }: { projected: number; budget: number; symbol: string; compact?: boolean }) {
-  const { state } = budgetStatus(projected, budget);
-  const Icon = ICON[state];
-  return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", BUDGET_TONE[state].pill, BUDGET_TONE[state].text)}>
-      {Icon && <Icon className="h-3 w-3" />}
-      {budgetCopy(projected, budget, symbol, compact)}
-    </span>
-  );
 }
 
 /**
