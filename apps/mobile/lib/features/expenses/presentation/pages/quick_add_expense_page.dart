@@ -7,14 +7,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
-import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/amount_expr.dart';
 import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/last_entry_store.dart';
 import '../../../../core/widgets/budget_period_field.dart';
+import '../../../../core/widgets/day_strip.dart';
 import '../../../../core/widgets/form_section.dart';
+import '../../../routines/data/log_nudge.dart';
 import '../../../../core/widgets/funding_source_field.dart';
 import '../../../home_widget/widget_service.dart';
 import '../../../savings/presentation/providers/savings_provider.dart';
@@ -23,7 +25,10 @@ import '../../domain/entities/expense_entity.dart';
 import '../providers/categories_provider.dart';
 import '../providers/expenses_list_provider.dart';
 import '../providers/recent_categories_provider.dart';
+import '../../data/models/quick_picks_model.dart';
+import '../providers/quick_picks_provider.dart';
 import '../widgets/category_chip_list.dart';
+import '../widgets/quick_add_helpers.dart';
 import '../../../../core/providers/funding_context_provider.dart';
 import '../../../budget/presentation/providers/budget_provider.dart';
 
@@ -43,6 +48,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
   final _descCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _amountFocus = FocusNode();
+  final _descFocus = FocusNode();
+  DateTime? _lastUsed;
   String? _selectedCategoryId;
   DateTime _date = DateTime.now();
   bool _fileUnderDateBudget = false;
@@ -70,6 +77,10 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       _fundingPotId = e.fundingSource == 'SAVINGS_POT' ? e.fundingPotId : null;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+      LastEntryStore.read().then((last) {
+        final d = lastChipDate(last, DateTime.now());
+        if (mounted && d != null) setState(() => _lastUsed = d);
+      });
     }
   }
 
@@ -79,6 +90,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     _descCtrl.dispose();
     _notesCtrl.dispose();
     _amountFocus.dispose();
+    _descFocus.dispose();
     super.dispose();
   }
 
@@ -95,28 +107,46 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
 
   bool get _canSubmit => _amountPaisas != null && _selectedCategoryId != null;
 
-  Future<void> _pickDate() async {
-    _amountFocus.unfocus();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: _date.isAfter(DateTime.now()) ? _date : DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _date = picked);
+  /// Whether the "Count it in {month}'s budget" choice applies to the chosen date.
+  bool get _showBudgetChoice {
+    if (_locked) return false;
+    final open = ref.read(budgetProvider).asData?.value;
+    return needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
   }
 
-  Future<void> _submit() async {
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
+
+  void _applyRepeat(QuickRepeat r) {
+    HapticFeedback.selectionClick();
+    final cats = ref.read(categoriesProvider).asData?.value ?? [];
+    final pots = ref.read(savingsProvider).asData?.value.pots ?? [];
+    setState(() {
+      _descCtrl.text = r.description;
+      if (cats.any((c) => c.id == r.categoryId)) _selectedCategoryId = r.categoryId;
+      _amountCtrl.text = amountFieldText(r.lastAmountPaisas);
+      if (r.fundingSource == 'SAVINGS_POT' && pots.any((p) => p.id == r.fundingPotId)) {
+        _fundingPotId = r.fundingPotId;
+      } else if (r.fundingSource == 'INCOME') {
+        _fundingPotId = null;
+      }
+    });
+    _amountFocus.requestFocus();
+    _amountCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _amountCtrl.text.length);
+  }
+
+  void _resetForAnother() {
+    setState(() {
+      _loading = false;
+      _amountCtrl.clear();
+      _descCtrl.clear();
+      _notesCtrl.clear();
+      _selectedCategoryId = null;
+      _isRegretPurchase = false;
+    });
+    _amountFocus.requestFocus();
+  }
+
+  Future<void> _submit({bool another = false}) async {
     final paisas = _amountPaisas;
     if (paisas == null || _selectedCategoryId == null) return;
     _amountFocus.unfocus();
@@ -143,8 +173,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
           notes: notes,
           date: _date,
           isRegretPurchase: _isRegretPurchase,
-          budgetMonth: _fileUnderDateBudget && !_locked ? _date.month : null,
-          budgetYear: _fileUnderDateBudget && !_locked ? _date.year : null,
+          budgetMonth: _fileUnder ? _date.month : null,
+          budgetYear: _fileUnder ? _date.year : null,
           // A split (set up on the web) keeps its sources; a loan/investment keeps its own.
           changeFunding: !_locked && !_existing!.isSplit,
           fundingPotId: _fundingPotId,
@@ -157,8 +187,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
           notes: notes,
           date: _date,
           isRegretPurchase: _isRegretPurchase,
-          budgetMonth: _fileUnderDateBudget ? _date.month : null,
-          budgetYear: _fileUnderDateBudget ? _date.year : null,
+          budgetMonth: _fileUnder ? _date.month : null,
+          budgetYear: _fileUnder ? _date.year : null,
           fundingPotId: _fundingPotId,
         );
       }
@@ -169,12 +199,21 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       ref.invalidate(fundingContextProvider);
       if (_editing) ref.invalidate(savingsProvider);
       await ref.read(recentCategoriesProvider.notifier).record(_selectedCategoryId!);
-      if (!_editing) unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
+      if (!_editing) {
+        unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
+        await LastEntryStore.record(_date);
+        unawaited(LogNudge.reschedule());
+      }
 
       if (!mounted) return;
-      ref.read(toastServiceProvider).success(context, _editing ? 'Expense updated' : 'Expense added');
+      ref.read(toastServiceProvider).success(
+          context, _editing ? 'Expense updated' : (another ? 'Added $description' : 'Expense added'));
       HapticFeedback.lightImpact();
-      _close();
+      if (another) {
+        _resetForAnother();
+      } else {
+        _close();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -188,8 +227,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     final categoriesAsync = ref.watch(categoriesProvider);
     final recentAsync = ref.watch(recentCategoriesProvider);
     final creating = _loading;
-    final dateLabel = DateFormat('EEE, d MMM y').format(_date);
-    final isToday = _isSameDay(_date, DateTime.now());
+    final picks = ref.watch(quickPicksProvider('EXPENSE')).asData?.value;
+    ref.watch(budgetProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -202,32 +241,12 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !creating ? _submit : null,
-              child: creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(
-                      _editing ? 'Save' : 'Add',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: _editing ? 'Save changes' : 'Add expense',
+        loading: creating,
+        onPrimary: _canSubmit ? _submit : null,
+        onAddAnother: _editing ? null : (_canSubmit ? () => _submit(another: true) : null),
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -243,6 +262,10 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
                 ),
               ),
+            if (!_locked && !_editing && (picks?.repeats.isNotEmpty ?? false)) ...[
+              QuickRepeatChips(repeats: picks!.repeats, onTap: _applyRepeat),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
@@ -271,6 +294,12 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               onChanged: (_) => setState(() {}),
             ),
             if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
+            const SizedBox(height: 8),
+            DayStrip(
+              selected: _date,
+              lastUsed: _lastUsed,
+              onChanged: (d) => setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute)),
+            ),
 
             const SizedBox(height: 12),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
@@ -279,7 +308,11 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
             categoriesAsync.when(
               data: (cats) => CategoryChipList(
                 categories: cats,
-                recentIds: recentAsync.asData?.value ?? [],
+                recentIds: orderedCategoryIds(
+                  picks?.topCategoryIds ?? const [],
+                  recentAsync.asData?.value ?? const [],
+                  cats.map((c) => c.id).toSet(),
+                ),
                 selectedId: _selectedCategoryId,
                 onSelected: (cat) {
                   HapticFeedback.selectionClick();
@@ -307,64 +340,33 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
 
             const SizedBox(height: 20),
 
-            _FormField(
+            DescriptionAutocomplete(
               controller: _descCtrl,
-              hint: 'Description (optional)',
-              maxLines: 1,
-              textCapitalization: TextCapitalization.sentences,
+              focusNode: _descFocus,
+              descriptions: picks?.descriptions ?? const [],
+              onPicked: (d) {
+                if (_selectedCategoryId == null && d.categoryId != null) {
+                  final cats = ref.read(categoriesProvider).asData?.value ?? [];
+                  if (cats.any((c) => c.id == d.categoryId)) setState(() => _selectedCategoryId = d.categoryId);
+                }
+              },
             ),
 
             const SizedBox(height: 20),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
             const SizedBox(height: 16),
 
-            FormSection(
-              title: 'When',
-              children: [
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon('CalendarDays'.lucideIcon, size: 16, color: AppColors.mutedForeground),
-                        const SizedBox(width: 10),
-                        Text(
-                          isToday ? 'Today' : dateLabel,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: isToday ? AppColors.mutedForeground : AppColors.foreground,
-                          ),
-                        ),
-                        if (!isToday) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            dateLabel,
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
-                          ),
-                        ],
-                        const Spacer(),
-                        Icon('ChevronDown'.lucideIcon, size: 14, color: AppColors.mutedForeground),
-                      ],
-                    ),
-                  ),
-                ),
-                if (!_locked)
-                  BudgetPeriodField(
-                    date: _date,
-                    checked: _fileUnderDateBudget,
-                    onChanged: (v) => setState(() => _fileUnderDateBudget = v),
-                    otherwise: _existing?.budgetMonth != null
-                        ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
-                        : null,
-                  ),
-              ],
-            ),
-
+            if (_showBudgetChoice) ...[
+              BudgetPeriodField(
+                date: _date,
+                checked: _fileUnderDateBudget,
+                countIt: true,
+                onChanged: (v) => setState(() => _fileUnderDateBudget = v),
+                otherwise: _existing?.budgetMonth != null
+                    ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
+                    : null,
+              ),
+            ],
             const SizedBox(height: 16),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
             const SizedBox(height: 16),
@@ -378,8 +380,8 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               FundingSourceField(
                 potId: _fundingPotId,
                 onChanged: (potId) => setState(() => _fundingPotId = potId),
-                month: _fileUnderDateBudget ? _date.month : _existing?.budgetMonth,
-                year: _fileUnderDateBudget ? _date.year : _existing?.budgetYear,
+                month: _fileUnder ? _date.month : _existing?.budgetMonth,
+                year: _fileUnder ? _date.year : _existing?.budgetYear,
               ),
 
             const SizedBox(height: 20),
@@ -439,9 +441,6 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       ),
     );
   }
-
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _FormField extends StatelessWidget {

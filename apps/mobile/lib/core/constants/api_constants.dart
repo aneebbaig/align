@@ -26,6 +26,7 @@ class ApiConstants {
   static const String expenses = '/expenses';
   static const String expenseFundingContext = '/expenses/funding-context';
   static const String income = '/income';
+  static const String quickPicks = '/quick-picks';
   static const String budget = '/budget';
   static const String savings = '/savings';
   static const String loans = '/loans';

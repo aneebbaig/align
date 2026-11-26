@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,14 +7,19 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
-import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/amount_expr.dart';
 import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/last_entry_store.dart';
 import '../../../../core/widgets/budget_period_field.dart';
-import '../../../../core/widgets/form_section.dart';
+import '../../../../core/widgets/day_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
+import '../../../expenses/data/models/quick_picks_model.dart';
+import '../../../expenses/presentation/providers/quick_picks_provider.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
+import '../../../routines/data/log_nudge.dart';
 import '../../../expenses/presentation/providers/categories_provider.dart';
 import '../../../expenses/presentation/widgets/category_chip_list.dart';
 import '../../../expenses/domain/entities/expense_entity.dart';
@@ -33,6 +40,8 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _amountFocus = FocusNode();
+  final _descFocus = FocusNode();
+  DateTime? _lastUsed;
   String? _selectedCategoryId;
   DateTime _date = DateTime.now();
   bool _fileUnderDateBudget = false;
@@ -55,6 +64,10 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
       _date = e.date;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _amountFocus.requestFocus());
+      LastEntryStore.read().then((last) {
+        final d = lastChipDate(last, DateTime.now());
+        if (mounted && d != null) setState(() => _lastUsed = d);
+      });
     }
   }
 
@@ -63,6 +76,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
     _amountCtrl.dispose();
     _descCtrl.dispose();
     _amountFocus.dispose();
+    _descFocus.dispose();
     super.dispose();
   }
 
@@ -79,28 +93,37 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
 
   bool get _canSubmit => _amountPaisas != null && _selectedCategoryId != null;
 
-  Future<void> _pickDate() async {
-    _amountFocus.unfocus();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: _date.isAfter(DateTime.now()) ? _date : DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _date = picked);
+  /// Whether the "Count it in {month}'s budget" choice applies to the chosen date.
+  bool get _showBudgetChoice {
+    final open = ref.read(budgetProvider).asData?.value;
+    return needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
   }
 
-  Future<void> _submit() async {
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
+
+  void _applyRepeat(QuickRepeat r) {
+    HapticFeedback.selectionClick();
+    final cats = ref.read(incomeCategoriesProvider).asData?.value ?? [];
+    setState(() {
+      _descCtrl.text = r.description;
+      if (cats.any((c) => c.id == r.categoryId)) _selectedCategoryId = r.categoryId;
+      _amountCtrl.text = amountFieldText(r.lastAmountPaisas);
+    });
+    _amountFocus.requestFocus();
+    _amountCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _amountCtrl.text.length);
+  }
+
+  void _resetForAnother() {
+    setState(() {
+      _loading = false;
+      _amountCtrl.clear();
+      _descCtrl.clear();
+      _selectedCategoryId = null;
+    });
+    _amountFocus.requestFocus();
+  }
+
+  Future<void> _submit({bool another = false}) async {
     final paisas = _amountPaisas;
     if (paisas == null || _selectedCategoryId == null) return;
     _amountFocus.unfocus();
@@ -125,8 +148,8 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
           description: description,
           notes: _existing!.notes,
           date: _date,
-          budgetMonth: _fileUnderDateBudget ? _date.month : null,
-          budgetYear: _fileUnderDateBudget ? _date.year : null,
+          budgetMonth: _fileUnder ? _date.month : null,
+          budgetYear: _fileUnder ? _date.year : null,
         );
       } else {
         await ds.createIncome(
@@ -134,17 +157,27 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
           categoryId: _selectedCategoryId!,
           description: description,
           date: _date,
-          budgetMonth: _fileUnderDateBudget ? _date.month : null,
-          budgetYear: _fileUnderDateBudget ? _date.year : null,
+          budgetMonth: _fileUnder ? _date.month : null,
+          budgetYear: _fileUnder ? _date.year : null,
         );
       }
 
       if (!mounted) return;
       ref.invalidate(incomeListProvider);
       ref.invalidate(fundingContextProvider);
-      ref.read(toastServiceProvider).success(context, _editing ? 'Income updated' : 'Income added');
+      if (!_editing) {
+        await LastEntryStore.record(_date);
+        unawaited(LogNudge.reschedule());
+      }
+      if (!mounted) return;
+      ref.read(toastServiceProvider).success(
+          context, _editing ? 'Income updated' : (another ? 'Added $description' : 'Income added'));
       HapticFeedback.lightImpact();
-      _close();
+      if (another) {
+        _resetForAnother();
+      } else {
+        _close();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -157,10 +190,8 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(incomeCategoriesProvider);
     final creating = _loading;
-    final dateLabel = DateFormat('EEE, d MMM y').format(_date);
-    final isToday = _date.year == DateTime.now().year &&
-        _date.month == DateTime.now().month &&
-        _date.day == DateTime.now().day;
+    final picks = ref.watch(quickPicksProvider('INCOME')).asData?.value;
+    ref.watch(budgetProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -173,32 +204,12 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !creating ? _submit : null,
-              child: creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(
-                      _editing ? 'Save' : 'Add',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: _editing ? 'Save changes' : 'Add income',
+        loading: creating,
+        onPrimary: _canSubmit ? _submit : null,
+        onAddAnother: _editing ? null : (_canSubmit ? () => _submit(another: true) : null),
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -214,6 +225,10 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
                 ),
               ),
+            if (!_locked && !_editing && (picks?.repeats.isNotEmpty ?? false)) ...[
+              QuickRepeatChips(repeats: picks!.repeats, onTap: _applyRepeat),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
@@ -242,6 +257,12 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
               onChanged: (_) => setState(() {}),
             ),
             if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
+            const SizedBox(height: 8),
+            DayStrip(
+              selected: _date,
+              lastUsed: _lastUsed,
+              onChanged: (d) => setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute)),
+            ),
 
             const SizedBox(height: 12),
             Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
@@ -250,7 +271,11 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
             categoriesAsync.when(
               data: (cats) => CategoryChipList(
                 categories: cats,
-                recentIds: const [],
+                recentIds: orderedCategoryIds(
+                  picks?.topCategoryIds ?? const [],
+                  const [],
+                  cats.map((c) => c.id).toSet(),
+                ),
                 selectedId: _selectedCategoryId,
                 onSelected: (cat) {
                   HapticFeedback.selectionClick();
@@ -278,81 +303,32 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
 
             const SizedBox(height: 20),
 
-            TextField(
+            DescriptionAutocomplete(
               controller: _descCtrl,
-              style: AppTextStyles.bodyMedium,
-              maxLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'Description (optional)',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-                filled: true,
-                fillColor: AppColors.card,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
-                ),
+              focusNode: _descFocus,
+              descriptions: picks?.descriptions ?? const [],
+              onPicked: (d) {
+                if (_selectedCategoryId == null && d.categoryId != null) {
+                  final cats = ref.read(incomeCategoriesProvider).asData?.value ?? [];
+                  if (cats.any((c) => c.id == d.categoryId)) setState(() => _selectedCategoryId = d.categoryId);
+                }
+              },
+            ),
+
+            if (_showBudgetChoice) ...[
+              const SizedBox(height: 20),
+              Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
+              const SizedBox(height: 16),
+              BudgetPeriodField(
+                date: _date,
+                checked: _fileUnderDateBudget,
+                countIt: true,
+                onChanged: (v) => setState(() => _fileUnderDateBudget = v),
+                otherwise: _existing?.budgetMonth != null
+                    ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
+                    : null,
               ),
-            ),
-
-            const SizedBox(height: 20),
-            Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
-            const SizedBox(height: 16),
-
-            FormSection(
-              title: 'When',
-              children: [
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon('CalendarDays'.lucideIcon, size: 16, color: AppColors.mutedForeground),
-                        const SizedBox(width: 10),
-                        Text(
-                          isToday ? 'Today' : dateLabel,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: isToday ? AppColors.mutedForeground : AppColors.foreground,
-                          ),
-                        ),
-                        if (!isToday) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            dateLabel,
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
-                          ),
-                        ],
-                        const Spacer(),
-                        Icon('ChevronDown'.lucideIcon, size: 14, color: AppColors.mutedForeground),
-                      ],
-                    ),
-                  ),
-                ),
-                BudgetPeriodField(
-                  date: _date,
-                  checked: _fileUnderDateBudget,
-                  onChanged: (v) => setState(() => _fileUnderDateBudget = v),
-                  otherwise: _existing?.budgetMonth != null
-                      ? "Otherwise stays under ${DateFormat('MMMM y').format(DateTime(_existing!.budgetYear!, _existing!.budgetMonth!))}'s budget"
-                      : null,
-                ),
-              ],
-            ),
+            ],
           ],
         ),
       ),

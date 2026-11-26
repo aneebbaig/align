@@ -15,6 +15,7 @@ class BudgetPeriodField extends StatelessWidget {
     required this.checked,
     required this.onChanged,
     this.otherwise,
+    this.countIt = false,
     super.key,
   });
 
@@ -24,6 +25,9 @@ class BudgetPeriodField extends StatelessWidget {
 
   /// Replaces the "Otherwise files under the current open period" line (e.g. when editing).
   final String? otherwise;
+
+  /// Uses the "Count it in …'s budget" wording.
+  final bool countIt;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -45,7 +49,7 @@ class BudgetPeriodField extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "File under ${DateFormat('MMMM y').format(date)}'s budget",
+                      "${countIt ? 'Count it in' : 'File under'} ${DateFormat('MMMM y').format(date)}'s budget",
                       style: AppTextStyles.bodyMedium,
                     ),
                     Text(
