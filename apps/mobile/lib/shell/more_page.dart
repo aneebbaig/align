@@ -48,8 +48,8 @@ class MorePage extends StatelessWidget {
             const SizedBox(height: 8),
             _MoreItem(
               icon: Icons.table_chart_outlined,
-              label: 'Planner',
-              subtitle: 'Month-by-month plan: lines, goals, available cash',
+              label: 'Forecast',
+              subtitle: 'Your cash month by month – separate from your real money',
               onTap: () => context.push('/planner'),
             ),
             const SizedBox(height: 8),

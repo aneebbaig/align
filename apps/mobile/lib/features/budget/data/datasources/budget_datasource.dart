@@ -33,6 +33,9 @@ class BudgetDatasource {
         categories: (d['categories'] as List<dynamic>)
             .map((e) => _parseCategory(e as Map<String, dynamic>))
             .toList(),
+        totalIncomePaisas: d['totalIncomePaisas'] as int?,
+        carriedOverPaisas: d['carriedOverPaisas'] as int?,
+        readyToAssignPaisas: d['readyToAssignPaisas'] as int?,
       );
     } catch (e) {
       throw ErrorHandler.handle(e);

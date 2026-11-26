@@ -679,7 +679,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         startingCashPaisas: _cashValue,
         usdRate: _rateValue,
       ),
-      done: 'Planner updated',
+      done: 'Forecast updated',
     );
     if (!mounted) return;
     if (ok) {
@@ -701,7 +701,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(title: 'Planner settings', onSubmit: _submit, canSubmit: _canSubmit, loading: _loading),
+            _Header(title: 'Forecast settings', onSubmit: _submit, canSubmit: _canSubmit, loading: _loading),
             _label('Starts'),
             AppCard(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -735,7 +735,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               onChanged: () => setState(() {}),
             ),
             const SizedBox(height: 6),
-            const Text("The planner's own rate - it doesn't change the real one in Settings.", style: AppTextStyles.bodySmall),
+            const Text("The forecast's own rate - it doesn't change the real one in Settings.", style: AppTextStyles.bodySmall),
           ],
         ),
       );
