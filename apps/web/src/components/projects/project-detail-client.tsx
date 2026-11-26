@@ -79,6 +79,16 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
     });
   }
 
+  function copyTitles() {
+    const titles = PROJECT_TASK_STATUSES.flatMap((s) => columns[s])
+      .filter((t) => selectedIds.has(t.id))
+      .map((t) => t.title);
+    navigator.clipboard.writeText(titles.join("\n")).then(
+      () => toast.success(`Copied ${titles.length} title${titles.length === 1 ? "" : "s"}`),
+      () => toast.error("Could not copy"),
+    );
+  }
+
   async function bulkMove(nextStatus: string) {
     const ids = [...selectedIds];
     const result = await bulkUpdateProjectTasks(ids, { status: nextStatus });
@@ -227,7 +237,7 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 items-start lg:grid lg:grid-cols-4 lg:overflow-x-visible">
+        <div className="flex gap-3 overflow-x-auto pb-4 items-start lg:grid lg:grid-cols-5 lg:overflow-x-visible">
           {PROJECT_TASK_STATUSES.map((columnStatus) => {
             const tasks = columns[columnStatus];
             const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id));
@@ -291,7 +301,7 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
       />
 
       {selectionMode && (
-        <ProjectBulkBar count={selectedIds.size} onClear={clearSelection} onMove={bulkMove} onPriority={bulkPriority} onDelete={bulkDelete} />
+        <ProjectBulkBar onCopyTitles={copyTitles} count={selectedIds.size} onClear={clearSelection} onMove={bulkMove} onPriority={bulkPriority} onDelete={bulkDelete} />
       )}
     </div>
   );

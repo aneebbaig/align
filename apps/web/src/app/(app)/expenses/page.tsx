@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { getCurrentPeriod, prevPeriod } from "@/lib/month";
-import { getExpenseFundingContext, getQuickPicks, getTransactions } from "@/actions/expenses";
+import { getExpenseFundingContext, getIncomeLeftThisMonthAction, getQuickPicks, getTransactions } from "@/actions/expenses";
 import { getCategories, getUserSettings } from "@/actions/settings";
 import { getBudgetWithSpending } from "@/actions/budget";
 import { ExpensesClient } from "@/components/expenses/expenses-client";
@@ -12,11 +12,12 @@ export default async function ExpensesPage() {
   const { month, year } = getCurrentPeriod(settings?.currentBudgetMonth, settings?.currentBudgetYear);
   const last = prevPeriod(month, year);
 
-  const [transactions, categories, budgetData, fundingContext, quickPicks] = await Promise.all([
+  const [transactions, categories, budgetData, fundingContext, incomeLeftThisMonth, quickPicks] = await Promise.all([
     getTransactions({ type: "EXPENSE" }),
     getCategories(),
     getBudgetWithSpending(month, year),
     getExpenseFundingContext(month, year),
+    getIncomeLeftThisMonthAction(month, year),
     getQuickPicks("EXPENSE"),
   ]);
 
@@ -40,7 +41,7 @@ export default async function ExpensesPage() {
         currentPeriod={{ month, year }}
         lastPeriod={last}
         thisMonthSpent={budgetData.totalSpent}
-        budgetTotal={budgetData.totalAssigned}
+        incomeLeftThisMonth={incomeLeftThisMonth}
       />
     </div>
   );

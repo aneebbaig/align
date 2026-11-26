@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { sumTotals } from "@/lib/wedding/totals";
+import { budgetOfEvents, sumTotals } from "@/lib/wedding/totals";
 
 // Shared helpers for the /api/v1/wedding routes. All money is in paisas (the
 // smallest unit), same as the other v1 routes and the database.
@@ -76,7 +76,8 @@ export function serializePlanSummary(p: PlanWithAll) {
     brideName: p.brideName,
     groomName: p.groomName,
     weddingDate: iso(p.weddingDate),
-    totalBudget: p.totalBudget,
+    // The wedding budget is what its events add up to; older app versions read it from totalBudget.
+    totalBudget: budgetOfEvents(p.events),
     haqMehr: p.haqMehr,
     haqMehrNote: p.haqMehrNote,
     status: p.status,
@@ -132,7 +133,7 @@ export function serializePlan(p: PlanWithAll) {
 export const expenseFields = {
   name: z.string().trim().min(1, "Give the expense a name").max(200),
   category: z.string().min(1).max(40),
-  eventId: z.string().nullable(),
+  eventId: z.string().min(1, "Pick an event"),
   estimatedAmount: paisas,
   actualAmount: paisas.nullable(),
   paidAmount: paisas,

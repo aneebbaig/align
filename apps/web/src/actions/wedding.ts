@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { toPaisas } from "@/lib/utils";
+import { removeWeddingEvent } from "@/lib/wedding/delete-event";
 import { ActionResult } from "@/types";
 
 // ─── WeddingPlan ───────────────────────────────────────────────────────────
@@ -34,7 +35,6 @@ export async function createWeddingPlan(data: {
   brideName: string;
   groomName: string;
   weddingDate?: string;
-  totalBudget?: number;
   haqMehr?: number;
   haqMehrNote?: string;
   notes?: string;
@@ -47,7 +47,6 @@ export async function createWeddingPlan(data: {
         brideName: data.brideName,
         groomName: data.groomName,
         weddingDate: data.weddingDate ? new Date(data.weddingDate) : null,
-        totalBudget: data.totalBudget ? toPaisas(data.totalBudget) : 0,
         haqMehr: data.haqMehr ? toPaisas(data.haqMehr) : null,
         haqMehrNote: data.haqMehrNote || null,
         notes: data.notes || null,
@@ -66,7 +65,6 @@ export async function updateWeddingPlan(id: string, data: Partial<{
   brideName: string;
   groomName: string;
   weddingDate: string;
-  totalBudget: number;
   haqMehr: number;
   haqMehrNote: string;
   notes: string;
@@ -79,7 +77,6 @@ export async function updateWeddingPlan(id: string, data: Partial<{
       data: {
         ...data,
         weddingDate: data.weddingDate ? new Date(data.weddingDate) : undefined,
-        totalBudget: data.totalBudget !== undefined ? toPaisas(data.totalBudget) : undefined,
         haqMehr: data.haqMehr !== undefined ? toPaisas(data.haqMehr) : undefined,
       },
     });
@@ -186,7 +183,8 @@ export async function updateWeddingEvent(id: string, data: Partial<{
   }
 }
 
-export async function deleteWeddingEvent(id: string): Promise<ActionResult> {
+/** Delete an event. If it has expenses, say where they go: `moveTo` another event, or `deleteExpenses`. */
+export async function deleteWeddingEvent(id: string, how: { moveTo?: string; deleteExpenses?: boolean } = {}): Promise<ActionResult> {
   try {
     const userId = await getUserId();
     const event = await prisma.weddingEvent.findFirst({
@@ -195,7 +193,10 @@ export async function deleteWeddingEvent(id: string): Promise<ActionResult> {
     });
     if (!event || event.weddingPlan.userId !== userId) return { success: false, error: "Not found" };
 
-    await prisma.weddingEvent.delete({ where: { id } });
+    const result = await removeWeddingEvent(event.weddingPlan.id, id, userId, how);
+    if (result === "not_found") return { success: false, error: "Not found" };
+    if (result === "bad_target") return { success: false, error: "Pick another event to move the expenses to" };
+    if (result === "has_expenses") return { success: false, error: "Choose what happens to this event's expenses" };
     revalidatePath(`/wedding/${event.weddingPlan.id}`);
     revalidatePath("/wedding");
     return { success: true };
@@ -211,7 +212,7 @@ export async function deleteWeddingEvent(id: string): Promise<ActionResult> {
 type ExpenseInput = {
   name: string;
   category: string;
-  eventId: string | null;
+  eventId: string;
   estimated: number;
   actual: number | null;
   paid: number;
@@ -231,23 +232,21 @@ async function ownedExpense(id: string, userId: string) {
   return expense;
 }
 
-export async function createWeddingExpense(weddingPlanId: string, data: Partial<ExpenseInput> & { name: string }): Promise<ActionResult> {
+export async function createWeddingExpense(weddingPlanId: string, data: Partial<ExpenseInput> & { name: string; eventId: string }): Promise<ActionResult> {
   try {
     const userId = await getUserId();
     const plan = await prisma.weddingPlan.findFirst({ where: { id: weddingPlanId, userId }, select: { id: true } });
     if (!plan) return { success: false, error: "Not found" };
     if (!data.name.trim()) return { success: false, error: "Give the expense a name" };
-    if (data.eventId) {
-      const event = await prisma.weddingEvent.findFirst({ where: { id: data.eventId, weddingPlanId } });
-      if (!event) return { success: false, error: "Event not found" };
-    }
+    const event = await prisma.weddingEvent.findFirst({ where: { id: data.eventId, weddingPlanId }, select: { id: true } });
+    if (!event) return { success: false, error: "Pick an event for this expense" };
 
     await prisma.weddingExpense.create({
       data: {
         weddingPlanId,
         name: data.name.trim(),
         category: data.category ?? "MISC",
-        eventId: data.eventId || null,
+        eventId: data.eventId,
         estimatedAmount: data.estimated ? toPaisas(data.estimated) : 0,
         actualAmount: data.actual != null ? toPaisas(data.actual) : null,
         paidAmount: data.paid ? toPaisas(data.paid) : 0,
@@ -285,7 +284,7 @@ export async function updateWeddingExpense(id: string, data: Partial<ExpenseInpu
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
         ...(data.category !== undefined ? { category: data.category } : {}),
-        ...(data.eventId !== undefined ? { eventId: data.eventId || null } : {}),
+        ...(data.eventId !== undefined ? { eventId: data.eventId } : {}),
         // With a quote chosen, the estimate is that quote's price - change the quote instead.
         ...(data.estimated !== undefined && !chosen ? { estimatedAmount: toPaisas(data.estimated) } : {}),
         ...(data.actual !== undefined ? { actualAmount: data.actual === null ? null : toPaisas(data.actual) } : {}),
@@ -353,8 +352,8 @@ export async function restoreWeddingExpensePayment(id: string, previous: { actua
   }
 }
 
-/** Move an expense to another event of the same wedding (null = Whole wedding). Returns the event it came from. */
-export async function moveWeddingExpense(id: string, eventId: string | null): Promise<ActionResult<{ previousEventId: string | null }>> {
+/** Move an expense to another event of the same wedding. Returns the event it came from. */
+export async function moveWeddingExpense(id: string, eventId: string): Promise<ActionResult<{ previousEventId: string }>> {
   try {
     const userId = await getUserId();
     const expense = await prisma.weddingExpense.findFirst({
@@ -362,11 +361,9 @@ export async function moveWeddingExpense(id: string, eventId: string | null): Pr
       select: { id: true, weddingPlanId: true, eventId: true },
     });
     if (!expense) return { success: false, error: "Not found" };
-    if (eventId) {
-      const event = await prisma.weddingEvent.findFirst({ where: { id: eventId, weddingPlanId: expense.weddingPlanId }, select: { id: true } });
-      if (!event) return { success: false, error: "Event not found" };
-    }
-    await prisma.weddingExpense.update({ where: { id }, data: { eventId: eventId || null } });
+    const event = await prisma.weddingEvent.findFirst({ where: { id: eventId, weddingPlanId: expense.weddingPlanId }, select: { id: true } });
+    if (!event) return { success: false, error: "Event not found" };
+    await prisma.weddingExpense.update({ where: { id }, data: { eventId } });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
     revalidatePath("/wedding");
     return { success: true, data: { previousEventId: expense.eventId } };

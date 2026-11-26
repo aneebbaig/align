@@ -34,7 +34,7 @@ export interface WeddingQuote {
 export interface WeddingExpense {
   id: string;
   weddingPlanId: string;
-  eventId: string | null;
+  eventId: string;
   name: string;
   category: string;
   estimatedAmount: number;
@@ -53,7 +53,6 @@ export interface WeddingPlan {
   brideName: string;
   groomName: string;
   weddingDate: Date | null;
-  totalBudget: number;
   haqMehr: number | null;
   haqMehrNote: string | null;
   notes: string | null;
@@ -145,6 +144,3 @@ export function orderExpenses<T extends { id: string; createdAt: Date | string }
 export function orderEvents<T extends { order: number; date: Date | string | null }>(events: T[]): T[] {
   return [...events].sort((a, b) => a.order - b.order || (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
 }
-
-/** Sentinel for "no event" in pickers. */
-export const GENERAL = "GENERAL";

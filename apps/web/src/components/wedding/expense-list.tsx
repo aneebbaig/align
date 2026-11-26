@@ -37,17 +37,17 @@ export function ExpenseList({ rows, events, sym, showEvent, groupable, tipFor, s
     if (!groupable) return [{ key: "all", title: null as string | null, rows: shown }];
     const map = new Map<string, WeddingExpense[]>();
     for (const r of shown) {
-      const k = groupBy === "event" ? r.eventId ?? "general" : r.category;
+      const k = groupBy === "event" ? r.eventId : r.category;
       map.set(k, [...(map.get(k) ?? []), r]);
     }
     const title = (k: string) => {
       if (groupBy === "category") return getExpenseCategoryLabel(k);
       const ev = events.find((x) => x.id === k);
-      return ev ? `${getEventInfo(ev.type).emoji} ${ev.name}` : "💍 Whole wedding";
+      return ev ? `${getEventInfo(ev.type).emoji} ${ev.name}` : k;
     };
     const out = [...map].map(([key, r]) => ({ key, title: title(key), rows: r }));
     if (groupBy === "category") return out.sort((a, b) => sumTotals(b.rows).projected - sumTotals(a.rows).projected);
-    const order = (k: string) => (k === "general" ? -1 : events.findIndex((x) => x.id === k));
+    const order = (k: string) => events.findIndex((x) => x.id === k);
     return out.sort((a, b) => order(a.key) - order(b.key));
   }, [shown, groupable, groupBy, events]);
 
@@ -97,7 +97,7 @@ export function ExpenseList({ rows, events, sym, showEvent, groupable, tipFor, s
                   <span className={cn(ROW_COLS.amount, "text-right pr-2")}>Estimate</span>
                   <span className={cn(ROW_COLS.amount, "text-right pr-2")}>Actual</span>
                   <span className={cn(ROW_COLS.pill, "text-center")}>Status</span>
-                  <span className="w-8" />
+                  <span className="w-[4.25rem]" />
                 </span>
               </div>
             )}

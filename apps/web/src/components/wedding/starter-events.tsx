@@ -27,7 +27,7 @@ export function StarterEvents({ planId, onDone, onCustom }: { planId: string; on
     <div className="rounded-xl border border-dashed border-border bg-card p-4 space-y-3">
       <div>
         <p className="text-sm font-semibold">Start with your events</p>
-        <p className="text-xs text-muted-foreground">Expenses belong to an event (or the whole wedding), and each event can have its own budget. Tap the ones you&apos;re having.</p>
+        <p className="text-xs text-muted-foreground">Every expense belongs to an event, and the wedding budget is what its events add up to. Tap the ones you&apos;re having.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {STARTER.map((v) => {

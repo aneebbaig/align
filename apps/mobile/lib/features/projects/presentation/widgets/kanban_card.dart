@@ -8,12 +8,7 @@ import '../../domain/entities/project_entity.dart';
 import 'project_card.dart' show projectColor;
 
 class KanbanCard extends StatelessWidget {
-  const KanbanCard({
-    super.key,
-    required this.task,
-    this.onTap,
-    this.dragging = false,
-  });
+  const KanbanCard({super.key, required this.task, this.onTap, this.dragging = false});
 
   final ProjectTaskEntity task;
   final VoidCallback? onTap;
@@ -21,13 +16,12 @@ class KanbanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final overdue = task.dueDate != null &&
+    final overdue =
+        task.dueDate != null &&
         !task.isDone &&
-        task.dueDate!.isBefore(DateTime(
-          DateTime.now().year,
-          DateTime.now().month,
-          DateTime.now().day,
-        ));
+        task.dueDate!.isBefore(
+          DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+        );
 
     return Material(
       color: Colors.transparent,
@@ -40,7 +34,13 @@ class KanbanCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
             boxShadow: dragging
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))]
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
                 : null,
           ),
           child: IntrinsicHeight(
@@ -86,13 +86,17 @@ class KanbanCard extends StatelessWidget {
                                 Icon(
                                   Icons.event_outlined,
                                   size: 11,
-                                  color: overdue ? AppColors.destructive : AppColors.mutedForeground,
+                                  color: overdue
+                                      ? AppColors.destructive
+                                      : AppColors.mutedForeground,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   DateFormat('d MMM').format(task.dueDate!),
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: overdue ? AppColors.destructive : AppColors.mutedForeground,
+                                    color: overdue
+                                        ? AppColors.destructive
+                                        : AppColors.mutedForeground,
                                     fontWeight: overdue ? FontWeight.w600 : FontWeight.w400,
                                   ),
                                 ),

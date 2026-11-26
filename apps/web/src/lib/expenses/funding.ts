@@ -79,6 +79,13 @@ export async function getPeriodNets(
   return [...nets].map(([key, net]) => ({ key, net }));
 }
 
+/** This period's own unspent income (no carry-over from earlier periods). */
+export async function getIncomeLeftThisMonth(userId: string, month: number, year: number): Promise<number> {
+  const key = periodKey({ month, year });
+  const nets = await getPeriodNets(userId);
+  return nets.find((n) => n.key === key)?.net ?? 0;
+}
+
 /** Income a period can still use: its own unspent income plus what earlier
  * periods left, and never more than every later running total allows. */
 export async function getIncomeAvailableForMonth(

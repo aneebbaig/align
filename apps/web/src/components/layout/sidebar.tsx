@@ -19,6 +19,7 @@ const NAV_GROUPS: { label: string | null; items: { href: string; label: string; 
   {
     label: null,
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/expenses", label: "Expenses", icon: ArrowDownUp },
       { href: "/income", label: "Income", icon: TrendingUp },
       { href: "/budget", label: "Budget", icon: PiggyBank },
@@ -50,10 +51,6 @@ const NAV_GROUPS: { label: string | null; items: { href: string; label: string; 
       { href: "/vault", label: "Vault", icon: Gift },
       { href: "/perfumes", label: "Perfumes", icon: FlaskConical },
     ],
-  },
-  {
-    label: "Overview",
-    items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
 ];
 

@@ -38,21 +38,21 @@ class ProjectEntity {
 
   /// List payload - task counts come from the API summary; [tasks] stays empty.
   factory ProjectEntity.fromSummaryJson(Map<String, dynamic> m) => ProjectEntity(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        description: m['description'] as String?,
-        client: m['client'] as String?,
-        color: m['color'] as String? ?? '#6366F1',
-        status: m['status'] as String,
-        dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
-        createdAt: DateTime.parse(m['createdAt'] as String),
-        updatedAt: DateTime.parse(m['updatedAt'] as String),
-        taskCount: m['taskCount'] as int? ?? 0,
-        doneCount: m['doneCount'] as int? ?? 0,
-        recentTasks: (m['recentTasks'] as List<dynamic>? ?? [])
-            .map((t) => ProjectTaskEntity.fromJson(t as Map<String, dynamic>))
-            .toList(),
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    description: m['description'] as String?,
+    client: m['client'] as String?,
+    color: m['color'] as String? ?? '#6366F1',
+    status: m['status'] as String,
+    dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
+    createdAt: DateTime.parse(m['createdAt'] as String),
+    updatedAt: DateTime.parse(m['updatedAt'] as String),
+    taskCount: m['taskCount'] as int? ?? 0,
+    doneCount: m['doneCount'] as int? ?? 0,
+    recentTasks: (m['recentTasks'] as List<dynamic>? ?? [])
+        .map((t) => ProjectTaskEntity.fromJson(t as Map<String, dynamic>))
+        .toList(),
+  );
 
   /// Detail payload - includes the full task list.
   factory ProjectEntity.fromDetailJson(Map<String, dynamic> m) {
@@ -90,10 +90,10 @@ class ProjectLinkEntity {
   Map<String, dynamic> toJson() => {'id': id, 'label': label, 'url': url};
 
   factory ProjectLinkEntity.fromJson(Map<String, dynamic> m) => ProjectLinkEntity(
-        id: m['id'] as String? ?? '',
-        label: m['label'] as String? ?? '',
-        url: m['url'] as String? ?? '',
-      );
+    id: m['id'] as String? ?? '',
+    label: m['label'] as String? ?? '',
+    url: m['url'] as String? ?? '',
+  );
 }
 
 class ProjectTaskEntity {
@@ -111,7 +111,7 @@ class ProjectTaskEntity {
   final String id;
   final String title;
   final String? description;
-  final String status; // TODO | IN_PROGRESS | REVIEW | DONE
+  final String status; // BUG | TODO | IN_PROGRESS | REVIEW | DONE
   final String priority; // LOW | MEDIUM | HIGH | URGENT
   final DateTime? dueDate;
   final int order;
@@ -119,7 +119,8 @@ class ProjectTaskEntity {
 
   bool get isDone => status == 'DONE';
 
-  ProjectTaskEntity copyWith({String? status, int? order, List<TagEntity>? tags}) => ProjectTaskEntity(
+  ProjectTaskEntity copyWith({String? status, int? order, List<TagEntity>? tags}) =>
+      ProjectTaskEntity(
         id: id,
         title: title,
         description: description,
@@ -131,17 +132,17 @@ class ProjectTaskEntity {
       );
 
   factory ProjectTaskEntity.fromJson(Map<String, dynamic> m) => ProjectTaskEntity(
-        id: m['id'] as String,
-        title: m['title'] as String,
-        description: m['description'] as String?,
-        status: m['status'] as String,
-        priority: m['priority'] as String? ?? 'MEDIUM',
-        dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
-        order: m['order'] as int? ?? 0,
-        tags: (m['tags'] as List<dynamic>? ?? [])
-            .map((t) => TagEntity.fromJson(t as Map<String, dynamic>))
-            .toList(),
-      );
+    id: m['id'] as String,
+    title: m['title'] as String,
+    description: m['description'] as String?,
+    status: m['status'] as String,
+    priority: m['priority'] as String? ?? 'MEDIUM',
+    dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
+    order: m['order'] as int? ?? 0,
+    tags: (m['tags'] as List<dynamic>? ?? [])
+        .map((t) => TagEntity.fromJson(t as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class TagEntity {
@@ -152,8 +153,8 @@ class TagEntity {
   final String color; // hex string e.g. "#6366f1"
 
   factory TagEntity.fromJson(Map<String, dynamic> m) => TagEntity(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        color: m['color'] as String? ?? '#6366f1',
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    color: m['color'] as String? ?? '#6366f1',
+  );
 }

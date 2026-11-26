@@ -15,21 +15,19 @@ export function WeddingCreateForm({ baseSymbol = "Rs", onCreated }: { baseSymbol
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    brideName: "", groomName: "", weddingDate: "", totalBudget: "", haqMehr: "", haqMehrNote: "", notes: "",
+    brideName: "", groomName: "", weddingDate: "", haqMehr: "", haqMehrNote: "", notes: "",
   });
   const set = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }));
 
   async function onSubmit() {
     if (!form.brideName.trim() || !form.groomName.trim()) return;
-    const totalBudget = form.totalBudget.trim() ? parseMoney(form.totalBudget) : undefined;
     const haqMehr = form.haqMehr.trim() ? parseMoney(form.haqMehr) : undefined;
-    if (totalBudget === null || haqMehr === null) { toast.error("Check the amounts - use a number or a sum like 300000+50000"); return; }
+    if (haqMehr === null) { toast.error("Check the amounts - use a number or a sum like 300000+50000"); return; }
     setLoading(true);
     const result = await createWeddingPlan({
       brideName: form.brideName,
       groomName: form.groomName,
       weddingDate: form.weddingDate || undefined,
-      totalBudget,
       haqMehr,
       haqMehrNote: form.haqMehrNote || undefined,
       notes: form.notes || undefined,
@@ -59,10 +57,6 @@ export function WeddingCreateForm({ baseSymbol = "Rs", onCreated }: { baseSymbol
       <div>
         <Label>Wedding date (optional)</Label>
         <Input type="date" value={form.weddingDate} onChange={(e) => set({ weddingDate: e.target.value })} />
-      </div>
-      <div>
-        <Label>Total budget - {baseSymbol} (optional)</Label>
-        <MoneyInput placeholder="e.g. 2000000" value={form.totalBudget} onChange={(e) => set({ totalBudget: e.target.value })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

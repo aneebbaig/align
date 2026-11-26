@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Copy, TrendingUp, TrendingDown, AlertTriangle, Loader2, PiggyBank, CheckCircle2, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, AlertTriangle, Loader2, PiggyBank, CheckCircle2, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,35 +222,14 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
       )}
 
       {/* Monthly Summary Cards */}
-      {hasIncome && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">
-              <TrendingUp className="h-3.5 w-3.5" />Income
+      {hasIncome && budgetData.unbudgetedTotal > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">
+              <AlertTriangle className="h-3.5 w-3.5" />Unplanned
             </div>
-            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{baseSymbol} {fmt(budgetData.totalIncome)}</div>
+            <div className="text-xl font-bold text-amber-700 dark:text-amber-300">{baseSymbol} {fmt(budgetData.unbudgetedTotal)}</div>
           </div>
-          <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-1.5 text-xs text-primary font-medium mb-1">
-              <PiggyBank className="h-3.5 w-3.5" />Budgeted
-            </div>
-            <div className="text-xl font-bold text-primary">{baseSymbol} {fmt(liveAssigned)}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{expenseCategories.filter((c) => (parseFloat(allocations[c.id] ?? "0") || 0) > 0).length} categories</div>
-          </div>
-          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-medium mb-1">
-              <TrendingDown className="h-3.5 w-3.5" />Spent
-            </div>
-            <div className="text-xl font-bold text-red-700 dark:text-red-300">{baseSymbol} {fmt(budgetData.totalSpent)}</div>
-          </div>
-          {budgetData.unbudgetedTotal > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">
-                <AlertTriangle className="h-3.5 w-3.5" />Unplanned
-              </div>
-              <div className="text-xl font-bold text-amber-700 dark:text-amber-300">{baseSymbol} {fmt(budgetData.unbudgetedTotal)}</div>
-            </div>
-          )}
         </div>
       )}
 
@@ -320,12 +299,32 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
         <p className="text-xs text-muted-foreground mb-4">
           Assign income to spending categories. <span className="font-medium">Available</span> = assigned − spent. Unspent income carries into next month&apos;s Ready to Assign.
         </p>
-        {liveAssigned > 0 && (
-          <div className="flex items-center justify-between bg-primary/5 border border-primary/15 rounded-lg px-4 py-2.5 mb-4">
-            <span className="text-sm font-medium text-foreground">Total budgeted across all categories</span>
-            <span className="text-sm font-bold text-primary">{baseSymbol} {fmt(liveAssigned)}</span>
-          </div>
-        )}
+        {liveAssigned > 0 && (() => {
+          const totalPct = Math.round((budgetData.totalSpent / liveAssigned) * 100);
+          return (
+            <div className="bg-primary/5 border border-primary/15 rounded-lg px-4 py-3 mb-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-foreground">
+                  Spent {baseSymbol} {fmt(budgetData.totalSpent)} of {baseSymbol} {fmt(liveAssigned)}
+                </span>
+                <span className={cn("text-xs font-medium",
+                  totalPct > 100 ? "text-red-500" : totalPct === 100 ? "text-blue-500" : totalPct >= 75 ? "text-amber-500" : "text-muted-foreground"
+                )}>{totalPct}%</span>
+              </div>
+              <Progress
+                value={Math.min(totalPct, 100)}
+                className={cn("h-1.5",
+                  totalPct > 100 ? "[&>div]:bg-red-500" :
+                  totalPct === 100 ? "[&>div]:bg-blue-500" :
+                  totalPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"
+                )}
+              />
+              <div className="text-xs text-muted-foreground">
+                Total budgeted across all categories: {baseSymbol} {fmt(liveAssigned)}
+              </div>
+            </div>
+          );
+        })()}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {expenseCategories.map((cat) => {
             const allocRupees = parseFloat(allocations[cat.id] ?? "0") || 0;

@@ -27,7 +27,7 @@ export const MAX_FUNDING_SOURCES = 2;
 // ─── Projects (freelance/client PM) ───────────────────────────────────────────
 
 export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"] as const;
-export const PROJECT_TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE"] as const;
+export const PROJECT_TASK_STATUSES = ["BUG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 export const PROJECT_TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
 export const PROJECT_TASK_PRIORITY_LABELS: Record<string, string> = {
@@ -52,6 +52,7 @@ export const PROJECT_STATUS_COLORS: Record<string, string> = {
 };
 
 export const PROJECT_TASK_STATUS_LABELS: Record<string, string> = {
+  BUG: "Bugs",
   TODO: "To Do",
   IN_PROGRESS: "In Progress",
   REVIEW: "Review",
@@ -60,6 +61,7 @@ export const PROJECT_TASK_STATUS_LABELS: Record<string, string> = {
 
 // Dot color per project task status - used on tile previews and kanban cards.
 export const PROJECT_TASK_STATUS_DOT_COLOR: Record<string, string> = {
+  BUG: "bg-red-500",
   TODO: "bg-muted-foreground/40",
   IN_PROGRESS: "bg-blue-500",
   REVIEW: "bg-amber-500",

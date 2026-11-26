@@ -42,7 +42,7 @@ export function BudgetEdit({ valuePaisas, symbol, label, onSave }: {
     );
   }
   if (!valuePaisas) {
-    return <button type="button" onClick={start} className="text-sm text-primary hover:underline underline-offset-2">Set budget</button>;
+    return <button type="button" onClick={start} className="text-sm text-primary hover:underline underline-offset-2 whitespace-nowrap shrink-0">Set budget</button>;
   }
   return (
     <div className="flex items-center gap-1">

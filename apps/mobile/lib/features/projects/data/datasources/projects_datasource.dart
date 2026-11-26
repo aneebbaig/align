@@ -9,8 +9,7 @@ import '../../domain/entities/project_entity.dart';
 part 'projects_datasource.g.dart';
 
 @riverpod
-ProjectsDatasource projectsDatasource(Ref ref) =>
-    ProjectsDatasource(ref.watch(apiClientProvider));
+ProjectsDatasource projectsDatasource(Ref ref) => ProjectsDatasource(ref.watch(apiClientProvider));
 
 class ProjectsDatasource {
   const ProjectsDatasource(this._dio);
@@ -23,9 +22,7 @@ class ProjectsDatasource {
         queryParameters: {if (status != null) 'status': status},
       );
       final list = res.data['data'] as List<dynamic>;
-      return list
-          .map((e) => ProjectEntity.fromSummaryJson(e as Map<String, dynamic>))
-          .toList();
+      return list.map((e) => ProjectEntity.fromSummaryJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
       throw ErrorHandler.handle(e);
     }
@@ -49,14 +46,17 @@ class ProjectsDatasource {
     String? dueDate,
   }) async {
     try {
-      final res = await _dio.post(ApiConstants.projects, data: {
-        'name': name,
-        if (client != null) 'client': client,
-        if (description != null) 'description': description,
-        'color': color,
-        'status': status,
-        if (dueDate != null) 'dueDate': dueDate,
-      });
+      final res = await _dio.post(
+        ApiConstants.projects,
+        data: {
+          'name': name,
+          if (client != null) 'client': client,
+          if (description != null) 'description': description,
+          'color': color,
+          'status': status,
+          if (dueDate != null) 'dueDate': dueDate,
+        },
+      );
       return (res.data['data'] as Map<String, dynamic>)['id'] as String;
     } catch (e) {
       throw ErrorHandler.handle(e);
@@ -88,23 +88,22 @@ class ProjectsDatasource {
     List<String>? tagIds,
   }) async {
     try {
-      await _dio.post(ApiConstants.projectTasks(projectId), data: {
-        'title': title,
-        'priority': priority,
-        'status': status,
-        if (dueDate != null) 'dueDate': dueDate,
-        if (tagIds != null && tagIds.isNotEmpty) 'tagIds': tagIds,
-      });
+      await _dio.post(
+        ApiConstants.projectTasks(projectId),
+        data: {
+          'title': title,
+          'priority': priority,
+          'status': status,
+          if (dueDate != null) 'dueDate': dueDate,
+          if (tagIds != null && tagIds.isNotEmpty) 'tagIds': tagIds,
+        },
+      );
     } catch (e) {
       throw ErrorHandler.handle(e);
     }
   }
 
-  Future<void> updateTask(
-    String projectId,
-    String taskId,
-    Map<String, dynamic> changes,
-  ) async {
+  Future<void> updateTask(String projectId, String taskId, Map<String, dynamic> changes) async {
     try {
       await _dio.patch(ApiConstants.projectTaskById(projectId, taskId), data: changes);
     } catch (e) {
@@ -122,13 +121,14 @@ class ProjectsDatasource {
 
   Future<void> reorderTasks(String projectId, List<Map<String, dynamic>> updates) async {
     try {
-      await Future.wait(updates.map((u) => _dio.patch(
+      await Future.wait(
+        updates.map(
+          (u) => _dio.patch(
             ApiConstants.projectTaskById(projectId, u['id'] as String),
-            data: {
-              'order': u['order'],
-              if (u['status'] != null) 'status': u['status'],
-            },
-          )));
+            data: {'order': u['order'], if (u['status'] != null) 'status': u['status']},
+          ),
+        ),
+      );
     } catch (e) {
       throw ErrorHandler.handle(e);
     }

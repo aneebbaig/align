@@ -11,7 +11,7 @@ import { evaluateAmount } from "@/lib/amount-expr";
 import { budgetStatus } from "@/lib/wedding/totals";
 import { cn } from "@/lib/utils";
 import { BUDGET_TONE } from "./budget-meter";
-import { GENERAL, WeddingEvent, fmt, getEventInfo } from "./wedding-types";
+import { WeddingEvent, fmt, getEventInfo } from "./wedding-types";
 
 /** Where an added expense would land, so the bar can say what it does to that budget. */
 export type ImpactInfo = { projected: number; budget: number; label: string };
@@ -20,16 +20,19 @@ const storageKey = (planId: string) => `wedding:last-event:${planId}`;
 
 /**
  * Brain-dump bar: name + estimate (sums allowed), Enter adds and keeps focus for the next.
- * With `fixedEventId` (null = Whole wedding) it always adds there; without it an event
- * picker shows, remembering the last event used for this wedding. "/" focuses the name.
+ * Every expense belongs to an event. With `fixedEventId` it always adds there; without it an
+ * event picker shows (the last event used for this wedding, else the first). "/" focuses the
+ * name. A wedding with no events gets a prompt to add some instead of the bar.
  */
-export function ExpenseAddBar({ planId, events, sym, fixedEventId, impactFor, onAdded }: {
+export function ExpenseAddBar({ planId, events, sym, fixedEventId, impactFor, onAdded, onNoEvents }: {
   planId: string; events: WeddingEvent[]; sym: string;
-  fixedEventId?: string | null; impactFor?: (eventId: string | null) => ImpactInfo;
+  fixedEventId?: string; impactFor?: (eventId: string) => ImpactInfo;
   onAdded: () => void;
+  /** Called by the "Add events" button shown when the wedding has none. */
+  onNoEvents?: () => void;
 }) {
   const picking = fixedEventId === undefined;
-  const [pick, setPick] = useState<string>(GENERAL);
+  const [pick, setPick] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [estimate, setEstimate] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,12 +45,12 @@ export function ExpenseAddBar({ planId, events, sym, fixedEventId, impactFor, on
     try {
       const saved = localStorage.getItem(storageKey(planId));
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved === GENERAL || (saved && events.some((e) => e.id === saved))) setPick(saved);
-    } catch { /* storage unavailable: stay on Whole wedding */ }
+      if (saved && events.some((e) => e.id === saved)) setPick(saved);
+    } catch { /* storage unavailable: use the first event */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId, picking]);
-  // An event that disappeared (deleted) falls back to Whole wedding.
-  const eventId = picking ? (pick !== GENERAL && events.some((e) => e.id === pick) ? pick : null) : fixedEventId;
+  // An event that disappeared (deleted) falls back to the first one.
+  const eventId = picking ? (pick && events.some((e) => e.id === pick) ? pick : events[0]?.id) : fixedEventId;
 
   function choose(v: string) {
     setPick(v);
@@ -57,11 +60,11 @@ export function ExpenseAddBar({ planId, events, sym, fixedEventId, impactFor, on
 
   const parsed = estimate.trim() ? evaluateAmount(estimate) : null;
   const typed = parsed?.ok ? Math.round(parsed.value * 100) : 0;
-  const info = impactFor?.(eventId ?? null);
+  const info = eventId ? impactFor?.(eventId) : undefined;
   const impact = info ? budgetStatus(info.projected + typed, info.budget) : null;
 
   async function add() {
-    if (!name.trim() || busy) return;
+    if (!name.trim() || busy || !eventId) return;
     if (parsed && !parsed.ok) { toast.error(parsed.error); return; }
     setBusy(true);
     const r = await createWeddingExpense(planId, { name, estimated: parsed?.ok ? parsed.value : 0, eventId });
@@ -85,20 +88,28 @@ export function ExpenseAddBar({ planId, events, sym, fixedEventId, impactFor, on
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  if (!eventId) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border bg-card px-4 py-3">
+        <p className="flex-1 basis-56 text-sm text-muted-foreground">Every expense belongs to an event. Add your events first (Nikkah, Barat, Valima...).</p>
+        {onNoEvents && <Button size="sm" onClick={onNoEvents}><Plus className="h-4 w-4" />Add events</Button>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {picking && (
-          <Select value={eventId ?? GENERAL} onValueChange={choose}>
-            <SelectTrigger className="h-10 w-full sm:w-44 shrink-0" aria-label="Add to event"><SelectValue /></SelectTrigger>
+          <Select value={eventId} onValueChange={choose}>
+            <SelectTrigger className="h-10 w-36 sm:w-40 shrink-0" aria-label="Add to event"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={GENERAL}>💍 Whole wedding</SelectItem>
               {events.map((ev) => <SelectItem key={ev.id} value={ev.id}>{getEventInfo(ev.type).emoji} {ev.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
-        <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKey} placeholder="Add an expense – e.g. Venue, Photographer  ( / )" aria-label="New expense name" className="flex-1 min-w-0 basis-40 h-10" />
-        <div className="relative w-28 sm:w-36 shrink-0">
+        <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKey} placeholder="Add an expense – e.g. Venue, Photographer  ( / )" aria-label="New expense name" className="flex-1 min-w-[10rem] basis-full sm:basis-0 h-10" />
+        <div className="relative w-32 shrink-0">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{sym}</span>
           <Input value={estimate} onChange={(e) => setEstimate(e.target.value)} onKeyDown={onKey} inputMode="decimal" placeholder="Estimate" aria-label="Estimate" className="pl-8 h-10" />
         </div>

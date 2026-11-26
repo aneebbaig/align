@@ -16,26 +16,28 @@ Color projectColor(String hex) {
 }
 
 (String, Color) projectStatusMeta(String status) => switch (status) {
-      'ACTIVE' => ('Active', AppColors.success),
-      'ON_HOLD' => ('On Hold', AppColors.warning),
-      'COMPLETED' => ('Completed', AppColors.info),
-      'CANCELLED' => ('Cancelled', AppColors.destructive),
-      _ => (status, AppColors.mutedForeground),
-    };
+  'ACTIVE' => ('Active', AppColors.success),
+  'ON_HOLD' => ('On Hold', AppColors.warning),
+  'COMPLETED' => ('Completed', AppColors.info),
+  'CANCELLED' => ('Cancelled', AppColors.destructive),
+  _ => (status, AppColors.mutedForeground),
+};
 
 IconData projectTaskStatusIcon(String status) => switch (status) {
-      'IN_PROGRESS' => Icons.adjust,
-      'REVIEW' => Icons.visibility_outlined,
-      'DONE' => Icons.check_circle,
-      _ => Icons.circle_outlined,
-    };
+  'BUG' => Icons.bug_report_outlined,
+  'IN_PROGRESS' => Icons.adjust,
+  'REVIEW' => Icons.visibility_outlined,
+  'DONE' => Icons.check_circle,
+  _ => Icons.circle_outlined,
+};
 
 Color projectTaskStatusColor(String status) => switch (status) {
-      'IN_PROGRESS' => AppColors.info,
-      'REVIEW' => AppColors.warning,
-      'DONE' => AppColors.success,
-      _ => AppColors.mutedForeground,
-    };
+  'BUG' => AppColors.destructive,
+  'IN_PROGRESS' => AppColors.info,
+  'REVIEW' => AppColors.warning,
+  'DONE' => AppColors.success,
+  _ => AppColors.mutedForeground,
+};
 
 class ProjectCard extends StatelessWidget {
   const ProjectCard({super.key, required this.project, required this.onTap});
@@ -47,9 +49,8 @@ class ProjectCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = projectColor(project.color);
     final (statusLabel, statusColor) = projectStatusMeta(project.status);
-    final overdue = project.dueDate != null &&
-        project.isActive &&
-        project.dueDate!.isBefore(DateTime.now());
+    final overdue =
+        project.dueDate != null && project.isActive && project.dueDate!.isBefore(DateTime.now());
 
     return AppCard(
       onTap: onTap,
@@ -97,36 +98,40 @@ class ProjectCard extends StatelessWidget {
                         const SizedBox(width: 10),
                         Text(
                           '${project.doneCount}/${project.taskCount}',
-                          style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ],
                     ),
                     if (project.recentTasks.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      ...project.recentTasks.map((t) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  projectTaskStatusIcon(t.status),
-                                  size: 11,
-                                  color: projectTaskStatusColor(t.status),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    t.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.mutedForeground,
-                                      decoration: t.isDone ? TextDecoration.lineThrough : null,
-                                    ),
+                      ...project.recentTasks.map(
+                        (t) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                projectTaskStatusIcon(t.status),
+                                size: 11,
+                                color: projectTaskStatusColor(t.status),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  t.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.mutedForeground,
+                                    decoration: t.isDone ? TextDecoration.lineThrough : null,
                                   ),
                                 ),
-                              ],
-                            ),
-                          )),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                     if (project.dueDate != null) ...[
                       const SizedBox(height: 10),
@@ -166,14 +171,14 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w600),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      label,
+      style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w600),
+    ),
+  );
 }

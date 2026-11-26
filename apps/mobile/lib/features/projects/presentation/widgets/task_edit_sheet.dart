@@ -9,11 +9,24 @@ import '../../../../core/widgets/due_date_chips.dart';
 import '../../domain/entities/project_entity.dart';
 import 'project_card.dart' show projectColor;
 
-const _statuses = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
-const _statusLabels = {'TODO': 'To Do', 'IN_PROGRESS': 'In Progress', 'REVIEW': 'Review', 'DONE': 'Done'};
+const _statuses = ['BUG', 'TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
+const _statusLabels = {
+  'BUG': 'Bugs',
+  'TODO': 'To Do',
+  'IN_PROGRESS': 'In Progress',
+  'REVIEW': 'Review',
+  'DONE': 'Done',
+};
 const _priorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const _tagColorPalette = [
-  '#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#a855f7', '#ec4899', '#94a3b8',
+  '#6366f1',
+  '#ef4444',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#a855f7',
+  '#ec4899',
+  '#94a3b8',
 ];
 
 String _nextTagColor(String current) {
@@ -165,183 +178,201 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         final discard = await _confirm(
-            'Discard changes?', 'Your edits to this task will be lost.', 'Discard');
+          'Discard changes?',
+          'Your edits to this task will be lost.',
+          'Discard',
+        );
         if (!discard) return;
         if (!context.mounted) return;
         Navigator.pop(context);
       },
       child: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            _label('Title'),
-            AppTextField(
-              controller: _title,
-              hint: 'Task title',
-              dense: true,
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            const SizedBox(height: 16),
-            _label('Details'),
-            AppTextField(
-              controller: _description,
-              hint: 'Notes, links, acceptance criteria…',
-              dense: true,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            const SizedBox(height: 16),
-            _label('Status'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final s in _statuses)
-                  _chip(
-                    label: _statusLabels[s]!,
-                    selected: _status == s,
-                    onTap: () => setState(() => _status = s),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _label('Priority'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final p in _priorities)
-                  _chip(
-                    label: p[0] + p.substring(1).toLowerCase(),
-                    selected: _priority == p,
-                    dotColor: priorityColor(p),
-                    onTap: () => setState(() => _priority = p),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _label('Tags'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final tag in _availableTags)
-                  GestureDetector(
-                    onLongPress: () => _deleteTag(tag.id),
-                    child: _chip(
-                      label: tag.name,
-                      selected: _selectedTagIds.contains(tag.id),
-                      dotColor: projectColor(tag.color),
-                      onTap: () => setState(() {
-                        _selectedTagIds.contains(tag.id) ? _selectedTagIds.remove(tag.id) : _selectedTagIds.add(tag.id);
-                      }),
-                    ),
-                  ),
-              ],
-            ),
-            if (widget.onCreateTag != null) ...[
-              const SizedBox(height: 8),
-              Row(
+              _label('Title'),
+              AppTextField(
+                controller: _title,
+                hint: 'Task title',
+                dense: true,
+                textCapitalization: TextCapitalization.sentences,
+              ),
+              const SizedBox(height: 16),
+              _label('Details'),
+              AppTextField(
+                controller: _description,
+                hint: 'Notes, links, acceptance criteria…',
+                dense: true,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+              ),
+              const SizedBox(height: 16),
+              _label('Status'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _newTagColor = _nextTagColor(_newTagColor)),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: projectColor(_newTagColor),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                      ),
+                  for (final s in _statuses)
+                    _chip(
+                      label: _statusLabels[s]!,
+                      selected: _status == s,
+                      onTap: () => setState(() => _status = s),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: AppTextField(
-                      controller: _newTag,
-                      hint: 'New tag',
-                      dense: true,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => _createTag(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _creatingTag ? null : _createTag,
-                    icon: _creatingTag
-                        ? const SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                        : const Icon(Icons.add, size: 20, color: AppColors.primary),
-                  ),
                 ],
               ),
-              Text(
-                'Long-press a tag to delete it.',
-                style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground),
+              const SizedBox(height: 16),
+              _label('Priority'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final p in _priorities)
+                    _chip(
+                      label: p[0] + p.substring(1).toLowerCase(),
+                      selected: _priority == p,
+                      dotColor: priorityColor(p),
+                      onTap: () => setState(() => _priority = p),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _label('Tags'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final tag in _availableTags)
+                    GestureDetector(
+                      onLongPress: () => _deleteTag(tag.id),
+                      child: _chip(
+                        label: tag.name,
+                        selected: _selectedTagIds.contains(tag.id),
+                        dotColor: projectColor(tag.color),
+                        onTap: () => setState(() {
+                          _selectedTagIds.contains(tag.id)
+                              ? _selectedTagIds.remove(tag.id)
+                              : _selectedTagIds.add(tag.id);
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+              if (widget.onCreateTag != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _newTagColor = _nextTagColor(_newTagColor)),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: projectColor(_newTagColor),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppTextField(
+                        controller: _newTag,
+                        hint: 'New tag',
+                        dense: true,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => _createTag(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _creatingTag ? null : _createTag,
+                      icon: _creatingTag
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : const Icon(Icons.add, size: 20, color: AppColors.primary),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Long-press a tag to delete it.',
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+              const SizedBox(height: 16),
+              _label('Due date'),
+              DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        )
+                      : const Text('Save'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  // No dialog: the page deletes it after an Undo snackbar.
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await widget.onDelete();
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.destructive),
+                  label: Text(
+                    'Delete task',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.destructive),
+                  ),
+                ),
               ),
             ],
-            const SizedBox(height: 16),
-            _label('Due date'),
-            DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                    : const Text('Save'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                // No dialog: the page deletes it after an Undo snackbar.
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await widget.onDelete();
-                },
-                icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.destructive),
-                label: Text('Delete task',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.destructive)),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-    ),
     );
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: AppTextStyles.labelMedium
-                .copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w600)),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: AppTextStyles.labelMedium.copyWith(
+        color: AppColors.mutedForeground,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 
   Widget _chip({
     required String label,
@@ -364,7 +395,11 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (dotColor != null) ...[
-              Container(width: 7, height: 7, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+              ),
               const SizedBox(width: 6),
             ],
             Text(

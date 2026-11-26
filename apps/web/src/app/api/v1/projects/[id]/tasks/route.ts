@@ -41,7 +41,7 @@ const createSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
-  status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]).default("TODO"),
+  status: z.enum(["BUG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"]).default("TODO"),
   dueDate: z.string().optional(),
   tagIds: z.array(z.string()).optional(),
 });

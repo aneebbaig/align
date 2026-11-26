@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       data: {
         ...(d.name !== undefined ? { name: d.name } : {}),
         ...(d.category !== undefined ? { category: d.category } : {}),
-        ...(d.eventId !== undefined ? { eventId: d.eventId || null } : {}),
+        ...(d.eventId !== undefined ? { eventId: d.eventId } : {}),
         ...(d.estimatedAmount !== undefined && !chosen ? { estimatedAmount: d.estimatedAmount } : {}),
         ...(d.actualAmount !== undefined ? { actualAmount: d.actualAmount } : {}),
         ...(d.paidAmount !== undefined ? { paidAmount: d.paidAmount } : {}),

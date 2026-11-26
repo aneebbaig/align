@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { sumTotals, paymentStatus, balanceOf, varianceOf, cheapestQuote, quoteSpread, groupTotals, budgetStatus, tippingExpense, unallocated } from "./totals";
+import { sumTotals, paymentStatus, balanceOf, varianceOf, cheapestQuote, quoteSpread, groupTotals, budgetStatus, tippingExpense, budgetOfEvents } from "./totals";
 
-const row = (estimatedAmount: number, actualAmount: number | null = null, paidAmount = 0, eventId: string | null = null, category = "MISC") =>
+const row = (estimatedAmount: number, actualAmount: number | null = null, paidAmount = 0, eventId = "e0", category = "MISC") =>
   ({ eventId, category, estimatedAmount, actualAmount, paidAmount });
 
 describe("wedding totals", () => {
@@ -31,9 +31,9 @@ describe("wedding totals", () => {
     expect(varianceOf(row(0, 80))).toBeNull();
   });
   it("groups totals by key", () => {
-    const g = groupTotals([row(100, null, 0, "a"), row(50, 60, 0, "a"), row(70, null, 0, null)], (e) => e.eventId ?? "general");
+    const g = groupTotals([row(100, null, 0, "a"), row(50, 60, 0, "a"), row(70, null, 0, "b")], (e) => e.eventId);
     expect(g.get("a")?.projected).toBe(160);
-    expect(g.get("general")?.estimated).toBe(70);
+    expect(g.get("b")?.estimated).toBe(70);
   });
   it("flags the cheapest quote only when there is a clear winner", () => {
     const q = (id: string, amount: number) => ({ id, amount, isChosen: false });
@@ -61,8 +61,8 @@ describe("wedding totals", () => {
     // a single expense bigger than the whole budget: over by its own cost at most
     expect(tippingExpense([r("x", 500)], 100)).toEqual({ id: "x", overBy: 400 });
   });
-  it("computes the budget left unallocated", () => {
-    expect(unallocated(1000, [{ budgetAllocated: 300 }, { budgetAllocated: 200 }])).toBe(500);
-    expect(unallocated(1000, [{ budgetAllocated: 700 }, { budgetAllocated: 600 }])).toBe(-300);
+  it("budgets a wedding as the sum of its events", () => {
+    expect(budgetOfEvents([{ budgetAllocated: 300 }, { budgetAllocated: 200 }])).toBe(500);
+    expect(budgetOfEvents([])).toBe(0);
   });
 });

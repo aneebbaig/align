@@ -8,7 +8,7 @@ import { requireBearerAuth } from "@/lib/v1-auth";
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).nullable().optional(),
-  status: z.enum(["TODO", "IN_PROGRESS", "REVIEW", "DONE"]).optional(),
+  status: z.enum(["BUG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   dueDate: z.string().nullable().optional(),
   order: z.number().int().optional(),

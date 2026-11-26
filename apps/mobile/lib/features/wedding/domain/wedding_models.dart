@@ -52,6 +52,7 @@ class WeddingSummary {
   final String brideName;
   final String groomName;
   final DateTime? weddingDate;
+  /// Sum of the wedding's event budgets (computed by the server).
   final int totalBudget;
   final String status; // PLANNING | IN_PROGRESS | DONE
   final int eventCount;
@@ -149,7 +150,7 @@ class WeddingExpense {
     required this.estimatedAmount,
     required this.paidAmount,
     required this.quotes,
-    this.eventId,
+    required this.eventId,
     this.actualAmount,
     this.vendorName,
     this.vendorPhone,
@@ -158,7 +159,7 @@ class WeddingExpense {
   });
 
   final String id;
-  final String? eventId; // null = whole wedding
+  final String eventId;
   final String name;
   final String category;
   final int estimatedAmount;
@@ -174,7 +175,7 @@ class WeddingExpense {
 
   factory WeddingExpense.fromJson(Map<String, dynamic> j) => WeddingExpense(
         id: j['id'] as String,
-        eventId: j['eventId'] as String?,
+        eventId: (j['eventId'] as String?) ?? '',
         name: (j['name'] as String?) ?? '',
         category: (j['category'] as String?) ?? 'MISC',
         estimatedAmount: _int(j['estimatedAmount']),
@@ -196,7 +197,6 @@ class WeddingPlan {
     required this.id,
     required this.brideName,
     required this.groomName,
-    required this.totalBudget,
     required this.status,
     required this.events,
     required this.expenses,
@@ -210,7 +210,6 @@ class WeddingPlan {
   final String brideName;
   final String groomName;
   final DateTime? weddingDate;
-  final int totalBudget;
   final int? haqMehr;
   final String? haqMehrNote;
   final String? notes;
@@ -220,12 +219,14 @@ class WeddingPlan {
 
   String get title => '$brideName & $groomName';
 
+  /// The wedding's budget is what its events add up to - there is no separate total.
+  int get budget => events.fold(0, (s, e) => s + e.budgetAllocated);
+
   factory WeddingPlan.fromJson(Map<String, dynamic> j) => WeddingPlan(
         id: j['id'] as String,
         brideName: (j['brideName'] as String?) ?? '',
         groomName: (j['groomName'] as String?) ?? '',
         weddingDate: _date(j['weddingDate']),
-        totalBudget: _int(j['totalBudget']),
         haqMehr: (j['haqMehr'] as num?)?.toInt(),
         haqMehrNote: j['haqMehrNote'] as String?,
         notes: j['notes'] as String?,

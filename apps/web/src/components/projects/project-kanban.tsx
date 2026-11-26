@@ -23,7 +23,7 @@ export function findColumn(columns: Columns, id: string): string | undefined {
 }
 
 // A quiet inline "add card" that expands into a title input at the bottom of a column.
-function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
+function AddCard({ onAdd, label }: { onAdd: (title: string) => Promise<void>; label: string }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,13 +45,13 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
         onClick={() => setOpen(true)}
         className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground/80 hover:bg-card hover:text-foreground transition-colors"
       >
-        <Plus className="h-3.5 w-3.5" /> Add task
+        <Plus className="h-3.5 w-3.5" /> {label}
       </button>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-2">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-2">
       <textarea
         ref={inputRef}
         autoFocus
@@ -63,8 +63,8 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
           if (e.key === "Enter") { e.preventDefault(); submit(); }
           if (e.key === "Escape") { setOpen(false); setValue(""); }
         }}
-        placeholder="What needs doing?"
-        className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        placeholder={label === "Add bug" ? "What is broken?" : "What needs doing?"}
+        className="block w-full min-w-0 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
       <div className="mt-1.5 flex items-center gap-2">
         <Button size="sm" className="h-7" onClick={submit} disabled={busy || !value.trim()}>Add</Button>
@@ -87,7 +87,7 @@ export function KanbanColumn({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <div className="flex w-72 shrink-0 flex-col lg:w-auto lg:min-w-0">
+    <div className="flex w-72 min-w-0 shrink-0 flex-col lg:w-auto">
       <div className="mb-2 flex items-center gap-2 px-1">
         {tasks.length > 0 && (
           <Checkbox
@@ -104,7 +104,7 @@ export function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex-1 rounded-xl border p-1.5 transition-colors",
+          "min-w-0 flex-1 rounded-xl border p-1.5 transition-colors",
           isOver ? "border-primary/40 bg-primary/5" : "border-transparent bg-muted/40",
         )}
       >
@@ -112,7 +112,7 @@ export function KanbanColumn({
           <div className="space-y-2">{children}</div>
         </SortableContext>
         <div className="pt-1">
-          <AddCard onAdd={onAdd} />
+          <AddCard onAdd={onAdd} label={status === "BUG" ? "Add bug" : "Add task"} />
         </div>
       </div>
     </div>

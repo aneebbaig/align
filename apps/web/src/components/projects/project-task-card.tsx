@@ -4,7 +4,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { MoreHorizontal, Pencil, Trash2, CalendarClock, Copy, Check } from "lucide-react";
+import { Bug, MoreHorizontal, Pencil, Trash2, CalendarClock, Copy, Check } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -106,7 +106,7 @@ export function ProjectTaskCard({
           aria-hidden
         />
         <div className="pl-3.5 pr-1.5 py-2.5">
-          <div className="flex items-start gap-1.5">
+          <div className="relative flex items-start gap-1.5">
             {!dragging && (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
@@ -122,14 +122,15 @@ export function ProjectTaskCard({
                 {selected && <Check className="h-3 w-3" />}
               </button>
             )}
+            {task.status === "BUG" && <Bug className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" aria-label="Bug" />}
             <p className={cn(
-              "flex-1 text-sm leading-snug line-clamp-3",
+              "min-w-0 flex-1 break-words text-sm leading-snug line-clamp-3",
               done ? "text-muted-foreground line-through" : "text-foreground",
             )}>
               {task.title}
             </p>
             {!dragging && (
-              <div className="flex items-center shrink-0 -mr-0.5 mt-[-2px]">
+              <div className="absolute right-0 -top-0.5 flex items-center rounded bg-card/90 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100 transition-opacity">
                 <button
                   onClick={copyTitle}
                   aria-label="Copy title"

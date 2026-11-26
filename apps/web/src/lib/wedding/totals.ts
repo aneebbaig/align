@@ -6,7 +6,7 @@
 // An expense is worth its actual cost where known, else its estimate.
 
 export interface CostRow {
-  eventId: string | null;
+  eventId: string;
   category: string;
   estimatedAmount: number;
   actualAmount: number | null;
@@ -117,8 +117,5 @@ export function tippingExpense<T extends CostRow & { id: string }>(rows: T[], bu
   return null;
 }
 
-export const allocatedTotal = (events: { budgetAllocated: number }[]) => events.reduce((s, e) => s + e.budgetAllocated, 0);
-
-/** Total budget not yet set aside for an event (negative = events add up to more than the total). */
-export const unallocated = (totalBudget: number, events: { budgetAllocated: number }[]) =>
-  totalBudget - allocatedTotal(events);
+/** The wedding's budget: what its events add up to. There is no separate whole-wedding number. */
+export const budgetOfEvents = (events: { budgetAllocated: number }[]) => events.reduce((s, e) => s + e.budgetAllocated, 0);

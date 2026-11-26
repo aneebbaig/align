@@ -14,8 +14,14 @@ import '../../data/datasources/projects_datasource.dart';
 import '../providers/projects_provider.dart';
 
 const _projectColors = [
-  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
-  '#F59E0B', '#10B981', '#06B6D4', '#3B82F6',
+  '#6366F1',
+  '#8B5CF6',
+  '#EC4899',
+  '#EF4444',
+  '#F59E0B',
+  '#10B981',
+  '#06B6D4',
+  '#3B82F6',
 ];
 
 Color _hex(String h) => Color(0xFF000000 | int.parse(h.replaceFirst('#', ''), radix: 16));
@@ -67,7 +73,9 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
     setState(() => _loading = true);
 
     try {
-      await ref.read(projectsDatasourceProvider).createProject(
+      await ref
+          .read(projectsDatasourceProvider)
+          .createProject(
             name: name,
             client: _clientCtrl.text.trim().isEmpty ? null : _clientCtrl.text.trim(),
             color: _color,
@@ -138,8 +146,10 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
               textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 20),
-            Text('Accent colour',
-                style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground)),
+            Text(
+              'Accent colour',
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground),
+            ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 12,
@@ -169,8 +179,10 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
               ],
             ),
             const SizedBox(height: 20),
-            Text('Due date',
-                style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground)),
+            Text(
+              'Due date',
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground),
+            ),
             const SizedBox(height: 8),
             DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
           ],

@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { sumTotals } from "@/lib/wedding/totals";
+import { budgetOfEvents, sumTotals } from "@/lib/wedding/totals";
 import { cn } from "@/lib/utils";
 import { BudgetMeter, BUDGET_TONE, budgetCopy } from "./budget-meter";
 import { WeddingCreateForm } from "./create-form";
@@ -14,7 +14,8 @@ import { WeddingPlan, PLAN_STATUS_CONFIG, fmt } from "./wedding-types";
 
 function WeddingCard({ plan, sym }: { plan: WeddingPlan; sym: string }) {
   const t = sumTotals(plan.expenses);
-  const tone = BUDGET_TONE[plan.totalBudget > 0 ? (t.projected > plan.totalBudget ? "over" : "ok") : "none"];
+  const budget = budgetOfEvents(plan.events);
+  const tone = BUDGET_TONE[budget > 0 ? (t.projected > budget ? "over" : "ok") : "none"];
   return (
     <Link href={`/wedding/${plan.id}`} className={cn("block rounded-xl border border-border bg-card p-5 space-y-3 transition-colors hover:border-foreground/20", plan.status === "DONE" && "opacity-70")}>
       <div className="flex items-start justify-between gap-3">
@@ -24,10 +25,10 @@ function WeddingCard({ plan, sym }: { plan: WeddingPlan; sym: string }) {
         </div>
         {plan.status === "DONE" && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", PLAN_STATUS_CONFIG.DONE.badge)}>Done</span>}
       </div>
-      <BudgetMeter size="sm" projected={t.projected} paid={t.paid} budget={plan.totalBudget} symbol={sym} />
+      <BudgetMeter size="sm" projected={t.projected} paid={t.paid} budget={budget} symbol={sym} />
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
         <span>Paid {fmt(t.paid, sym)} · To pay {fmt(t.outstanding, sym)}</span>
-        {plan.totalBudget > 0 && <span className={cn("font-medium", tone.text)}>{budgetCopy(t.projected, plan.totalBudget, sym, true)}</span>}
+        {budget > 0 && <span className={cn("font-medium", tone.text)}>{budgetCopy(t.projected, budget, sym, true)}</span>}
       </div>
     </Link>
   );

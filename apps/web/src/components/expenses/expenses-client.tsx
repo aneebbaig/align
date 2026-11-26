@@ -40,7 +40,7 @@ export function ExpensesClient({
   currentPeriod,
   lastPeriod,
   thisMonthSpent = 0,
-  budgetTotal = 0,
+  incomeLeftThisMonth = 0,
   quickPicks,
 }: {
   transactions: Transaction[];
@@ -51,7 +51,7 @@ export function ExpensesClient({
   currentPeriod: { month: number; year: number };
   lastPeriod: { month: number; year: number };
   thisMonthSpent?: number;
-  budgetTotal?: number;
+  incomeLeftThisMonth?: number;
   quickPicks?: QuickPicks;
 }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +64,6 @@ export function ExpensesClient({
   const expenseCategories = categories.filter((c) => c.type === "EXPENSE" || c.type === "BOTH");
   const baseSymbol = fundingContext.currencies.find((c) => c.isBase)?.symbol ?? "Rs";
 
-  const overUnder = budgetTotal - thisMonthSpent;
   const monthlyIncomeAvailable = fundingContext.monthlyIncomeAvailable;
 
   return (
@@ -81,36 +80,32 @@ export function ExpensesClient({
 
       <div className="space-y-6">
         {/* Summary cards - always current period */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border rounded-xl overflow-hidden border border-border">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden border border-border">
           <div className="bg-card px-5 py-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">This Month</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">This month</p>
             <div className="text-xl font-bold text-red-500 dark:text-red-400 tabnum">{baseSymbol} {fmt(thisMonthSpent)}</div>
           </div>
           <div className="bg-card px-5 py-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">Budget</p>
-            <div className="text-xl font-bold text-foreground tabnum">{budgetTotal > 0 ? `${baseSymbol} ${fmt(budgetTotal)}` : "-"}</div>
-            {budgetTotal === 0 && <div className="text-xs text-muted-foreground mt-0.5">Not set</div>}
-          </div>
-          <div className="bg-card px-5 py-4">
             <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5",
-              budgetTotal === 0 ? "text-muted-foreground/60" : overUnder >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
-              {budgetTotal === 0 ? "Remaining" : overUnder >= 0 ? "Under Budget" : "Over Budget"}
+              incomeLeftThisMonth >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
+              Left this month
             </p>
             <div className={cn("text-xl font-bold tabnum",
-              budgetTotal === 0 ? "text-muted-foreground" : overUnder >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
-              {budgetTotal === 0 ? "-" : `${baseSymbol} ${fmt(Math.abs(overUnder))}`}
+              incomeLeftThisMonth >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
+              {incomeLeftThisMonth < 0 ? "−" : ""}{baseSymbol} {fmt(Math.abs(incomeLeftThisMonth))}
             </div>
+            {incomeLeftThisMonth < 0 && <div className="text-xs text-red-500 mt-0.5">more than this month’s income</div>}
           </div>
           <div className="bg-card px-5 py-4">
             <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5",
               monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
-              Left from income
+              All-time income savings
             </p>
             <div className={cn("text-xl font-bold tabnum",
               monthlyIncomeAvailable >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400")}>
-              {baseSymbol} {fmt(Math.abs(monthlyIncomeAvailable))}
+              {monthlyIncomeAvailable < 0 ? "−" : ""}{baseSymbol} {fmt(Math.abs(monthlyIncomeAvailable))}
             </div>
-            {monthlyIncomeAvailable < 0 && <div className="text-xs text-red-500 mt-0.5">over-allocated</div>}
+            {monthlyIncomeAvailable < 0 && <div className="text-xs text-red-500 mt-0.5">more than your income savings</div>}
           </div>
         </div>
 

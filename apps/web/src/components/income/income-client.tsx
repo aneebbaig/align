@@ -100,12 +100,9 @@ export function IncomeClient({
 
         {/* All-time summary + Add button */}
         <div className="flex items-center justify-between flex-wrap gap-3">
+          {nativeBreakdown.length > 0 ? (
           <div className="grid gap-px bg-border rounded-xl overflow-hidden border border-border"
-            style={{ gridTemplateColumns: `repeat(${1 + nativeBreakdown.length + (nativeBreakdown.length > 0 && baseOnlyIncome > 0 ? 1 : 0)}, minmax(0,1fr))` }}>
-            <div className="bg-card px-5 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60 mb-1.5">Total Income (all time)</p>
-              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabnum">{baseSymbol} {(totalIncome / 100).toLocaleString()}</div>
-            </div>
+            style={{ gridTemplateColumns: `repeat(${nativeBreakdown.length + (baseOnlyIncome > 0 ? 1 : 0)}, minmax(0,1fr))` }}>
             {nativeBreakdown.map(({ currency, nativeTotal, baseTotal }) => (
               <div key={currency.id} className="bg-card px-5 py-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-500 dark:text-blue-400 mb-1.5 flex items-center gap-1">
@@ -122,6 +119,7 @@ export function IncomeClient({
               </div>
             )}
           </div>
+          ) : <div />}
           <Button title="Add income (Press N)" onClick={() => { setEditingTx(null); setOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700">
             <Plus className="h-4 w-4" />Add Income
           </Button>

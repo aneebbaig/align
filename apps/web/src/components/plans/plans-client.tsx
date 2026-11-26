@@ -12,11 +12,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createPlanner, deletePlanner, updatePlannerStatus } from "@/actions/plan";
+import { createPlanner, deletePlanner, updatePlanner, updatePlannerStatus } from "@/actions/plan";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { EditableTitle } from "@/components/shared/inline-fields";
 import { PageHeader } from "@/components/shared/page-header";
 import { planTotals } from "@/lib/plans/totals";
 import { fmtShort } from "@/components/wedding/wedding-types";
@@ -60,18 +61,23 @@ function PlanCard({ plan, sym, onStatus, onDelete }: {
   const boughtCount = plan.items.filter((i) => i.status === "PAID").length;
   const donePct = plan.items.length > 0 ? Math.round((boughtCount / plan.items.length) * 100) : 0;
   const closed = isClosed(plan);
+  const router = useRouter();
+  async function rename(name: string) {
+    const r = await updatePlanner(plan.id, { name });
+    if (r.success) router.refresh(); else toast.error(r.error ?? "Failed");
+  }
   return (
     <div className="relative rounded-xl border border-border bg-card hover:border-foreground/15 transition-colors">
       <Link href={`/plans/${plan.id}`} className="block p-5 pr-12 space-y-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <typeInfo.icon className="h-4 w-4 shrink-0" style={{ color: typeInfo.color }} />
-          <div className="min-w-0">
-            <p className="font-medium truncate">{plan.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-              {plan.targetDate && <span>{format(new Date(plan.targetDate), "d MMM yyyy")}</span>}
-              {badge && <Badge variant={badge.variant} className="px-2 py-0 text-[11px] font-medium">{badge.label}</Badge>}
-            </p>
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <typeInfo.icon className="h-4 w-4 shrink-0" style={{ color: typeInfo.color }} />
+            <EditableTitle value={plan.name} ariaLabel={`name of ${plan.name}`} onSave={rename} className="font-medium" />
           </div>
+          <p className="text-xs text-muted-foreground flex items-center gap-2 pl-6">
+            {plan.targetDate && <span>{format(new Date(plan.targetDate), "d MMM yyyy")}</span>}
+            {badge && <Badge variant={badge.variant} className="px-2 py-0 text-[11px] font-medium">{badge.label}</Badge>}
+          </p>
         </div>
         <div className="space-y-1.5">
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
