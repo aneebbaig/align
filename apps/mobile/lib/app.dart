@@ -31,6 +31,7 @@ import 'features/projects/presentation/pages/project_detail_page.dart';
 import 'features/projects/presentation/pages/quick_add_project_page.dart';
 import 'features/income/presentation/pages/quick_add_income_page.dart';
 import 'features/loans/presentation/pages/quick_add_loan_page.dart';
+import 'features/settings/presentation/providers/menu_prefs_provider.dart';
 import 'shell/app_scaffold.dart';
 import 'shell/money_page.dart';
 import 'shell/more_page.dart';
@@ -78,7 +79,9 @@ GoRouter goRouter(Ref ref) {
 
       if (!isAuthenticated && !isOnLogin) return '/login';
       if (isAuthenticated && (isOnLogin || onSplash)) {
-        final dest = pendingLink ?? '/dashboard';
+        // Don't land on a section this person hid from their menu.
+        final hidden = ref.read(menuPrefsProvider).hidden;
+        final dest = pendingLink ?? (hidden.contains('dashboard') ? '/money' : '/dashboard');
         pendingLink = null;
         return dest;
       }

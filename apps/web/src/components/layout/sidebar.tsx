@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { AlignLogo } from "@/components/shared/align-logo";
 import { APP_NAME } from "@/lib/brand";
 import { useState } from "react";
+import { isHrefHidden } from "@/lib/hidden-sections";
 
 const NAV_GROUPS = [
   {
@@ -52,7 +53,7 @@ const NAV_GROUPS = [
   },
 ];
 
-export function Sidebar({ role }: { role?: string }) {
+export function Sidebar({ role, hiddenSections = [] }: { role?: string; hiddenSections?: string[] }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const isSuperAdmin = role === "SUPER_ADMIN";
@@ -79,7 +80,7 @@ export function Sidebar({ role }: { role?: string }) {
 
       {/* Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.filter((g) => g.items.some(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections))).map((group) => (
           <div key={group.label} className="mb-1">
             {!collapsed && (
               <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45 px-5 py-1.5">
@@ -89,7 +90,7 @@ export function Sidebar({ role }: { role?: string }) {
             {collapsed && <div className="my-1 mx-2 border-b border-sidebar-border" />}
             <div>
               {group.items
-                .filter(({ href }) => href !== "/vault" || isSuperAdmin)
+                .filter(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections))
                 .map(({ href, label, icon: Icon }) => {
                   const active =
                     pathname === href ||

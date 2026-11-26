@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
@@ -11,6 +10,9 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
+import '../../../../core/widgets/day_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../../../core/widgets/form_section.dart';
 import '../../data/datasources/loans_datasource.dart';
 import '../../domain/entities/loan_entity.dart';
@@ -75,15 +77,12 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
     return _isTopUp || p <= widget.loan.remainingPaisas;
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) setState(() => _date = picked);
+  bool get _showBudgetChoice {
+    final open = ref.read(budgetProvider).asData?.value;
+    return _offersEntry && _book && needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
   }
+
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
 
   Future<void> _submit() async {
     final paisas = _amountPaisas;
@@ -92,8 +91,8 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
     setState(() => _loading = true);
     final ds = ref.read(loansDatasourceProvider);
     final notes = _notesCtrl.text.trim().isNotEmpty ? _notesCtrl.text.trim() : null;
-    final month = _book && _fileUnderDateBudget ? _date.month : null;
-    final year = _book && _fileUnderDateBudget ? _date.year : null;
+    final month = _fileUnder ? _date.month : null;
+    final year = _fileUnder ? _date.year : null;
     try {
       if (_isTopUp) {
         await ds.addToLoan(
@@ -164,13 +163,14 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
             FormSection(
               title: 'When',
               children: [
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Text(DateFormat('EEE, d MMM y').format(_date), style: AppTextStyles.bodyMedium),
+                DayStrip(
+                  selected: _date,
+                  onChanged: (d) => setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute)),
                 ),
-                if (_offersEntry && _book)
+                if (_showBudgetChoice)
                   BudgetPeriodField(
                     date: _date,
+                    countIt: true,
                     checked: _fileUnderDateBudget,
                     onChanged: (v) => setState(() => _fileUnderDateBudget = v),
                   ),

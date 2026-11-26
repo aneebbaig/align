@@ -8,6 +8,7 @@ import { toPaisas } from "@/lib/utils";
 import { computeFinancialPosition } from "@/lib/financial-position";
 import { creditPot, debitPot } from "@/lib/pot-helpers";
 import { getCurrencies, getPotBalancesInBase } from "@/lib/currency-helpers";
+import { deleteInvestmentCategoryCore } from "@/lib/investments/delete-category";
 import { computeInvestmentSuggestion, loansDueThisMonth } from "@/lib/investments/suggestion";
 import { CLOSED_LOAN_STATUSES } from "@/lib/loans/balance";
 import {
@@ -452,6 +453,23 @@ export async function deleteInvestment(id: string): Promise<ActionResult> {
     return { success: true };
   } catch (e) {
     console.error("[deleteInvestment]", e);
+    return { success: false, error: "Failed to delete investment" };
+  }
+}
+
+export async function deleteInvestmentCategory(planCategoryId: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const deleted = await deleteInvestmentCategoryCore(userId, planCategoryId);
+    if (!deleted) return { success: false, error: "Investment not found" };
+    revalidatePath("/savings");
+    revalidatePath("/investments");
+    revalidatePath("/expenses");
+    revalidatePath("/income");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (e) {
+    console.error("[deleteInvestmentCategory]", e);
     return { success: false, error: "Failed to delete investment" };
   }
 }

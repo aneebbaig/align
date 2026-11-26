@@ -60,6 +60,9 @@ class ApiConstants {
   static String investmentContributions(String id) => '/investments/$id/contributions';
   static String investmentContributionById(String id, String cid) =>
       '/investments/$id/contributions/$cid';
+  static const String preferences = '/preferences';
+  static String investmentPlanCategoryById(String categoryId) =>
+      '/investment-plan/categories/$categoryId';
   static String investmentPlanCategoryContributions(String categoryId) =>
       '/investment-plan/categories/$categoryId/contributions';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDayChips, stepDay, readLastUsed, parseDateStr, toDateStr, isInStrip } from "./day-strip";
+import { isOtherPeriod, buildDayChips, stepDay, readLastUsed, parseDateStr, toDateStr, isInStrip } from "./day-strip";
 
 const today = new Date(2026, 10, 26, 15, 0); // Thu 26 Nov 2026, local
 
@@ -50,5 +50,14 @@ describe("readLastUsed", () => {
 describe("date strings", () => {
   it("round-trips local days", () => {
     expect(toDateStr(parseDateStr("2026-03-08"))).toBe("2026-03-08");
+  });
+});
+
+describe("isOtherPeriod", () => {
+  it("is true only when the date's month differs from the home period", () => {
+    expect(isOtherPeriod("2026-10-30", { month: 11, year: 2026 })).toBe(true);
+    expect(isOtherPeriod("2025-11-30", { month: 11, year: 2026 })).toBe(true);
+    expect(isOtherPeriod("2026-11-02", { month: 11, year: 2026 })).toBe(false);
+    expect(isOtherPeriod("2026-11-02", undefined)).toBe(false);
   });
 });

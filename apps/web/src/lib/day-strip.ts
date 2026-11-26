@@ -69,3 +69,10 @@ export function readLastUsed(raw: string | null, now: Date): string | null {
 export function rememberEntryDate(date: string, now: Date, storage: Pick<Storage, "setItem"> | undefined = typeof window !== "undefined" ? window.localStorage : undefined) {
   try { storage?.setItem(LAST_ENTRY_DATE_KEY, JSON.stringify({ date, savedAt: now.toISOString() })); } catch { /* storage unavailable */ }
 }
+
+/** True when a yyyy-MM-dd date falls in a different budget month than the home period. */
+export function isOtherPeriod(date: string, home: { month: number; year: number } | undefined | null): boolean {
+  if (!date || !home) return false;
+  const [year, month] = date.split("-").map(Number);
+  return month !== home.month || year !== home.year;
+}

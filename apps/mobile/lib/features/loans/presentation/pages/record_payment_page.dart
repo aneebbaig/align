@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
@@ -10,6 +9,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
+import '../../../../core/widgets/day_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../../../core/widgets/form_section.dart';
 import '../../../../core/widgets/funding_source_field.dart';
 import '../../data/datasources/loans_datasource.dart';
@@ -77,26 +79,12 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
     return p != null && p <= cap;
   }
 
-  Future<void> _pickDate() async {
-    _amountFocus.unfocus();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _date = picked);
+  bool get _showBudgetChoice {
+    final open = ref.read(budgetProvider).asData?.value;
+    return needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
   }
+
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
 
   Future<void> _submit() async {
     final paisas = _amountPaisas;
@@ -112,8 +100,8 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
               amountPaisas: paisas,
               date: _date,
               notes: _notesCtrl.text.trim().isNotEmpty ? _notesCtrl.text.trim() : null,
-              budgetMonth: _fileUnderDateBudget ? _date.month : null,
-              budgetYear: _fileUnderDateBudget ? _date.year : null,
+              budgetMonth: _fileUnder ? _date.month : null,
+              budgetYear: _fileUnder ? _date.year : null,
               fundingPotId: widget.loan.type == 'RECEIVED' ? _fundingPotId : null,
             );
       } else {
@@ -122,8 +110,8 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
               amountPaisas: paisas,
               date: _date,
               notes: _notesCtrl.text.trim().isNotEmpty ? _notesCtrl.text.trim() : null,
-              budgetMonth: _fileUnderDateBudget ? _date.month : null,
-              budgetYear: _fileUnderDateBudget ? _date.year : null,
+              budgetMonth: _fileUnder ? _date.month : null,
+              budgetYear: _fileUnder ? _date.year : null,
               fundingPotId: widget.loan.type == 'RECEIVED' ? _fundingPotId : null,
               skipTransaction: !_bookTransaction,
             );
@@ -145,10 +133,6 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
   @override
   Widget build(BuildContext context) {
     final submitting = _loading;
-    final dateLabel = DateFormat('EEE, d MMM y').format(_date);
-    final isToday = _date.year == DateTime.now().year &&
-        _date.month == DateTime.now().month &&
-        _date.day == DateTime.now().day;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -262,38 +246,20 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
             FormSection(
               title: 'When',
               children: [
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined,
-                            size: 16, color: AppColors.mutedForeground),
-                        const SizedBox(width: 10),
-                        Text(
-                          isToday ? 'Today' : dateLabel,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: isToday ? AppColors.mutedForeground : AppColors.foreground,
-                          ),
-                        ),
-                        const Spacer(),
-                        const Icon(Icons.keyboard_arrow_down,
-                            size: 16, color: AppColors.mutedForeground),
-                      ],
-                    ),
+                DayStrip(
+                  selected: _date,
+                  onChanged: (d) {
+                    _amountFocus.unfocus();
+                    setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute));
+                  },
+                ),
+                if (_showBudgetChoice)
+                  BudgetPeriodField(
+                    date: _date,
+                    countIt: true,
+                    checked: _fileUnderDateBudget,
+                    onChanged: (v) => setState(() => _fileUnderDateBudget = v),
                   ),
-                ),
-                BudgetPeriodField(
-                  date: _date,
-                  checked: _fileUnderDateBudget,
-                  onChanged: (v) => setState(() => _fileUnderDateBudget = v),
-                ),
               ],
             ),
 
@@ -315,8 +281,8 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
               FundingSourceField(
                 potId: _fundingPotId,
                 onChanged: (potId) => setState(() => _fundingPotId = potId),
-                month: _fileUnderDateBudget ? _date.month : null,
-                year: _fileUnderDateBudget ? _date.year : null,
+                month: _fileUnder ? _date.month : null,
+                year: _fileUnder ? _date.year : null,
               ),
             ],
 

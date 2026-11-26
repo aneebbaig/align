@@ -7,6 +7,9 @@ import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/providers/funding_context_provider.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
+import '../../../../core/widgets/day_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -134,40 +137,9 @@ class _SheetHeader extends StatelessWidget {
       );
 }
 
-Future<DateTime?> _pickDate(BuildContext context, DateTime initial) => showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-
-Widget _dateButton(BuildContext context, DateTime date, VoidCallback onTap) => GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        child: Text(shortDate(date), style: AppTextStyles.bodyMedium),
-      ),
-    );
-
 // ── Add money ─────────────────────────────────────────────────────────────
 // Works whether the target already has a linked Investment (log a top-up)
-// or is a plan category with no money in it yet (lazily creates the SIP on
+// or is a plan category with no money in it yet (lazily creates the investment on
 // the server via addMoneyToCategory).
 
 class _AddMoneySheet extends ConsumerStatefulWidget {
@@ -187,6 +159,13 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   bool _loading = false;
   bool _book = true;
   bool _fileUnderDate = false;
+
+  bool get _showBudgetChoice {
+    final open = ref.watch(budgetProvider).asData?.value;
+    return _book && needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
+  }
+
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDate;
 
   bool get _valid {
     final p = _toPaisas(_amount.text);
@@ -209,8 +188,8 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     try {
       HapticFeedback.mediumImpact();
       final ds = ref.read(investmentsDatasourceProvider);
-      final month = _book && _fileUnderDate ? _date.month : null;
-      final year = _book && _fileUnderDate ? _date.year : null;
+      final month = _fileUnder ? _date.month : null;
+      final year = _fileUnder ? _date.year : null;
       if (widget.investment != null) {
         await ds.logContribution(
           investmentId: widget.investment!.id,
@@ -271,10 +250,10 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
                 style: AppTextStyles.bodySmall),
           ],
           const SizedBox(height: 12),
-          _dateButton(context, _date, () async {
-            final p = await _pickDate(context, _date);
-            if (p != null) setState(() => _date = p);
-          }),
+          DayStrip(
+            selected: _date,
+            onChanged: (d) => setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute)),
+          ),
           const SizedBox(height: 12),
           _Field(controller: _notes, hint: 'Notes (optional)'),
           const SizedBox(height: 8),
@@ -284,14 +263,16 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
             onChanged: (v) => setState(() => _book = v),
           ),
           if (_book) ...[
-            BudgetPeriodField(
-              date: _date,
-              checked: _fileUnderDate,
-              onChanged: (v) => setState(() => _fileUnderDate = v),
-            ),
+            if (_showBudgetChoice)
+              BudgetPeriodField(
+                date: _date,
+                countIt: true,
+                checked: _fileUnderDate,
+                onChanged: (v) => setState(() => _fileUnderDate = v),
+              ),
             if (!widget.isWithdrawal) _AvailableIncome(
-              month: _fileUnderDate ? _date.month : null,
-              year: _fileUnderDate ? _date.year : null,
+              month: _fileUnder ? _date.month : null,
+              year: _fileUnder ? _date.year : null,
             ),
           ],
         ],

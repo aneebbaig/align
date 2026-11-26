@@ -21,7 +21,9 @@ import { isLoanClosed, normalizePersonName, offersWriteOffExpense } from "@/lib/
 import { getExpenseFundingContext } from "@/actions/expenses";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BudgetPeriodOverride, monthYearFromDateStr } from "@/components/shared/budget-period-override";
+import { monthYearFromDateStr } from "@/components/shared/budget-period-override";
+import { EntryDate, useLastUsedDate } from "@/components/shared/entry-date";
+import { rememberEntryDate } from "@/lib/day-strip";
 import { SplitFunding, FundingSelectContent, type FundingOption } from "@/components/shared/split-funding";
 import { FormSection, MoreOptions } from "@/components/shared/form-section";
 import { cn } from "@/lib/utils";
@@ -53,6 +55,7 @@ const STATUS_BADGE: Record<string, string> = {
 export function LoansClient({
   loans, summary, fundingContext, currentPeriod,
 }: { loans: Loan[]; summary: Summary; fundingContext: FundingContext; currentPeriod: { month: number; year: number } }) {
+  const lastUsedDate = useLastUsedDate();
   const [createOpen, setCreateOpen] = useState(false);
   const [fileCreateUnderDateBudget, setFileCreateUnderDateBudget] = useState(false);
   const [fileUnderDateBudget, setFileUnderDateBudget] = useState(false);
@@ -138,6 +141,7 @@ export function LoansClient({
           ? "Loan added - tracking only, no entry recorded"
           : form.type === "GIVEN" ? "Loan added - recorded as an expense" : "Loan added - recorded as income"
       );
+      rememberEntryDate(form.date, new Date());
       setCreateOpen(false);
       setForm({ personName: "", description: "", type: "GIVEN", principalAmount: "", date: format(new Date(), "yyyy-MM-dd"), dueDate: "", notes: "" });
       setFileCreateUnderDateBudget(false);
@@ -161,6 +165,7 @@ export function LoansClient({
       : await writeOffLoan(entryDialog.loan.id, { ...common, bookExpense: entryForm.book });
     if (result.success) {
       toast.success(entryDialog.kind === "TOP_UP" ? "Added to loan" : entryDialog.loan.type === "GIVEN" ? "Written off" : "Marked as forgiven");
+      rememberEntryDate(entryForm.date, new Date());
       setEntryDialog(null);
     } else toast.error(result.error ?? "Failed");
     setLoading(false);
@@ -221,6 +226,7 @@ export function LoansClient({
         : !bookPayTransaction ? "Payment recorded - tracking only, no entry recorded"
         : isReceived ? "Payment recorded & expense created!" : "Payment recorded & added to income!"
       );
+      rememberEntryDate(payForm.date, new Date());
       setPayOpen(null);
       setEditingPaymentId(null);
 
@@ -297,9 +303,11 @@ export function LoansClient({
           <p className="text-xl font-bold text-red-500 tabnum">{baseSymbol} {(summary.totalReceived / 100).toLocaleString()}</p>
         </div>
         <div className="bg-background px-5 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50 mb-1.5">Net</p>
-          <p className={cn("text-xl font-bold tabnum", summary.netPosition >= 0 ? "text-foreground" : "text-red-500")}>
-            {summary.netPosition >= 0 ? "+" : ""}{baseSymbol} {(Math.abs(summary.netPosition) / 100).toLocaleString()}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50 mb-1.5">
+            {summary.netPosition === 0 ? "All square" : summary.netPosition < 0 ? "Net – you owe" : "Net – owed to you"}
+          </p>
+          <p className={cn("text-xl font-bold tabnum", summary.netPosition < 0 ? "text-red-500" : summary.netPosition > 0 ? "text-emerald-500" : "text-foreground")}>
+            {summary.netPosition === 0 ? "" : summary.netPosition > 0 ? "+" : "-"}{baseSymbol} {(Math.abs(summary.netPosition) / 100).toLocaleString()}
           </p>
         </div>
       </div>
@@ -411,11 +419,14 @@ export function LoansClient({
             </FormSection>
 
             <FormSection title="When">
-              <div>
-                <Label>Date</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
-              </div>
-              <BudgetPeriodOverride date={form.date} checked={fileCreateUnderDateBudget} onChange={setFileCreateUnderDateBudget} />
+              <EntryDate
+                date={form.date}
+                onDateChange={(d) => setForm((p) => ({ ...p, date: d }))}
+                homePeriod={currentPeriod}
+                checked={fileCreateUnderDateBudget}
+                onCheckedChange={setFileCreateUnderDateBudget}
+                lastUsed={lastUsedDate}
+              />
             </FormSection>
 
             <MoreOptions>
@@ -465,15 +476,14 @@ export function LoansClient({
             </FormSection>
 
             <FormSection title="When">
-              <div>
-                <Label>Date</Label>
-                <Input type="date" value={payForm.date} onChange={(e) => setPayForm((p) => ({ ...p, date: e.target.value }))} />
-              </div>
-              <BudgetPeriodOverride
+              <EntryDate
                 date={payForm.date}
+                onDateChange={(d) => setPayForm((p) => ({ ...p, date: d }))}
+                homePeriod={currentPeriod}
                 checked={fileUnderDateBudget}
-                onChange={setFileUnderDateBudget}
+                onCheckedChange={setFileUnderDateBudget}
                 affectsFunding={payLoan?.type === "RECEIVED"}
+                lastUsed={lastUsedDate}
               />
             </FormSection>
 
@@ -598,10 +608,14 @@ export function LoansClient({
                   </p>
                 )}
               </div>
-              <div className="space-y-1.5">
-                <Label>Date</Label>
-                <Input type="date" value={entryForm.date} onChange={(e) => setEntryForm((f) => ({ ...f, date: e.target.value }))} />
-              </div>
+              <EntryDate
+                date={entryForm.date}
+                onDateChange={(d) => setEntryForm((f) => ({ ...f, date: d }))}
+                homePeriod={entryForm.book ? currentPeriod : undefined}
+                checked={entryForm.fileUnderDate}
+                onCheckedChange={entryForm.book ? (v) => setEntryForm((f) => ({ ...f, fileUnderDate: v })) : undefined}
+                lastUsed={lastUsedDate}
+              />
               <div className="space-y-1.5">
                 <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
                 <Textarea rows={2} value={entryForm.notes} onChange={(e) => setEntryForm((f) => ({ ...f, notes: e.target.value }))} />
@@ -615,9 +629,6 @@ export function LoansClient({
                       <span className="block text-xs text-muted-foreground">Uncheck to track this without an entry in Expenses/Income</span>
                     </Label>
                   </div>
-                  {entryForm.book && (
-                    <BudgetPeriodOverride date={entryForm.date} checked={entryForm.fileUnderDate} onChange={(v) => setEntryForm((f) => ({ ...f, fileUnderDate: v }))} />
-                  )}
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">

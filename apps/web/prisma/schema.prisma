@@ -30,6 +30,8 @@ model User {
   currentBudgetMonth     Int?
   currentBudgetYear      Int?
   emergencyFundMonths    Int       @default(6)
+  // Menu sections this login hides (keys in src/lib/hidden-sections.ts). Personal, per login.
+  hiddenSections         String[]  @default([])
   notifyBudgetWarning    Boolean   @default(true)
   notifyDoomSpending     Boolean   @default(true)
   notifyLoanDue          Boolean   @default(true)

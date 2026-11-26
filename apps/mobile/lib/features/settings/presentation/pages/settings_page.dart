@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/server_url.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -11,6 +13,8 @@ import '../../../../core/widgets/app_list_row.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../routines/data/log_nudge.dart';
 import '../../../routines/data/reminder_service.dart';
+import '../../domain/menu_sections.dart';
+import '../providers/menu_prefs_provider.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -73,6 +77,9 @@ class SettingsPage extends ConsumerWidget {
                       ],
                     ),
                   ),
+
+                // Menu section
+                const _MenuSettings(),
 
                 // Server section
                 const _SectionLabel('Server'),
@@ -271,6 +278,58 @@ class _NudgeSettingsState extends State<_NudgeSettings> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// "Show in menu" switches, shared with the web app. Older servers have no
+/// preferences endpoint, so the whole card disappears instead of erroring.
+class _MenuSettings extends ConsumerWidget {
+  const _MenuSettings();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(menuPrefsProvider);
+    if (!prefs.supported) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionLabel('Menu'),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                child: Text(
+                  'Hide sections you do not use. Only changes your own menu.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
+              for (final section in phoneSections)
+                SwitchListTile(
+                  value: !prefs.hidden.contains(section.key),
+                  activeThumbColor: AppColors.primary,
+                  title: Text(section.label, style: AppTextStyles.bodyMedium),
+                  onChanged: (shown) async {
+                    try {
+                      await ref.read(menuPrefsProvider.notifier).setHidden(section.key, !shown);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ref.read(toastServiceProvider).error(
+                              context,
+                              e is AppException ? e.message : 'Failed to save',
+                            );
+                      }
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

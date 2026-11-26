@@ -146,8 +146,8 @@ export function LoanCard({ loan, baseSymbol, expanded, onToggle, onPay, onMarkPa
 
         <div className="mt-3 pt-3 border-t border-border/60 flex items-center gap-2">
           <Button size="sm" className="h-8 flex-1 sm:flex-none" onClick={onPay}>Record payment</Button>
-          <Button size="sm" variant="ghost" className="h-8 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700" onClick={onMarkPaid}>
-            <CheckCheck className="h-3.5 w-3.5" /><span className="hidden min-[420px]:inline">Paid in full</span>
+          <Button size="sm" variant="outline" className="h-8" onClick={onMarkPaid}>
+            <CheckCheck className="h-3.5 w-3.5" />Mark paid in full
           </Button>
           <div className="ml-auto flex items-center">{historyToggle}{menu}</div>
         </div>
