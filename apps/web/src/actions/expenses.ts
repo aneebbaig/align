@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/generated/prisma/client";
-import { getAuthenticatedUser, getUserId } from "@/lib/session";
+import { getAuthenticatedUser, getLoginUser, getUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { transactionSchema } from "@/lib/validations";
 import { ActionResult } from "@/types";
@@ -99,7 +99,9 @@ export async function createTransaction(data: {
   splitSources?: { source: "INCOME" | "SAVINGS_POT"; potId?: string; currencyId?: string; pkrAmount: number }[];
 }): Promise<ActionResult> {
   try {
-    const user = await getAuthenticatedUser({ email: true, currentBudgetMonth: true, currentBudgetYear: true, notifyDoomSpending: true, notifyBudgetWarning: true });
+    const user = await getAuthenticatedUser({ currentBudgetMonth: true, currentBudgetYear: true });
+    // Alert emails go to the person who is actually logged in, per their own preferences.
+    const login = await getLoginUser({ email: true, notifyDoomSpending: true, notifyBudgetWarning: true });
     // New transactions are filed under the user's open budget period (not their calendar date),
     // unless an explicit override month is supplied.
     const period = (data.budgetMonth && data.budgetYear)
@@ -206,10 +208,10 @@ export async function createTransaction(data: {
         where: { userId: user.id, type: "EXPENSE", date: { gte: twoHoursAgo } },
         select: { amount: true },
       });
-      if (recentExpenses.length >= 3 && user.notifyDoomSpending) {
+      if (recentExpenses.length >= 3 && login.notifyDoomSpending) {
         const total = recentExpenses.reduce((s, t) => s + t.amount, 0) + amountPaisas;
         const base = await getBaseCurrency();
-        await sendEmail(user.email as string, "🛑 Doom Spending Alert", doomSpendingEmail(recentExpenses.length + 1, total, base.symbol));
+        await sendEmail(login.email as string, "🛑 Doom Spending Alert", doomSpendingEmail(recentExpenses.length + 1, total, base.symbol));
       }
 
       const [budgetCat, spent] = await Promise.all([
@@ -222,14 +224,14 @@ export async function createTransaction(data: {
           _sum: { amount: true },
         }),
       ]);
-      if (budgetCat && user.notifyBudgetWarning) {
+      if (budgetCat && login.notifyBudgetWarning) {
         const totalSpent = (spent._sum.amount ?? 0) + amountPaisas;
         const pct = Math.round((totalSpent / budgetCat.allocatedAmount) * 100);
         if (pct >= 85 && pct < 100) {
           const prevPct = Math.round(((totalSpent - amountPaisas) / budgetCat.allocatedAmount) * 100);
           if (prevPct < 85) {
             const base = await getBaseCurrency();
-            await sendEmail(user.email as string, `⚠️ Budget Warning: ${budgetCat.category.name}`, budgetWarningEmail(budgetCat.category.name, pct, totalSpent, budgetCat.allocatedAmount, base.symbol));
+            await sendEmail(login.email as string, `⚠️ Budget Warning: ${budgetCat.category.name}`, budgetWarningEmail(budgetCat.category.name, pct, totalSpent, budgetCat.allocatedAmount, base.symbol));
           }
         }
       }

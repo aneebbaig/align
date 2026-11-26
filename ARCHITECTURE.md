@@ -17,11 +17,11 @@ Standard Next.js App Router. The parts worth knowing:
 
 - `src/app/(app)/` is the signed-in UI. Server components fetch through server actions and hand data to client components.
 - `src/app/api/v1/` is the REST API the phone uses. Every route checks a bearer token through `requireBearerAuth`.
-- `src/actions/` is the web UI's data layer. Every query is scoped by the session's `userId`.
+- `src/actions/` is the web UI's data layer. Every query is scoped by the household owner id (`getUserId()`), not the login id; see "One household" below.
 - `src/lib/` holds the shared bits: `prisma`, the token/session helpers, `utils`, `constants`.
 - `prisma/` is the schema, migrations, and seed script.
 
-Auth is [better-auth](https://www.better-auth.com), configured in `src/lib/auth.ts`, and works two ways for the two clients. The web pages use a cookie session (`getUserId`, `requireUser`). The API uses an `Authorization: Bearer` header via better-auth's bearer plugin (`requireBearerAuth`). Both resolve to the same session. Optional TOTP two-factor comes from better-auth's `twoFactor` plugin, and its secrets are encrypted with `BETTER_AUTH_SECRET` (falling back to `AUTH_SECRET`). The `totp*` columns on `users` are left over from an older hand-rolled 2FA and are unused.
+Auth is [better-auth](https://www.better-auth.com), configured in `src/lib/auth.ts`, and works two ways for the two clients. The web pages use a cookie session (`getUserId` for data scope, `getLoginUserId` / `requireUser` for the real person). The API uses an `Authorization: Bearer` header via better-auth's bearer plugin (`requireBearerAuth`). Both resolve to the same session. Optional TOTP two-factor comes from better-auth's `twoFactor` plugin, and its secrets are encrypted with `BETTER_AUTH_SECRET` (falling back to `AUTH_SECRET`). The `totp*` columns on `users` are left over from an older hand-rolled 2FA and are unused.
 
 Worth repeating from the contributing guide: route `params` are async here, so `await params` in every handler. When in doubt, mirror an existing route in `src/app/api/v1/`.
 
@@ -30,7 +30,7 @@ Worth repeating from the contributing guide: route `params` are async here, so `
 This is the part to understand before changing anything financial. The whole app runs on a zero-based model: money can't appear or move without a declared source.
 
 - Income only enters through the income page, and it raises that month's "ready to assign". Unspent income carries forward: a period's available income is what earlier periods left unspent (an overspent period carries nothing, never less than zero) plus its own, and spending in a past period must also fit every later running total (`src/lib/budget/carryover.ts`).
-- The budget is household-wide (income, spending, carry-over and the open period are summed or shared across the household's users), while funding checks and pots stay per person.
+- One household: a database is one household, and every login (for example a couple) is just another admin over the same data. All shared data (income, expenses, pots, loans, investments, budget and open period, plans, planner, wedding, lists, tasks, projects, calendar, perfumes, categories, tags, routines) is scoped by one household owner id, the oldest user (`getHouseholdOwnerId()` in `src/lib/household.ts`). `getUserId()` and `requireBearerAuth().id` return that id; funding checks, pots and totals therefore see everything. Personal and tied to the real login (`getLoginUserId()`, `auth.loginId`): authentication, sessions, 2FA, profile, notification preferences and the Vault. The owner cannot be deleted. The `one_household` migration folded existing per-login data onto the owner.
 - Every expense is funded from something real: monthly income or a savings pot. A pot-funded expense deducts from the pot and writes a ledger row in the same transaction. Editing or deleting one reverses the old movement first.
 - Pots hold a separate balance per currency. Putting money in requires a source (income, or a transfer from another pot), and it's checked against what income is actually left. Transfers move both sides in one transaction. There's no standalone withdraw; you spend from a pot by making an expense funded by it.
 - Investments track what you put in and what they're worth. Adding money raises both; withdrawing lowers only the current value, and gain counts what was taken out (current + withdrawn − invested). Either can book an expense/income entry, or not.

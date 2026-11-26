@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerUser } from "@/lib/session";
+import { getHouseholdOwnerId } from "@/lib/household";
 import { prisma } from "@/lib/prisma";
 import { ActionResult } from "@/types";
 import bcrypt from "bcryptjs";
@@ -76,6 +77,8 @@ export async function adminDeleteUser(id: string): Promise<ActionResult> {
   try {
     const selfId = await requireSuperAdmin();
     if (id === selfId) return { success: false, error: "You cannot delete your own account" };
+    // All household data hangs off the owner (oldest user); deleting it would cascade the lot.
+    if (id === (await getHouseholdOwnerId())) return { success: false, error: "The household owner (oldest user) cannot be deleted" };
     await prisma.user.delete({ where: { id } });
     revalidatePath("/settings");
     return { success: true };

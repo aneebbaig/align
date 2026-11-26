@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { getCurrentPeriod } from "@/lib/month";
-import { getHouseholdUserIds } from "@/lib/household";
 import { getIncomeCarry } from "@/lib/expenses/funding";
 
 export async function GET(req: NextRequest) {
@@ -18,8 +17,6 @@ export async function GET(req: NextRequest) {
 
     const { month, year } = getCurrentPeriod(user.currentBudgetMonth, user.currentBudgetYear);
 
-    const ids = await getHouseholdUserIds();
-
     const [budget, expenseTxns, incomeAgg] = await Promise.all([
       prisma.budget.findUnique({
         where: { month_year: { month, year } },
@@ -31,11 +28,11 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.transaction.findMany({
-        where: { userId: { in: ids }, type: "EXPENSE", budgetMonth: month, budgetYear: year },
+        where: { userId: auth.id, type: "EXPENSE", budgetMonth: month, budgetYear: year },
         select: { categoryId: true, amount: true },
       }),
       prisma.transaction.aggregate({
-        where: { userId: { in: ids }, type: "INCOME", budgetMonth: month, budgetYear: year },
+        where: { userId: auth.id, type: "INCOME", budgetMonth: month, budgetYear: year },
         _sum: { amount: true },
       }),
     ]);
@@ -46,9 +43,7 @@ export async function GET(req: NextRequest) {
     }
 
     const totalIncomePaisas = incomeAgg._sum.amount ?? 0;
-    const carriedOverPaisas = (
-      await Promise.all(ids.map((id) => getIncomeCarry(id, month, year)))
-    ).reduce((sum, c) => sum + c.carryIn, 0);
+    const carriedOverPaisas = (await getIncomeCarry(auth.id, month, year)).carryIn;
     const totalAssigned = budget?.budgetCategories.reduce((sum, bc) => sum + bc.allocatedAmount, 0) ?? 0;
     const totalPlannedSavings = budget?.savingsAllocations.reduce((sum, sa) => sum + sa.amount, 0) ?? 0;
     const readyToAssignPaisas = totalIncomePaisas + carriedOverPaisas - totalAssigned - totalPlannedSavings;

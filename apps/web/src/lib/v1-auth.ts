@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getHouseholdOwnerId } from "@/lib/household";
 
+// `id` is the household data scope (owner id); `loginId` is the real person.
 export interface BearerUser {
   id: string;
+  loginId: string;
   email: string;
   name: string;
   role: string;
@@ -22,5 +25,5 @@ export async function requireBearerAuth(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const u = session.user as { id: string; email: string; name?: string | null; role?: string | null };
-  return { id: u.id, email: u.email, name: u.name ?? "", role: u.role ?? "ADMIN" };
+  return { id: await getHouseholdOwnerId(), loginId: u.id, email: u.email, name: u.name ?? "", role: u.role ?? "ADMIN" };
 }

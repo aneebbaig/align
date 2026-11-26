@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getServerUser, getUserId } from "@/lib/session";
+import { getLoginUserId, getUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { ActionResult } from "@/types";
 import bcrypt from "bcryptjs";
@@ -141,7 +141,7 @@ export async function updateUserSettings(data: {
   emergencyFundMonths: number;
 }): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     // Update name for current user only (personal)
     await prisma.user.update({ where: { id: userId }, data: { name: data.name } });
     // Shared settings propagate to ALL users so both household members stay in sync
@@ -161,7 +161,7 @@ export async function changePassword(data: {
   newPassword: string;
 }): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     if (data.newPassword.length < 8) return { success: false, error: "Password must be at least 8 characters" };
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return { success: false, error: "User not found" };
@@ -191,18 +191,22 @@ export async function updateEmergencyFundMonths(months: number): Promise<ActionR
   }
 }
 
+// Personal fields (name, email, notification preferences) come from the real
+// login; the open budget period is the household's (the owner row).
 export async function getUserSettings() {
-  const userId = await getUserId();
-  return prisma.user.findUnique({
-    where: { id: userId },
-    select: {
+  const [loginId, ownerId] = await Promise.all([getLoginUserId(), getUserId()]);
+  const [me, owner] = await Promise.all([
+    prisma.user.findUnique({ where: { id: loginId }, select: {
       name: true, email: true, dateFormat: true,
       firstDayOfWeek: true, currentBudgetMonth: true, currentBudgetYear: true, emergencyFundMonths: true,
       notifyBudgetWarning: true, notifyDoomSpending: true, notifyLoanDue: true,
       notifyDailyDigest: true, notifyDigestTasks: true, notifyDigestCalendar: true,
       notifyDigestBudget: true, notifyDigestFinancials: true,
-    },
-  });
+    } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { currentBudgetMonth: true, currentBudgetYear: true } }),
+  ]);
+  if (!me) return null;
+  return { ...me, currentBudgetMonth: owner?.currentBudgetMonth ?? null, currentBudgetYear: owner?.currentBudgetYear ?? null };
 }
 
 export async function getRecurringTransactions() {

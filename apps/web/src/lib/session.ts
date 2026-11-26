@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdOwnerId } from "@/lib/household";
 
 // Shape the rest of the app relies on (id/email/name/role). Backed by
 // better-auth sessions now; the interface is unchanged so callers of
@@ -26,13 +27,40 @@ export async function requireUser(): Promise<AuthUser> {
   return user;
 }
 
+// Data scope: the household owner id. Every login shares the same data, so all
+// shared-data queries and creates use this id (see src/lib/household.ts).
 export async function getUserId(): Promise<string> {
+  const user = await getServerUser();
+  if (!user) throw new Error("Unauthorized");
+  return getHouseholdOwnerId();
+}
+
+// Identity: the real logged-in person. Use for profile, password, 2FA,
+// notification preferences and the Vault.
+export async function getLoginUserId(): Promise<string> {
   const user = await getServerUser();
   if (!user) throw new Error("Unauthorized");
   return user.id;
 }
 
+// Reads the household owner's row so shared fields (e.g. the open budget
+// period) are household-wide.
 export async function getAuthenticatedUser<S extends Record<string, unknown>>(
+  select: S,
+): Promise<{ id: string } & { [K in keyof S]: unknown }> {
+  const authUser = await getServerUser();
+  if (!authUser) throw new Error("Unauthorized");
+  const ownerId = await getHouseholdOwnerId();
+  const user = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: { id: true, ...select },
+  });
+  if (!user) throw new Error("Unauthorized");
+  return user as { id: string } & { [K in keyof S]: unknown };
+}
+
+// The real logged-in person's own row.
+export async function getLoginUser<S extends Record<string, unknown>>(
   select: S,
 ): Promise<{ id: string } & { [K in keyof S]: unknown }> {
   const authUser = await getServerUser();

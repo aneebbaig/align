@@ -1,6 +1,6 @@
 # Align - Personal Finance Manager
 
-A private finance app for a household of one or two users. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a calendar, and a secret gift vault.
+A private finance app for one household of one or two logins. Every login is an admin over the same data (scoped by the household owner, the oldest user); only login/security, profile, notification preferences and the Vault are personal. The `one_household` migration folded any existing per-login data onto the owner. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a calendar, and a secret gift vault.
 
 **Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · better-auth · Tailwind CSS v4
 

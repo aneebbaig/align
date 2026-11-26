@@ -1,6 +1,6 @@
 "use server";
 
-import { getServerUser } from "@/lib/session";
+import { getServerUser, getUserId } from "@/lib/session";
 import { getUserSettings } from "@/actions/settings";
 import { getCurrentPeriod } from "@/lib/month";
 import { getBudgetWithSpending } from "@/actions/budget";
@@ -26,6 +26,7 @@ export async function getNotifications(): Promise<AppNotification[]> {
   const user = await getServerUser();
   if (!user) return [];
 
+  const householdId = await getUserId();
   const settings = await getUserSettings();
   const { month, year } = getCurrentPeriod(settings?.currentBudgetMonth, settings?.currentBudgetYear);
 
@@ -40,7 +41,7 @@ export async function getNotifications(): Promise<AppNotification[]> {
       getBaseCurrency(),
       settings?.notifyLoanDue
         ? prisma.loan.findMany({
-            where: { userId: user.id, status: { notIn: CLOSED_LOAN_STATUSES }, dueDate: { not: null } },
+            where: { userId: householdId, status: { notIn: CLOSED_LOAN_STATUSES }, dueDate: { not: null } },
             select: { id: true, personName: true, type: true, status: true, remainingAmount: true, dueDate: true },
           })
         : Promise.resolve([]),

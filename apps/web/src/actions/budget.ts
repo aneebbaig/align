@@ -7,8 +7,6 @@ import { ActionResult } from "@/types";
 import { getCurrentPeriod, nextPeriod } from "@/lib/month";
 import { toPaisas } from "@/lib/utils";
 import { getIncomeCarry } from "@/lib/expenses/funding";
-import { getHouseholdUserIds } from "@/lib/household";
-import { periodKey } from "@/lib/budget/carryover";
 
 export async function getBudget(month: number, year: number) {
   await getUserId();
@@ -117,19 +115,12 @@ export async function copyPreviousMonthBudget(month: number, year: number): Prom
   }
 }
 
-// The budget is household-wide: carry-over is the sum of each member's own carry.
-async function householdCarriedOver(ids: string[], month: number, year: number): Promise<number> {
-  const carries = await Promise.all(ids.map((id) => getIncomeCarry(id, month, year)));
-  return carries.reduce((s, c) => s + c.carryIn, 0);
-}
-
 export async function getReadyToAssign(month: number, year: number) {
-  await getUserId();
-  const ids = await getHouseholdUserIds();
+  const userId = await getUserId();
 
   const [incomeTransactions, budget] = await Promise.all([
     prisma.transaction.findMany({
-      where: { userId: { in: ids }, type: "INCOME", budgetMonth: month, budgetYear: year },
+      where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
       select: { amount: true },
     }),
     prisma.budget.findUnique({
@@ -144,14 +135,13 @@ export async function getReadyToAssign(month: number, year: number) {
   const totalIncome = incomeTransactions.reduce((s, t) => s + t.amount, 0);
   const totalAssigned = budget?.budgetCategories.reduce((s, bc) => s + bc.allocatedAmount, 0) ?? 0;
   const totalPlannedSavings = budget?.savingsAllocations.reduce((s, sa) => s + sa.amount, 0) ?? 0;
-  const carriedOver = await householdCarriedOver(ids, month, year);
+  const carriedOver = (await getIncomeCarry(userId, month, year)).carryIn;
 
   return { totalIncome, carriedOver, readyToAssign: totalIncome + carriedOver - totalAssigned - totalPlannedSavings };
 }
 
 export async function getBudgetWithSpending(month: number, year: number) {
-  await getAuthenticatedUser({ id: true });
-  const ids = await getHouseholdUserIds();
+  const user = await getAuthenticatedUser({ id: true });
 
   const [budget, expenseTransactions, incomeTransactions, pots] = await Promise.all([
     prisma.budget.findUnique({
@@ -166,16 +156,16 @@ export async function getBudgetWithSpending(month: number, year: number) {
       },
     }),
     prisma.transaction.findMany({
-      where: { userId: { in: ids }, type: "EXPENSE", budgetMonth: month, budgetYear: year },
-      include: { category: { select: { name: true, color: true } }, user: { select: { name: true } } },
+      where: { userId: user.id, type: "EXPENSE", budgetMonth: month, budgetYear: year },
+      include: { category: { select: { name: true, color: true } } },
       orderBy: { date: "desc" },
     }),
     prisma.transaction.findMany({
-      where: { userId: { in: ids }, type: "INCOME", budgetMonth: month, budgetYear: year },
+      where: { userId: user.id, type: "INCOME", budgetMonth: month, budgetYear: year },
       select: { amount: true },
     }),
     prisma.savingsPot.findMany({
-      where: { userId: { in: ids }, type: { not: "EMERGENCY" } },
+      where: { userId: user.id, type: { not: "EMERGENCY" } },
       select: { id: true, name: true, type: true, balances: { include: { currency: true } } },
       orderBy: [{ type: "asc" }, { createdAt: "asc" }],
     }),
@@ -191,7 +181,7 @@ export async function getBudgetWithSpending(month: number, year: number) {
 
   const totalAssigned = budget?.budgetCategories.reduce((s, bc) => s + bc.allocatedAmount, 0) ?? 0;
   const totalPlannedSavings = budget?.savingsAllocations.reduce((s, sa) => s + sa.amount, 0) ?? 0;
-  const carriedOver = await householdCarriedOver(ids, month, year);
+  const carriedOver = (await getIncomeCarry(user.id, month, year)).carryIn;
   const readyToAssign = totalIncome + carriedOver - totalAssigned - totalPlannedSavings;
 
   const budgetedCategoryIds = new Set(budget?.budgetCategories.map((bc) => bc.categoryId) ?? []);
@@ -203,7 +193,6 @@ export async function getBudgetWithSpending(month: number, year: number) {
     totalSpent,
     totalIncome,
     carriedOver,
-    householdSize: ids.length,
     unbudgetedExpenses,
     unbudgetedTotal,
     spendingByCategory,
@@ -253,20 +242,13 @@ export async function startNewBudgetPeriod(
     const current = getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null);
     const next = target ?? nextPeriod(current.month, current.year);
 
-    // The period is household-wide: move everyone who is not already past the clicker.
-    const members = await prisma.user.findMany({
-      select: { id: true, currentBudgetMonth: true, currentBudgetYear: true },
-    });
-    const currentKey = periodKey(current);
-    const toAdvance = members
-      .filter((m) => m.id === user.id || periodKey(getCurrentPeriod(m.currentBudgetMonth, m.currentBudgetYear)) <= currentKey)
-      .map((m) => m.id);
-    await prisma.user.updateMany({
-      where: { id: { in: toAdvance } },
+    // The open period is the household's: it lives on the owner row (user.id).
+    await prisma.user.update({
+      where: { id: user.id },
       data: { currentBudgetMonth: next.month, currentBudgetYear: next.year },
     });
 
-    const carriedOver = await householdCarriedOver(members.map((m) => m.id), next.month, next.year);
+    const carriedOver = (await getIncomeCarry(user.id, next.month, next.year)).carryIn;
 
     revalidatePath("/budget");
     revalidatePath("/dashboard");

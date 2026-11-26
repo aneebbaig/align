@@ -25,7 +25,6 @@ interface BudgetCategory {
 interface UnbudgetedExpense {
   id: string; description: string; amount: number; categoryId: string;
   category: { name: string; color: string };
-  user?: { name: string };
 }
 
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
@@ -42,7 +41,6 @@ interface BudgetData {
   totalSpent: number;
   totalIncome: number;
   carriedOver: number;
-  householdSize?: number;
   unbudgetedExpenses: UnbudgetedExpense[];
   unbudgetedTotal: number;
   spendingByCategory: Record<string, number>;
@@ -105,7 +103,6 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
   const liveSavings = Object.values(savingsAllocs).reduce((sum, v) => sum + (parseFloat(v) || 0) * 100, 0);
   const liveReadyToAssign = budgetData.totalIncome + budgetData.carriedOver - liveAssigned - liveSavings;
 
-  const multiHousehold = (budgetData.householdSize ?? 1) > 1;
   const hasIncome = budgetData.totalIncome > 0;
   const showReadyToAssign = hasIncome || budgetData.carriedOver !== 0;
 
@@ -206,7 +203,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
                 {rtaNegative ? "-" : ""}{baseSymbol} {fmt(Math.abs(liveReadyToAssign))}
               </div>
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                <span>{multiHousehold ? "Household income" : "Income"} {baseSymbol} {fmt(budgetData.totalIncome)}</span>
+                <span>Income {baseSymbol} {fmt(budgetData.totalIncome)}</span>
                 {budgetData.carriedOver !== 0 && <><span>·</span><span>Carried over {baseSymbol} {fmt(budgetData.carriedOver)}</span></>}
                 <span>·</span>
                 <span>Categories {baseSymbol} {fmt(liveAssigned)}</span>
@@ -229,7 +226,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3">
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">
-              <TrendingUp className="h-3.5 w-3.5" />{multiHousehold ? "Household income" : "Income"}
+              <TrendingUp className="h-3.5 w-3.5" />Income
             </div>
             <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{baseSymbol} {fmt(budgetData.totalIncome)}</div>
           </div>
@@ -414,7 +411,6 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tx.category.color }} />
                 <span className="text-sm text-foreground flex-1">{tx.description}</span>
                 <span className="text-xs text-muted-foreground">{tx.category.name}</span>
-                {multiHousehold && tx.user?.name && <span className="text-xs text-muted-foreground">{tx.user.name}</span>}
                 <span className="text-sm font-semibold text-red-600">-{baseSymbol} {fmt(tx.amount)}</span>
               </div>
             ))}
@@ -429,7 +425,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
         open={confirmNewMonth}
         onOpenChange={setConfirmNewMonth}
         title="Start new budget month?"
-        description={`New income and expenses will be filed under ${getMonthName(upcoming.month)} ${upcoming.year} from now on - regardless of the calendar date. Do this when your salary for the new month arrives.${multiHousehold ? " This starts the month for everyone in the household." : ""}`}
+        description={`New income and expenses will be filed under ${getMonthName(upcoming.month)} ${upcoming.year} from now on - regardless of the calendar date. Do this when your salary for the new month arrives.`}
         confirmLabel="Start New Month"
         onConfirm={handleStartNewMonth}
         loading={isPending}
