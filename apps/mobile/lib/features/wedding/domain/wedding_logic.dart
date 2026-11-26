@@ -148,18 +148,11 @@ const eventTypes = <(String, String)>[
   ('OTHER', 'Other'),
 ];
 
-/// Route/filter key for expenses that belong to no event.
-const generalKey = 'general';
-const generalLabel = 'Whole wedding';
-
-String eventKey(String? eventId) => eventId ?? generalKey;
-
-String eventName(List<WeddingEvent> events, String? eventId) {
-  if (eventId == null) return generalLabel;
+String eventName(List<WeddingEvent> events, String eventId) {
   for (final e in events) {
     if (e.id == eventId) return e.name;
   }
-  return generalLabel;
+  return 'Event';
 }
 
 List<WeddingEvent> orderEvents(List<WeddingEvent> events) => [...events]
@@ -181,21 +174,19 @@ class ExpenseGroup {
 }
 
 /// Splits rows into labelled groups, keeping first-seen row order inside each.
-/// Event groups follow event order (whole wedding first); category groups sort
+/// Event groups follow event order; category groups sort
 /// by planned cost, biggest first.
 List<ExpenseGroup> groupExpenses(List<WeddingExpense> rows, GroupBy by, List<WeddingEvent> events) {
   if (by == GroupBy.none) return [ExpenseGroup('all', '', rows)];
   final buckets = <String, List<WeddingExpense>>{};
   for (final e in rows) {
-    final k = by == GroupBy.event ? eventKey(e.eventId) : e.category;
+    final k = by == GroupBy.event ? e.eventId : e.category;
     buckets.putIfAbsent(k, () => []).add(e);
   }
   if (by == GroupBy.event) {
-    final order = [generalKey, ...orderEvents(events).map((e) => e.id)];
     return [
-      for (final k in order)
-        if (buckets.containsKey(k))
-          ExpenseGroup(k, k == generalKey ? generalLabel : eventName(events, k), buckets[k]!),
+      for (final ev in orderEvents(events))
+        if (buckets.containsKey(ev.id)) ExpenseGroup(ev.id, ev.name, buckets[ev.id]!),
     ];
   }
   final out = [for (final en in buckets.entries) ExpenseGroup(en.key, categoryLabel(en.key), en.value)];
@@ -212,7 +203,7 @@ class Attention {
   final AttentionKind kind;
   final String text;
 
-  /// Event key to open ([generalKey] for the whole wedding), when the item is about an event.
+  /// Event to open, when the item is about an event.
   final String? eventId;
   final String? expenseId;
 }
@@ -277,10 +268,12 @@ WeddingSummary? soleActiveWedding(List<WeddingSummary> all) {
   return active.length == 1 ? active.first : null;
 }
 
-/// Event id to preselect in quick add: the remembered one if it still exists, else null (whole wedding).
+/// Event id quick add lands in: the remembered one if it still exists, else the first
+/// event, else null (the wedding has no events yet, so nothing can be added).
 String? resolveRememberedEvent(String? saved, List<WeddingEvent> events) {
-  if (saved == null || saved == generalKey) return null;
-  return events.any((e) => e.id == saved) ? saved : null;
+  if (saved != null && events.any((e) => e.id == saved)) return saved;
+  final ordered = orderEvents(events);
+  return ordered.isEmpty ? null : ordered.first.id;
 }
 
 // ── formatting ──────────────────────────────────────────────────────────────

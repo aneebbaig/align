@@ -76,8 +76,6 @@ class _PlanMenu extends ConsumerWidget {
           switch (v) {
             case 'details':
               showEditWeddingSheet(context, plan);
-            case 'budget':
-              showBudgetSheet(context, plan);
             case 'event':
               showAddEventSheet(context, plan);
             case 'all':
@@ -104,7 +102,6 @@ class _PlanMenu extends ConsumerWidget {
         },
         itemBuilder: (_) => [
           const PopupMenuItem(value: 'details', child: Text('Edit wedding details', style: AppTextStyles.bodyMedium)),
-          const PopupMenuItem(value: 'budget', child: Text('Edit budget', style: AppTextStyles.bodyMedium)),
           const PopupMenuItem(value: 'event', child: Text('Add event', style: AppTextStyles.bodyMedium)),
           if (onShowAll != null) const PopupMenuItem(value: 'all', child: Text('All weddings', style: AppTextStyles.bodyMedium)),
           PopupMenuItem(
@@ -125,7 +122,6 @@ class _Overview extends ConsumerWidget {
     final events = orderEvents(plan.events);
     final totals = sumTotals(plan.expenses);
     final attention = attentionItems(plan, DateTime.now(), money: moneyShort);
-    final generalRows = plan.expenses.where((e) => e.eventId == null).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -140,26 +136,29 @@ class _Overview extends ConsumerWidget {
             label: const Text('Add event'),
           ),
         ),
-        SizedBox(
-          height: 112,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              if (generalRows.isNotEmpty || events.isEmpty)
-                _EventCard(planId: plan.id, keyId: generalKey, name: generalLabel, budget: 0, rows: generalRows, date: null),
-              for (final ev in events)
-                _EventCard(
-                  planId: plan.id,
-                  keyId: ev.id,
-                  name: ev.name,
-                  budget: ev.budgetAllocated,
-                  date: ev.date,
-                  event: ev,
-                  rows: plan.expenses.where((e) => e.eventId == ev.id).toList(),
-                ),
-            ],
+        if (events.isEmpty)
+          AppCard(
+            onTap: () => showAddEventSheet(context, plan),
+            child: Row(children: [
+              const Icon(Icons.event_outlined, color: AppColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('Every expense belongs to an event. Add your events first (Nikkah, Barat, Valima...).',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground)),
+              ),
+            ]),
+          )
+        else
+          SizedBox(
+            height: 112,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final ev in events)
+                  _EventCard(planId: plan.id, event: ev, rows: plan.expenses.where((e) => e.eventId == ev.id).toList()),
+              ],
+            ),
           ),
-        ),
         if (attention.isNotEmpty) ...[
           const SectionTitle('Needs attention'),
           for (final a in attention.take(5)) _AttentionTile(planId: plan.id, item: a),
@@ -178,16 +177,17 @@ class _Overview extends ConsumerWidget {
 }
 
 /// Budget summary: Planned, Paid, To pay, Left, with the planned/paid meter.
-class BudgetCard extends ConsumerWidget {
-  const BudgetCard({required this.plan, required this.totals, this.onTap, super.key});
+/// The budget is the sum of the events' budgets.
+class BudgetCard extends StatelessWidget {
+  const BudgetCard({required this.plan, required this.totals, super.key});
   final WeddingPlan plan;
   final WeddingTotals totals;
-  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final st = budgetStatus(totals.projected, plan.totalBudget);
-    final hasBudget = plan.totalBudget > 0;
+  Widget build(BuildContext context) {
+    final budget = plan.budget;
+    final st = budgetStatus(totals.projected, budget);
+    final hasBudget = budget > 0;
     final color = budgetColor(st.state);
     final left = hasBudget ? (st.overBy > 0 ? '${money(st.overBy)} over' : money(st.left)) : '-';
     final days = plan.weddingDate == null
@@ -197,29 +197,23 @@ class BudgetCard extends ConsumerWidget {
             .inDays;
 
     return AppCard(
-      onTap: onTap ?? () => showBudgetSheet(context, plan),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text(
-              plan.weddingDate == null
-                  ? 'Budget'
-                  : '${DateFormat('d MMM yyyy').format(plan.weddingDate!)}${days != null && days >= 0 ? ' · $days days to go' : ''}',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
-            ),
-          ),
-          const Icon(Icons.edit_outlined, size: 14, color: AppColors.mutedForeground),
-        ]),
+        Text(
+          plan.weddingDate == null
+              ? 'Budget'
+              : '${DateFormat('d MMM yyyy').format(plan.weddingDate!)}${days != null && days >= 0 ? ' · $days days to go' : ''}',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+        ),
         const SizedBox(height: 6),
         if (hasBudget)
           Text(
-            '${money(totals.projected)} of ${money(plan.totalBudget)}',
+            '${money(totals.projected)} of ${money(budget)}',
             style: AppTextStyles.headlineSmall.copyWith(color: color),
           )
         else
-          Text('Set a budget to see where you stand', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning)),
+          Text('Give your events a budget to see where you stand', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning)),
         const SizedBox(height: 10),
-        BudgetMeter(projected: totals.projected, paid: totals.paid, budget: plan.totalBudget),
+        BudgetMeter(projected: totals.projected, paid: totals.paid, budget: budget),
         const SizedBox(height: 14),
         Row(children: [
           _Stat('Planned', money(totals.projected)),
@@ -262,41 +256,30 @@ class _Stat extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  const _EventCard({
-    required this.planId,
-    required this.keyId,
-    required this.name,
-    required this.budget,
-    required this.rows,
-    required this.date,
-    this.event,
-  });
-  final WeddingEvent? event;
+  const _EventCard({required this.planId, required this.event, required this.rows});
   final String planId;
-  final String keyId;
-  final String name;
-  final int budget;
-  final DateTime? date;
+  final WeddingEvent event;
   final List<WeddingExpense> rows;
 
   @override
   Widget build(BuildContext context) {
     final t = sumTotals(rows);
+    final budget = event.budgetAllocated;
     final over = budget > 0 && t.projected > budget;
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: SizedBox(
         width: 168,
         child: AppCard(
-          onTap: () => context.push('/wedding/$planId/event/$keyId'),
-          onLongPress: event == null ? null : () => showEditEventSheet(context, planId, event!),
+          onTap: () => context.push('/wedding/$planId/event/${event.id}'),
+          onLongPress: () => showEditEventSheet(context, planId, event),
           padding: const EdgeInsets.all(12),
           borderColor: over ? AppColors.destructive.withValues(alpha: 0.6) : null,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(event.name, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
               Text(
-                date == null ? 'No date' : DateFormat('d MMM yyyy').format(date!),
+                event.date == null ? 'No date' : DateFormat('d MMM yyyy').format(event.date!),
                 style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground),
               ),
             ]),

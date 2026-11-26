@@ -5,9 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/utils/amount_expr.dart';
-import '../../../../core/widgets/amount_expr_field.dart';
-import '../../../../core/utils/money_format.dart';
 import '../../../../core/widgets/app_sheet.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/sheet_header.dart';
@@ -18,9 +15,6 @@ import 'wedding_common.dart';
 
 /// Creates a wedding; resolves to the new id (or null if dismissed).
 Future<String?> showCreateWeddingSheet(BuildContext context) => showAppSheet<String>(context, const _CreateWedding(), safeArea: true);
-
-/// Edit the total budget.
-Future<void> showBudgetSheet(BuildContext context, WeddingPlan plan) => showAppSheet<void>(context, _BudgetSheet(plan: plan), safeArea: true);
 
 /// One-tap event types, plus a custom name.
 Future<void> showAddEventSheet(BuildContext context, WeddingPlan plan) => showAppSheet<void>(context, _AddEventSheet(plan: plan), safeArea: true);
@@ -34,7 +28,6 @@ class _CreateWedding extends ConsumerStatefulWidget {
 class _CreateWeddingState extends ConsumerState<_CreateWedding> {
   final _bride = TextEditingController();
   final _groom = TextEditingController();
-  final _budget = TextEditingController();
   DateTime? _date;
   bool _busy = false;
 
@@ -42,7 +35,6 @@ class _CreateWeddingState extends ConsumerState<_CreateWedding> {
   void dispose() {
     _bride.dispose();
     _groom.dispose();
-    _budget.dispose();
     super.dispose();
   }
 
@@ -62,18 +54,12 @@ class _CreateWeddingState extends ConsumerState<_CreateWedding> {
       ref.read(toastServiceProvider).error(context, 'Enter both names');
       return;
     }
-    final budget = parseOptionalAmount(_budget.text);
-    if (budget == badAmount) {
-      ref.read(toastServiceProvider).error(context, 'That budget is not a valid amount');
-      return;
-    }
     setState(() => _busy = true);
     try {
       final id = await ref.read(weddingDatasourceProvider).createWedding(
             brideName: _bride.text.trim(),
             groomName: _groom.text.trim(),
             weddingDate: _date,
-            totalBudget: budget,
           );
       if (mounted) Navigator.pop(context, id);
     } catch (e) {
@@ -100,58 +86,6 @@ class _CreateWeddingState extends ConsumerState<_CreateWedding> {
             icon: const Icon(Icons.calendar_today_outlined, size: 18),
             label: Text(_date == null ? 'Wedding date (optional)' : DateFormat('d MMM yyyy').format(_date!)),
           ),
-          const SizedBox(height: 12),
-          Text('Total budget (optional)', style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-          const SizedBox(height: 4),
-          AmountExprField(controller: _budget, prefix: 'PKR '),
-        ],
-      );
-}
-
-class _BudgetSheet extends ConsumerStatefulWidget {
-  const _BudgetSheet({required this.plan});
-  final WeddingPlan plan;
-  @override
-  ConsumerState<_BudgetSheet> createState() => _BudgetSheetState();
-}
-
-class _BudgetSheetState extends ConsumerState<_BudgetSheet> {
-  late final _c = TextEditingController(text: widget.plan.totalBudget == 0 ? '' : paisasToFieldText(widget.plan.totalBudget));
-  bool _busy = false;
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final v = parseOptionalAmount(_c.text);
-    if (v == badAmount) {
-      ref.read(toastServiceProvider).error(context, 'That is not a valid amount');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      await ref.read(weddingDatasourceProvider).updateWedding(widget.plan.id, {'totalBudget': v ?? 0});
-      refreshWedding(ref, widget.plan.id);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _busy = false);
-        toastError(context, ref, e);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          SheetHeader(title: 'Wedding budget', loading: _busy, canSubmit: true, onSubmit: _save),
-          const SizedBox(height: 8),
-          AmountExprField(controller: _c, prefix: 'PKR ', autofocus: true),
         ],
       );
 }

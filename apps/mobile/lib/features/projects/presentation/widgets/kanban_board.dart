@@ -36,10 +36,17 @@ class _KanbanBoardState extends State<KanbanBoard> {
   late final PageController _pager;
   int _page = 0;
 
+  // Open on "To do" when there is a Bugs column before it.
+  int get _initialPage {
+    final i = widget.statusOrder.indexOf('TODO');
+    return i < 0 ? 0 : i;
+  }
+
   @override
   void initState() {
     super.initState();
-    _pager = PageController();
+    _page = _initialPage;
+    _pager = PageController(initialPage: _page);
   }
 
   @override
@@ -74,7 +81,9 @@ class _KanbanBoardState extends State<KanbanBoard> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.primary.withValues(alpha: 0.15) : Colors.transparent,
+                    color: selected
+                        ? AppColors.primary.withValues(alpha: 0.15)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: selected ? AppColors.primary : AppColors.border.withValues(alpha: 0.6),
@@ -163,8 +172,9 @@ class _KanbanColumnPage extends StatelessWidget {
                     Center(
                       child: Text(
                         'No tasks here yet.',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.mutedForeground.withValues(alpha: 0.7)),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.mutedForeground.withValues(alpha: 0.7),
+                        ),
                       ),
                     ),
                   ],
@@ -173,10 +183,8 @@ class _KanbanColumnPage extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   itemCount: tasks.length,
                   onReorderItem: onReorder,
-                  proxyDecorator: (child, index, animation) => Material(
-                    color: Colors.transparent,
-                    child: child,
-                  ),
+                  proxyDecorator: (child, index, animation) =>
+                      Material(color: Colors.transparent, child: child),
                   itemBuilder: (_, i) => Padding(
                     key: ValueKey(tasks[i].id),
                     padding: const EdgeInsets.only(bottom: 8),
@@ -254,8 +262,10 @@ class _AddTaskFieldState extends State<_AddTaskField> {
               ),
               icon: _busy
                   ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    )
                   : const Icon(Icons.add),
             ),
           ),

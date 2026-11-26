@@ -9,8 +9,7 @@ import '../../domain/entities/project_entity.dart';
 part 'tags_datasource.g.dart';
 
 @riverpod
-TagsDatasource tagsDatasource(Ref ref) =>
-    TagsDatasource(ref.watch(apiClientProvider));
+TagsDatasource tagsDatasource(Ref ref) => TagsDatasource(ref.watch(apiClientProvider));
 
 class TagsDatasource {
   const TagsDatasource(this._dio);

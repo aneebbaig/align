@@ -110,7 +110,10 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
     final label = _label.text.trim().isEmpty
         ? url.replaceFirst(RegExp(r'https?://', caseSensitive: false), '')
         : _label.text.trim();
-    _persistLinks([..._links, ProjectLinkEntity(id: UniqueKey().toString(), label: label, url: url)]);
+    _persistLinks([
+      ..._links,
+      ProjectLinkEntity(id: UniqueKey().toString(), label: label, url: url),
+    ]);
     _label.clear();
     _url.clear();
     setState(() => _adding = false);
@@ -137,10 +140,16 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
                 width: 36,
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-            Text('Details', style: AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              'Details',
+              style: AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 16),
 
             _sectionLabel('Notes'),
@@ -158,8 +167,10 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
             if (_links.isEmpty && !_adding)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text('No links yet.',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
+                child: Text(
+                  'No links yet.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+                ),
               ),
             for (final l in _links)
               Padding(
@@ -190,7 +201,11 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
                         onTap: () => _open(l.url),
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(Icons.open_in_new, size: 15, color: AppColors.mutedForeground),
+                          child: Icon(
+                            Icons.open_in_new,
+                            size: 15,
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                       GestureDetector(
@@ -245,8 +260,12 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
                             _url.clear();
                             setState(() => _adding = false);
                           },
-                          child: Text('Cancel',
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground)),
+                          child: Text(
+                            'Cancel',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -271,8 +290,10 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
                     children: [
                       const Icon(Icons.add, size: 16, color: AppColors.mutedForeground),
                       const SizedBox(width: 6),
-                      Text('Add link',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        'Add link',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
+                      ),
                     ],
                   ),
                 ),
@@ -284,9 +305,13 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: AppTextStyles.labelMedium
-                .copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w600)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: AppTextStyles.labelMedium.copyWith(
+        color: AppColors.mutedForeground,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }

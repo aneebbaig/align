@@ -17,8 +17,7 @@ class ProjectsPage extends ConsumerStatefulWidget {
   ConsumerState<ProjectsPage> createState() => _ProjectsPageState();
 }
 
-class _ProjectsPageState extends ConsumerState<ProjectsPage>
-    with SingleTickerProviderStateMixin {
+class _ProjectsPageState extends ConsumerState<ProjectsPage> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   static const _filters = ['ALL', 'ACTIVE', 'ON_HOLD', 'COMPLETED'];
   static const _labels = ['All', 'Active', 'On Hold', 'Completed'];
@@ -38,9 +37,7 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage>
   }
 
   Widget _buildList(List<ProjectEntity> all, String filter) {
-    final visible = filter == 'ALL'
-        ? [...all]
-        : all.where((p) => p.status == filter).toList();
+    final visible = filter == 'ALL' ? [...all] : all.where((p) => p.status == filter).toList();
 
     visible.sort((a, b) {
       final av = _sort == 'updated' ? a.updatedAt : a.createdAt;
@@ -126,10 +123,8 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage>
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
           ),
         ),
-        data: (all) => TabBarView(
-          controller: _tabs,
-          children: [for (final f in _filters) _buildList(all, f)],
-        ),
+        data: (all) =>
+            TabBarView(controller: _tabs, children: [for (final f in _filters) _buildList(all, f)]),
       ),
     );
   }

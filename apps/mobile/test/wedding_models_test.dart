@@ -8,7 +8,6 @@ void main() {
       'brideName': 'A',
       'groomName': 'B',
       'weddingDate': '2027-03-04T00:00:00.000Z',
-      'totalBudget': 500000000,
       'haqMehr': null,
       'status': 'PLANNING',
       'events': [
@@ -29,7 +28,7 @@ void main() {
             {'id': 'q2', 'vendorName': 'Yan', 'amount': 4500000, 'isChosen': true},
           ],
         },
-        {'id': 'x2', 'eventId': null, 'name': 'Cake', 'estimatedAmount': 100, 'actualAmount': 90, 'paidAmount': 90},
+        {'id': 'x2', 'eventId': 'e1', 'name': 'Cake', 'estimatedAmount': 100, 'actualAmount': 90, 'paidAmount': 90},
       ],
     };
 
@@ -45,11 +44,12 @@ void main() {
       expect(dress.actualAmount, isNull);
       expect(dress.quotes, hasLength(2));
       expect(dress.hasChosenQuote, isTrue);
+      expect(p.budget, 100000);
     });
 
     test('tolerates missing optional fields', () {
       final cake = WeddingPlan.fromJson(json).expenses.last;
-      expect(cake.eventId, isNull);
+      expect(cake.eventId, 'e1');
       expect(cake.category, 'MISC');
       expect(cake.quotes, isEmpty);
       expect(cake.actualAmount, 90);

@@ -8,7 +8,7 @@ WeddingExpense x(
   int est = 100,
   int? actual,
   int paid = 0,
-  String? eventId,
+  String eventId = 'e',
   String category = 'MISC',
   String? vendor,
   List<WeddingQuote> quotes = const [],
@@ -113,13 +113,13 @@ void main() {
     ];
     final rows = [
       x('1', eventId: 'b', category: 'FOOD', est: 10),
-      x('2', eventId: null, category: 'DRESS', est: 500),
+      x('2', eventId: 'm', category: 'DRESS', est: 500),
       x('3', eventId: 'm', category: 'FOOD', est: 20),
     ];
 
-    test('by event: whole wedding first, then event order', () {
+    test('by event: follows event order', () {
       final g = groupExpenses(rows, GroupBy.event, events);
-      expect(g.map((e) => e.label), ['Whole wedding', 'Mehndi', 'Barat']);
+      expect(g.map((e) => e.label), ['Mehndi', 'Barat']);
     });
 
     test('by category: biggest first', () {
@@ -154,12 +154,15 @@ void main() {
       expect(soleActiveWedding(const []), isNull);
     });
 
-    test('remembered event falls back to whole wedding when gone', () {
-      final events = [const WeddingEvent(id: 'm', type: 'MEHNDI', name: 'Mehndi', budgetAllocated: 0, status: 'PLANNED', order: 1)];
-      expect(resolveRememberedEvent('m', events), 'm');
-      expect(resolveRememberedEvent('gone', events), isNull);
-      expect(resolveRememberedEvent('general', events), isNull);
-      expect(resolveRememberedEvent(null, events), isNull);
+    test('remembered event falls back to the first event, null when there are none', () {
+      final events = [
+        const WeddingEvent(id: 'b', type: 'BARAT', name: 'Barat', budgetAllocated: 0, status: 'PLANNED', order: 5),
+        const WeddingEvent(id: 'm', type: 'MEHNDI', name: 'Mehndi', budgetAllocated: 0, status: 'PLANNED', order: 1),
+      ];
+      expect(resolveRememberedEvent('b', events), 'b');
+      expect(resolveRememberedEvent('gone', events), 'm');
+      expect(resolveRememberedEvent(null, events), 'm');
+      expect(resolveRememberedEvent('m', const []), isNull);
     });
   });
 
@@ -170,7 +173,6 @@ void main() {
           id: 'p',
           brideName: 'A',
           groomName: 'B',
-          totalBudget: 0,
           status: 'PLANNING',
           weddingDate: date,
           events: events,
@@ -182,7 +184,7 @@ void main() {
       final items = attentionItems(
         plan(events: [ev], expenses: [
           x('a', eventId: 'e', est: 150),
-          x('b', quotes: [q('1', 1), q('2', 2)]),
+          x('b', eventId: 'zz', quotes: [q('1', 1), q('2', 2)]),
         ]),
         now,
         money: m,
@@ -198,6 +200,21 @@ void main() {
       final far = attentionItems(plan(date: DateTime(2027, 9, 1), expenses: [x('a')]), now, money: m);
       expect(far, isEmpty);
     });
+  });
+
+  test('a wedding budget is the sum of its event budgets', () {
+    const p = WeddingPlan(
+      id: 'p',
+      brideName: 'A',
+      groomName: 'B',
+      status: 'PLANNING',
+      events: [
+        WeddingEvent(id: 'a', type: 'MEHNDI', name: 'Mehndi', budgetAllocated: 300, status: 'PLANNED', order: 1),
+        WeddingEvent(id: 'b', type: 'BARAT', name: 'Barat', budgetAllocated: 200, status: 'PLANNED', order: 2),
+      ],
+      expenses: [],
+    );
+    expect(p.budget, 500);
   });
 
   test('formatShort', () {

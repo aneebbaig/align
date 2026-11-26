@@ -42,14 +42,12 @@ class WeddingDatasource {
     required String brideName,
     required String groomName,
     DateTime? weddingDate,
-    int? totalBudget,
   }) =>
       _run(() async {
         final res = await _dio.post(ApiConstants.wedding, data: {
           'brideName': brideName,
           'groomName': groomName,
           if (weddingDate != null) 'weddingDate': weddingDate.toIso8601String(),
-          if (totalBudget != null) 'totalBudget': totalBudget,
         });
         return _data(res)['id'] as String;
       });
@@ -66,14 +64,21 @@ class WeddingDatasource {
   Future<void> updateEvent(String id, String eventId, Map<String, dynamic> patch) =>
       _run(() => _dio.patch(ApiConstants.weddingEvent(id, eventId), data: patch));
 
-  Future<void> deleteEvent(String id, String eventId) =>
-      _run(() => _dio.delete(ApiConstants.weddingEvent(id, eventId)));
+  /// An event with expenses needs [moveTo] (another event's id) or [deleteExpenses]; the server answers 409 otherwise.
+  Future<void> deleteEvent(String id, String eventId, {String? moveTo, bool deleteExpenses = false}) =>
+      _run(() => _dio.delete(
+            ApiConstants.weddingEvent(id, eventId),
+            queryParameters: {
+              if (moveTo != null) 'moveTo': moveTo,
+              if (deleteExpenses) 'deleteExpenses': '1',
+            },
+          ));
 
   // expenses
   Future<void> addExpense(
     String id, {
     required String name,
-    String? eventId,
+    required String eventId,
     int estimatedAmount = 0,
     String category = 'MISC',
   }) =>

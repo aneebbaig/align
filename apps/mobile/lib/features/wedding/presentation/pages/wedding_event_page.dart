@@ -14,7 +14,7 @@ import '../widgets/quick_add_bar.dart';
 import '../widgets/wedding_common.dart';
 import '../widgets/wedding_edit_sheets.dart';
 
-/// One event's expenses. [eventId] is an event id, or 'general' for the whole wedding.
+/// One event's expenses and budget.
 class WeddingEventPage extends ConsumerWidget {
   const WeddingEventPage({required this.planId, required this.eventId, super.key});
   final String planId;
@@ -24,9 +24,8 @@ class WeddingEventPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(weddingPlanProvider(planId));
     final plan = async.asData?.value;
-    final isGeneral = eventId == generalKey;
-    final event = plan == null || isGeneral ? null : plan.events.where((e) => e.id == eventId).firstOrNull;
-    final title = isGeneral ? generalLabel : (event?.name ?? 'Event');
+    final event = plan?.events.where((e) => e.id == eventId).firstOrNull;
+    final title = event?.name ?? 'Event';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -55,12 +54,12 @@ class WeddingEventPage extends ConsumerWidget {
           onRetry: () => ref.invalidate(weddingPlanProvider(planId)),
         ),
         data: (plan) {
-          if (!isGeneral && event == null) {
+          if (event == null) {
             return const AppEmptyState(title: 'This event no longer exists', icon: Icons.event_busy_outlined);
           }
-          final rows = plan.expenses.where((e) => eventKey(e.eventId) == eventId).toList();
+          final rows = plan.expenses.where((e) => e.eventId == eventId).toList();
           final t = sumTotals(rows);
-          final budget = isGeneral ? 0 : event!.budgetAllocated;
+          final budget = event.budgetAllocated;
           final st = budgetStatus(t.projected, budget);
           return Column(children: [
             Expanded(
@@ -74,8 +73,8 @@ class WeddingEventPage extends ConsumerWidget {
                   children: [
                     AppCard(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (event?.date != null)
-                          Text(DateFormat('EEE d MMM yyyy').format(event!.date!),
+                        if (event.date != null)
+                          Text(DateFormat('EEE d MMM yyyy').format(event.date!),
                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
                         if (budget > 0)
                           Padding(
@@ -98,7 +97,7 @@ class WeddingEventPage extends ConsumerWidget {
                 ),
               ),
             ),
-            QuickAddBar(plan: plan, fixedEventKey: eventId),
+            QuickAddBar(plan: plan, fixedEventId: eventId),
           ]);
         },
       ),

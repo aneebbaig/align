@@ -58,7 +58,7 @@ class _ExpenseSheetBodyState extends ConsumerState<_ExpenseSheetBody> {
   final _quoteVendor = TextEditingController();
   final _quoteAmount = TextEditingController();
   late String _category = widget.expense.category;
-  late String? _eventId = widget.expense.eventId;
+  late String _eventId = widget.expense.eventId;
   bool _busy = false;
 
   static String _field(int paisas) => paisas == 0 ? '' : paisasToFieldText(paisas);
@@ -205,9 +205,9 @@ class _ExpenseSheetBodyState extends ConsumerState<_ExpenseSheetBody> {
             Expanded(
               child: _Dropdown<String>(
                 label: 'Event',
-                value: eventKey(_eventId),
-                items: [(generalKey, generalLabel), for (final ev in events) (ev.id, ev.name)],
-                onChanged: (v) => setState(() => _eventId = v == generalKey ? null : v),
+                value: _eventId,
+                items: [for (final ev in events) (ev.id, ev.name)],
+                onChanged: (v) => setState(() => _eventId = v),
               ),
             ),
           ]),

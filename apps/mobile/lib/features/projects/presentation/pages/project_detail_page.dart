@@ -22,8 +22,9 @@ import '../widgets/project_details_sheet.dart';
 import '../widgets/project_pickers.dart';
 import '../widgets/task_edit_sheet.dart';
 
-const _statusOrder = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
+const _statusOrder = ['BUG', 'TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
 const _statusLabels = {
+  'BUG': 'Bugs',
   'TODO': 'To Do',
   'IN_PROGRESS': 'In Progress',
   'REVIEW': 'Review',
@@ -58,6 +59,18 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
     _columns = _bucket(project.tasks);
   }
 
+  Future<void> _copyBugTitles() async {
+    final bugs = _columns['BUG'] ?? const <ProjectTaskEntity>[];
+    final toast = ref.read(toastServiceProvider);
+    if (bugs.isEmpty) {
+      toast.info(context, 'No bugs to copy');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: bugs.map((t) => t.title).join('\n')));
+    if (!mounted) return;
+    toast.success(context, 'Copied ${bugs.length} bug title${bugs.length == 1 ? '' : 's'}');
+  }
+
   void _refresh() {
     ref.invalidate(projectProvider(widget.projectId));
     ref.invalidate(projectsProvider);
@@ -75,8 +88,9 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       _refresh();
     } catch (e) {
       if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to move task');
+      ref
+          .read(toastServiceProvider)
+          .error(context, e is AppException ? e.message : 'Failed to move task');
       _refresh();
     }
   }
@@ -95,17 +109,16 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
 
   Future<void> _addTask(String status, String title) async {
     try {
-      await ref.read(projectsDatasourceProvider).createTask(
-            widget.projectId,
-            title: title,
-            status: status,
-          );
+      await ref
+          .read(projectsDatasourceProvider)
+          .createTask(widget.projectId, title: title, status: status);
       if (!mounted) return;
       _refresh();
     } catch (e) {
       if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to add task');
+      ref
+          .read(toastServiceProvider)
+          .error(context, e is AppException ? e.message : 'Failed to add task');
     }
   }
 
@@ -121,20 +134,24 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
           _refresh();
         } catch (e) {
           if (!mounted) return;
-          ref.read(toastServiceProvider).error(
-              context, e is AppException ? e.message : 'Failed to save task');
+          ref
+              .read(toastServiceProvider)
+              .error(context, e is AppException ? e.message : 'Failed to save task');
         }
       },
       onDelete: () async => _deleteTask(task),
       onCreateTag: (name, color) async {
         try {
-          final created = await ref.read(tagsDatasourceProvider).createTag(name: name, color: color);
+          final created = await ref
+              .read(tagsDatasourceProvider)
+              .createTag(name: name, color: color);
           ref.invalidate(tagsProvider);
           return created;
         } catch (e) {
           if (!mounted) return null;
-          ref.read(toastServiceProvider).error(
-              context, e is AppException ? e.message : 'Failed to create tag');
+          ref
+              .read(toastServiceProvider)
+              .error(context, e is AppException ? e.message : 'Failed to create tag');
           return null;
         }
       },
@@ -145,8 +162,9 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
           if (mounted) _refresh();
         } catch (e) {
           if (!mounted) return;
-          ref.read(toastServiceProvider).error(
-              context, e is AppException ? e.message : 'Failed to delete tag');
+          ref
+              .read(toastServiceProvider)
+              .error(context, e is AppException ? e.message : 'Failed to delete tag');
         }
       },
     );
@@ -158,12 +176,15 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       notes: project.notes,
       links: project.links,
       onSaveNotes: (notes) async {
-        await ref.read(projectsDatasourceProvider).updateProject(widget.projectId, {'notes': notes});
+        await ref.read(projectsDatasourceProvider).updateProject(widget.projectId, {
+          'notes': notes,
+        });
         if (mounted) _refresh();
       },
       onSaveLinks: (links) async {
-        await ref.read(projectsDatasourceProvider).updateProject(
-            widget.projectId, {'links': links.map((l) => l.toJson()).toList()});
+        await ref.read(projectsDatasourceProvider).updateProject(widget.projectId, {
+          'links': links.map((l) => l.toJson()).toList(),
+        });
         if (mounted) _refresh();
       },
       showError: (ctx, msg) => ref.read(toastServiceProvider).error(ctx, msg),
@@ -207,8 +228,9 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       _refresh();
     } catch (e) {
       if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to update status');
+      ref
+          .read(toastServiceProvider)
+          .error(context, e is AppException ? e.message : 'Failed to update status');
     }
   }
 
@@ -221,8 +243,9 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       _refresh();
     } catch (e) {
       if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to rename project');
+      ref
+          .read(toastServiceProvider)
+          .error(context, e is AppException ? e.message : 'Failed to rename project');
     }
   }
 
@@ -241,8 +264,9 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       context.pop();
     } catch (e) {
       if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to delete project');
+      ref
+          .read(toastServiceProvider)
+          .error(context, e is AppException ? e.message : 'Failed to delete project');
     }
   }
 
@@ -260,16 +284,19 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
           data: (project) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(project.name,
+              Text(
+                project.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.headlineSmall,
+              ),
+              if (project.client != null && project.client!.isNotEmpty)
+                Text(
+                  project.client!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.headlineSmall),
-              if (project.client != null && project.client!.isNotEmpty)
-                Text(project.client!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: AppColors.mutedForeground)),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground),
+                ),
             ],
           ),
           loading: () => const Text('Project', style: AppTextStyles.headlineSmall),
@@ -279,20 +306,26 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: AppColors.mutedForeground),
             tooltip: 'Rename',
-            onPressed: projectAsync.hasValue
-                ? () => _editName(projectAsync.value!)
-                : null,
+            onPressed: projectAsync.hasValue ? () => _editName(projectAsync.value!) : null,
           ),
           IconButton(
             icon: const Icon(Icons.notes_outlined, color: AppColors.mutedForeground),
             tooltip: 'Details',
-            onPressed: projectAsync.hasValue
-                ? () => _openDetails(projectAsync.value!)
-                : null,
+            onPressed: projectAsync.hasValue ? () => _openDetails(projectAsync.value!) : null,
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: AppColors.mutedForeground),
             onPressed: projectAsync.hasValue ? _deleteProject : null,
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppColors.mutedForeground),
+            enabled: projectAsync.hasValue,
+            onSelected: (v) {
+              if (v == 'copy_bugs') _copyBugTitles();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'copy_bugs', child: Text('Copy bug titles')),
+            ],
           ),
         ],
       ),
@@ -328,13 +361,20 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(project.name,
-                                    style: AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700)),
+                                Text(
+                                  project.name,
+                                  style: AppTextStyles.headlineSmall.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                                 if (project.client != null) ...[
                                   const SizedBox(height: 3),
-                                  Text(project.client!,
-                                      style: AppTextStyles.bodySmall
-                                          .copyWith(color: AppColors.mutedForeground)),
+                                  Text(
+                                    project.client!,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
                                 ],
                                 const SizedBox(height: 12),
                                 Row(
@@ -342,8 +382,10 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                                     GestureDetector(
                                       onTap: () => _changeStatus(project),
                                       child: Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: statusColor.withValues(alpha: 0.14),
                                           borderRadius: BorderRadius.circular(6),
@@ -351,9 +393,13 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Text(statusLabel,
-                                                style: AppTextStyles.labelSmall.copyWith(
-                                                    color: statusColor, fontWeight: FontWeight.w600)),
+                                            Text(
+                                              statusLabel,
+                                              style: AppTextStyles.labelSmall.copyWith(
+                                                color: statusColor,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                             const SizedBox(width: 4),
                                             Icon(Icons.expand_more, size: 14, color: statusColor),
                                           ],
@@ -364,16 +410,21 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                                     if (project.dueDate != null)
                                       Text(
                                         'Due ${DateFormat('d MMM y').format(project.dueDate!)}',
-                                        style: AppTextStyles.labelSmall
-                                            .copyWith(color: AppColors.mutedForeground),
+                                        style: AppTextStyles.labelSmall.copyWith(
+                                          color: AppColors.mutedForeground,
+                                        ),
                                       ),
                                   ],
                                 ),
                                 if (project.description != null) ...[
                                   const SizedBox(height: 12),
-                                  Text(project.description!,
-                                      style: AppTextStyles.bodySmall
-                                          .copyWith(color: AppColors.mutedForeground, height: 1.4)),
+                                  Text(
+                                    project.description!,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.mutedForeground,
+                                      height: 1.4,
+                                    ),
+                                  ),
                                 ],
                               ],
                             ),
