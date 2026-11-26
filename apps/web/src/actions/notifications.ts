@@ -5,7 +5,6 @@ import { getUserSettings } from "@/actions/settings";
 import { getCurrentPeriod } from "@/lib/month";
 import { getBudgetWithSpending } from "@/actions/budget";
 import { getTodaysTasks } from "@/actions/tasks";
-import { getTodaysEvents } from "@/actions/calendar";
 import { getSavingsPots, getAverageMonthlyExpenses } from "@/actions/savings";
 import { getTransactions } from "@/actions/expenses";
 import { prisma } from "@/lib/prisma";
@@ -30,11 +29,10 @@ export async function getNotifications(): Promise<AppNotification[]> {
   const settings = await getUserSettings();
   const { month, year } = getCurrentPeriod(settings?.currentBudgetMonth, settings?.currentBudgetYear);
 
-  const [budgetData, todaysTasks, todaysEvents, savingsPots, avgMonthlyExpenses, recentTransactions, base, dueLoans] =
+  const [budgetData, todaysTasks, savingsPots, avgMonthlyExpenses, recentTransactions, base, dueLoans] =
     await Promise.all([
       getBudgetWithSpending(month, year),
       getTodaysTasks(),
-      getTodaysEvents(),
       getSavingsPots(),
       getAverageMonthlyExpenses(),
       getTransactions({ month, year }),
@@ -137,16 +135,6 @@ export async function getNotifications(): Promise<AppNotification[]> {
       id: "overdue-tasks",
       type: "warning",
       message: `${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""} need attention`,
-    });
-  }
-
-  // Today's reminders
-  const reminders = todaysEvents.filter((e) => e.type === "REMINDER");
-  if (reminders.length > 0) {
-    notifications.push({
-      id: "reminders",
-      type: "info",
-      message: `${reminders.length} reminder${reminders.length > 1 ? "s" : ""} today`,
     });
   }
 

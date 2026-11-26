@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, Snowflake, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,8 +66,40 @@ interface PerfumeFormPerfume {
   basedOn: string | null;
 }
 
-export function PerfumeForm({
-  open,
+const isKnownOccasion = (v: string) => !v || OCCASION_OPTIONS.some((o) => o.value === v);
+
+function initialForm(perfume: PerfumeFormPerfume | null): typeof DEFAULT_FORM {
+  if (!perfume) return DEFAULT_FORM;
+  const knownOcc = isKnownOccasion(perfume.occasion ?? "");
+  return {
+    name: perfume.name,
+    company: perfume.company ?? "",
+    category: perfume.category,
+    price: (perfume.price / 100).toString(),
+    quantity: perfume.quantity?.toString() ?? "",
+    status: perfume.status,
+    isSummer: perfume.isSummer,
+    blindBuy: perfume.blindBuy,
+    occasion: knownOcc ? (perfume.occasion ?? "DAILY_WEAR") : "OTHER",
+    notes: perfume.notes ?? "",
+    basedOn: perfume.basedOn ?? "",
+    customOccasion: !knownOcc ? (perfume.occasion ?? "") : "",
+  };
+}
+
+/** Mounts a fresh form each time the dialog opens, so state starts from the perfume being edited. */
+export function PerfumeForm(props: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: PerfumeFormData) => Promise<void>;
+  perfume?: PerfumeFormPerfume | null;
+  baseSymbol?: string;
+}) {
+  if (!props.open) return null;
+  return <PerfumeFormDialog {...props} />;
+}
+
+function PerfumeFormDialog({
   onClose,
   onSubmit,
   perfume = null,
@@ -79,35 +112,11 @@ export function PerfumeForm({
   baseSymbol?: string;
 }) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [formData, setFormData] = useState(() => initialForm(perfume));
 
-  const isKnownOccasion = (v: string) => !v || OCCASION_OPTIONS.some((o) => o.value === v);
   const occasionSelectValue = isKnownOccasion(formData.occasion)
     ? formData.occasion || "DAILY_WEAR"
     : "OTHER";
-
-  useEffect(() => {
-    if (!open) return;
-    if (!perfume) {
-      setFormData(DEFAULT_FORM);
-      return;
-    }
-    const knownOcc = isKnownOccasion(perfume.occasion ?? "");
-    setFormData({
-      name: perfume.name,
-      company: perfume.company ?? "",
-      category: perfume.category,
-      price: (perfume.price / 100).toString(),
-      quantity: perfume.quantity?.toString() ?? "",
-      status: perfume.status,
-      isSummer: perfume.isSummer,
-      blindBuy: perfume.blindBuy,
-      occasion: knownOcc ? (perfume.occasion ?? "DAILY_WEAR") : "OTHER",
-      notes: perfume.notes ?? "",
-      basedOn: perfume.basedOn ?? "",
-      customOccasion: !knownOcc ? (perfume.occasion ?? "") : "",
-    });
-  }, [open, perfume]);
 
   async function handleSubmit() {
     if (loading) return;
@@ -124,7 +133,7 @@ export function PerfumeForm({
         basedOn: formData.category === "ORIGINAL" ? null : formData.basedOn.trim() || null,
         occasion: occasionSelectValue === "OTHER" ? customOccasion.trim() || null : occasionSelectValue,
         notes: formData.notes.trim() || null,
-        price: parseFloat(formData.price) || 0,
+        price: parseMoney(formData.price) ?? 0,
         quantity: formData.quantity ? parseInt(formData.quantity, 10) || null : null,
         isLiked: perfume?.isLiked ?? false,
         buyNext: false,
@@ -137,7 +146,7 @@ export function PerfumeForm({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{perfume ? "Edit Perfume" : "Add Perfume"}</DialogTitle>
@@ -148,6 +157,7 @@ export function PerfumeForm({
             <Label htmlFor="p-name">Name</Label>
             <Input
               id="p-name"
+              autoFocus
               value={formData.name}
               onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Sauvage"
@@ -209,10 +219,8 @@ export function PerfumeForm({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="p-price">Price ({baseSymbol})</Label>
-              <Input
+              <MoneyInput
                 id="p-price"
-                type="number"
-                inputMode="decimal"
                 value={formData.price}
                 onChange={(e) => setFormData((f) => ({ ...f, price: e.target.value }))}
                 placeholder="0"

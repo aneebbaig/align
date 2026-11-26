@@ -42,8 +42,6 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
-  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-  const tomorrowEnd = new Date(todayEnd); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
   const in7Days = new Date(now); in7Days.setDate(in7Days.getDate() + 7);
 
   const month = now.getMonth() + 1;
@@ -56,8 +54,6 @@ export async function GET(req: NextRequest) {
   // Parallel DB fetch - all shared household data
   const [
     users,
-    todayEvents,
-    tomorrowEvents,
     overdueTasks,
     todayTasks,
     loansComingDue,
@@ -69,17 +65,9 @@ export async function GET(req: NextRequest) {
     prisma.user.findMany({
       select: {
         id: true, name: true, email: true,
-        notifyDailyDigest: true, notifyDigestTasks: true, notifyDigestCalendar: true,
+        notifyDailyDigest: true, notifyDigestTasks: true,
         notifyLoanDue: true, notifyDigestBudget: true, notifyDigestFinancials: true,
       },
-    }),
-    prisma.calendarEvent.findMany({
-      where: { date: { gte: todayStart, lte: todayEnd } },
-      orderBy: { startTime: "asc" },
-    }),
-    prisma.calendarEvent.findMany({
-      where: { date: { gte: tomorrowStart, lte: tomorrowEnd } },
-      orderBy: { startTime: "asc" },
     }),
     prisma.task.findMany({
       where: { status: { not: "DONE" }, type: "ONE_TIME", dueDate: { lt: todayStart } },
@@ -149,8 +137,6 @@ export async function GET(req: NextRequest) {
 
   // Only send if there's something worth emailing
   const hasContent =
-    todayEvents.length > 0 ||
-    tomorrowEvents.length > 0 ||
     overdueTasks.length > 0 ||
     todayTasks.length > 0 ||
     loansComingDue.length > 0 ||
@@ -165,8 +151,6 @@ export async function GET(req: NextRequest) {
   }
 
   const digestPayload = {
-    todayEvents: todayEvents.map((e) => ({ title: e.title, startTime: e.startTime, isAllDay: e.isAllDay })),
-    tomorrowEvents: tomorrowEvents.map((e) => ({ title: e.title, startTime: e.startTime, isAllDay: e.isAllDay })),
     overdueTasks: overdueTasks.map((t) => ({ title: t.title, dueDate: t.dueDate })),
     todayTasks: todayTasks.map((t) => ({ title: t.title, priority: t.priority })),
     loansComingDue: loansComingDue.map((l) => ({ personName: l.personName, remainingAmount: l.remainingAmount, dueDate: l.dueDate! })),
@@ -186,9 +170,7 @@ export async function GET(req: NextRequest) {
     const firstName = user.name?.split(" ")[0] ?? "there";
     const userPayload = {
       ...digestPayload,
-      todayEvents:    user.notifyDigestCalendar   ? digestPayload.todayEvents    : [],
-      tomorrowEvents: user.notifyDigestCalendar   ? digestPayload.tomorrowEvents : [],
-      overdueTasks:   user.notifyDigestTasks      ? digestPayload.overdueTasks   : [],
+          overdueTasks:   user.notifyDigestTasks      ? digestPayload.overdueTasks   : [],
       todayTasks:     user.notifyDigestTasks      ? digestPayload.todayTasks     : [],
       loansComingDue: user.notifyLoanDue          ? digestPayload.loansComingDue : [],
       budgetAlerts:   user.notifyDigestBudget     ? digestPayload.budgetAlerts   : [],
@@ -198,8 +180,6 @@ export async function GET(req: NextRequest) {
     };
 
     const userHasContent =
-      userPayload.todayEvents.length > 0 ||
-      userPayload.tomorrowEvents.length > 0 ||
       userPayload.overdueTasks.length > 0 ||
       userPayload.todayTasks.length > 0 ||
       userPayload.loansComingDue.length > 0 ||

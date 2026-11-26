@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 export type ColorTheme = "warm" | "carbon" | "dusk" | "moss" | "rose";
 
@@ -18,21 +18,38 @@ export function useColorTheme() {
   return useContext(ColorThemeContext);
 }
 
+const COLOR_KEY = "color-theme";
+const VALID_COLORS: ColorTheme[] = ["warm", "carbon", "dusk", "moss", "rose"];
+const colorListeners = new Set<() => void>();
+
+function subscribeColor(cb: () => void) {
+  colorListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    colorListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function getColorSnapshot(): ColorTheme {
+  const stored = localStorage.getItem(COLOR_KEY) as ColorTheme | null;
+  return stored && VALID_COLORS.includes(stored) ? stored : "warm";
+}
+
 export function ColorThemeProvider({ children }: { children: React.ReactNode }) {
-  const [colorTheme, setColorThemeState] = useState<ColorTheme>("warm");
+  const colorTheme = useSyncExternalStore<ColorTheme>(
+    subscribeColor,
+    getColorSnapshot,
+    () => "warm"
+  );
 
   useEffect(() => {
-    const stored = localStorage.getItem("color-theme") as ColorTheme | null;
-    const valid: ColorTheme[] = ["warm", "carbon", "dusk", "moss", "rose"];
-    const theme = stored && valid.includes(stored) ? stored : "warm";
-    setColorThemeState(theme);
-    applyTheme(theme);
-  }, []);
+    applyTheme(colorTheme);
+  }, [colorTheme]);
 
   function setColorTheme(theme: ColorTheme) {
-    setColorThemeState(theme);
-    localStorage.setItem("color-theme", theme);
-    applyTheme(theme);
+    localStorage.setItem(COLOR_KEY, theme);
+    colorListeners.forEach((l) => l());
   }
 
   return (

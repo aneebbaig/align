@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, CalendarDays, Home, Plane, Wrench, LayoutGrid, Heart, type LucideIcon } from "lucide-react";
+import { Plus, CalendarDays, Home, Plane, Wrench, LayoutGrid, Archive, MoreHorizontal, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -12,13 +12,14 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createPlanner } from "@/actions/plan";
+import { createPlanner, deletePlanner, updatePlannerStatus } from "@/actions/plan";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { planTotals } from "@/lib/plans/totals";
-import { sumTotals } from "@/lib/wedding/totals";
-import { BudgetMeter } from "@/components/wedding/budget-meter";
-import { WeddingCreateForm } from "@/components/wedding/create-form";
-import { WeddingPlan, fmtShort } from "@/components/wedding/wedding-types";
+import { fmtShort } from "@/components/wedding/wedding-types";
 import { cn } from "@/lib/utils";
 
 interface PlannerItem { id: string; estimatedCost: number; actualCost: number | null; status: string; }
@@ -35,87 +36,99 @@ const PLANNER_TYPES: { value: string; label: string; icon: LucideIcon; color: st
   { value: "RENOVATION", label: "Renovation", icon: Wrench, color: "#78716c" },
   { value: "CUSTOM", label: "Custom", icon: LayoutGrid, color: "#8b5cf6" },
 ];
-const WEDDING_TILE = { value: "WEDDING", label: "Wedding", icon: Heart, color: "#ec4899" };
 
 function getTypeInfo(type: string) {
   return PLANNER_TYPES.find((t) => t.value === type) ?? PLANNER_TYPES[0];
 }
 
-/** One card, for a plan or a wedding: icon + name, a muted date, a thin meter, one muted line. */
-function PlanCard({ href, icon: Icon, color, title, meta, meter, line }: {
-  href: string; icon?: LucideIcon; color?: string; title: string; meta?: string | null; meter: React.ReactNode; line: string;
-}) {
-  return (
-    <Link href={href} className="block rounded-xl border border-border bg-card p-5 space-y-3 hover:border-foreground/15 transition-colors">
-      <div className="flex items-center gap-2.5 min-w-0">
-        {Icon && <Icon className="h-4 w-4 shrink-0" style={{ color }} />}
-        <div className="min-w-0">
-          <p className="font-medium truncate">{title}</p>
-          {meta && <p className="text-xs text-muted-foreground mt-0.5">{meta}</p>}
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        {meter}
-        <p className="text-xs text-muted-foreground tabular-nums">{line}</p>
-      </div>
-    </Link>
-  );
-}
+const STATUS_BADGE: Record<string, { label: string; variant: "secondary" | "success" | "outline" }> = {
+  IN_PROGRESS: { label: "In progress", variant: "secondary" },
+  COMPLETED: { label: "Completed", variant: "success" },
+  CANCELLED: { label: "Archived", variant: "outline" },
+};
 
-function planCard(plan: Planner, sym: string) {
+const isClosed = (p: Planner) => p.status === "COMPLETED" || p.status === "CANCELLED";
+
+/** One plan card: a link to the plan plus a menu (the menu sits beside the link, never inside it). */
+function PlanCard({ plan, sym, onStatus, onDelete }: {
+  plan: Planner; sym: string; onStatus: (id: string, status: string) => void; onDelete: (plan: Planner) => void;
+}) {
   const t = planTotals(plan.items);
   const typeInfo = getTypeInfo(plan.type);
-  const done = plan.status === "COMPLETED" ? "Completed" : plan.status === "CANCELLED" ? "Cancelled" : null;
-  const meta = [plan.targetDate ? format(new Date(plan.targetDate), "d MMM yyyy") : null, done].filter(Boolean).join(" · ");
+  const badge = STATUS_BADGE[plan.status];
   const pct = t.estimated > 0 ? Math.min(100, (t.paid / t.estimated) * 100) : 0;
+  const boughtCount = plan.items.filter((i) => i.status === "PAID").length;
+  const donePct = plan.items.length > 0 ? Math.round((boughtCount / plan.items.length) * 100) : 0;
+  const closed = isClosed(plan);
   return (
-    <PlanCard
-      key={plan.id}
-      href={`/plans/${plan.id}`}
-      icon={typeInfo.icon}
-      color={typeInfo.color}
-      title={plan.name}
-      meta={meta || null}
-      meter={
-        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+    <div className="relative rounded-xl border border-border bg-card hover:border-foreground/15 transition-colors">
+      <Link href={`/plans/${plan.id}`} className="block p-5 pr-12 space-y-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <typeInfo.icon className="h-4 w-4 shrink-0" style={{ color: typeInfo.color }} />
+          <div className="min-w-0">
+            <p className="font-medium truncate">{plan.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+              {plan.targetDate && <span>{format(new Date(plan.targetDate), "d MMM yyyy")}</span>}
+              {badge && <Badge variant={badge.variant} className="px-2 py-0 text-[11px] font-medium">{badge.label}</Badge>}
+            </p>
+          </div>
         </div>
-      }
-      line={`${fmtShort(t.paid, sym)} paid of ${fmtShort(t.estimated, sym)}`}
-    />
+        <div className="space-y-1.5">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground tabular-nums">{fmtShort(t.paid, sym)} paid of {fmtShort(t.estimated, sym)}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">{donePct}% done · {plan.items.length} {plan.items.length === 1 ? "item" : "items"}</p>
+        </div>
+      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className="absolute top-3 right-3 h-8 w-8" aria-label={`Actions for ${plan.name}`}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {plan.status === "PLANNING" && <DropdownMenuItem onClick={() => onStatus(plan.id, "IN_PROGRESS")}>Start</DropdownMenuItem>}
+          {!closed && <DropdownMenuItem onClick={() => onStatus(plan.id, "COMPLETED")}>Complete</DropdownMenuItem>}
+          {!closed && <DropdownMenuItem onClick={() => onStatus(plan.id, "CANCELLED")}>Archive</DropdownMenuItem>}
+          {closed && <DropdownMenuItem onClick={() => onStatus(plan.id, "IN_PROGRESS")}>Reopen</DropdownMenuItem>}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => onDelete(plan)}>Delete</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
-function weddingCard(plan: WeddingPlan, sym: string) {
-  const t = sumTotals(plan.expenses);
-  return (
-    <PlanCard
-      key={plan.id}
-      href={`/wedding/${plan.id}`}
-      title={`💍 ${plan.brideName} & ${plan.groomName}`}
-      meta={plan.weddingDate ? format(new Date(plan.weddingDate), "d MMM yyyy") : null}
-      meter={<BudgetMeter size="xs" shortCopy={plan.totalBudget > 0} projected={t.projected} paid={t.paid} budget={plan.totalBudget} symbol={sym} />}
-      line={`${fmtShort(t.paid, sym)} paid of ${fmtShort(t.projected, sym)}`}
-    />
-  );
-}
-
-export function PlansClient({ planners, weddings, baseSymbol = "Rs" }: { planners: Planner[]; weddings: WeddingPlan[]; baseSymbol?: string }) {
+export function PlansClient({ planners, baseSymbol = "Rs" }: { planners: Planner[]; baseSymbol?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState("GENERAL");
   const [form, setForm] = useState({ name: "", description: "", targetDate: "" });
 
-  const isClosed = (p: Planner) => p.status === "COMPLETED" || p.status === "CANCELLED";
-  const activeCards = [
-    ...planners.filter((p) => !isClosed(p)).map((p) => planCard(p, baseSymbol)),
-    ...weddings.filter((w) => w.status !== "DONE").map((w) => weddingCard(w, baseSymbol)),
-  ];
-  const closedCards = [
-    ...planners.filter(isClosed).map((p) => planCard(p, baseSymbol)),
-    ...weddings.filter((w) => w.status === "DONE").map((w) => weddingCard(w, baseSymbol)),
-  ];
+  const [deleting, setDeleting] = useState<Planner | null>(null);
+  const activeList = planners.filter((p) => !isClosed(p));
+  const closedList = planners.filter(isClosed);
+
+  async function changeStatus(id: string, status: string) {
+    const r = await updatePlannerStatus(id, status);
+    if (r.success) { toast.success(status === "COMPLETED" ? "Plan completed" : status === "CANCELLED" ? "Plan archived" : "Plan started"); router.refresh(); }
+    else toast.error(r.error ?? "Failed");
+  }
+
+  async function removePlan() {
+    if (!deleting) return;
+    const r = await deletePlanner(deleting.id);
+    setDeleting(null);
+    if (r.success) { toast.success("Plan deleted"); router.refresh(); } else toast.error(r.error ?? "Failed");
+  }
+
+  const renderCards = (list: Planner[]) => (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {list.map((p) => <PlanCard key={p.id} plan={p} sym={baseSymbol} onStatus={changeStatus} onDelete={setDeleting} />)}
+    </div>
+  );
 
   async function onSubmit() {
     if (!form.name.trim()) return;
@@ -140,40 +153,38 @@ export function PlansClient({ planners, weddings, baseSymbol = "Rs" }: { planner
     setLoading(false);
   }
 
-  const tiles = [...PLANNER_TYPES, WEDDING_TILE];
 
   return (
     <>
       <PageHeader
         section="Planning"
         title="Plans"
-        description="Big things you're paying for over time – a trip, a house move, a renovation, a wedding."
+        description="Big things you're paying for over time – a trip, a house move, a renovation."
         action={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New plan</Button>}
       />
 
-      {activeCards.length === 0 && closedCards.length === 0 ? (
+      {planners.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
           title="No plans yet"
-          description="Big things you're paying for over time – a trip, a house move, a renovation, a wedding."
+          description="Big things you're paying for over time – a trip, a house move, a renovation."
           action={{ label: "New plan", onClick: () => setOpen(true) }}
         />
       ) : (
-        <div className="space-y-8">
-          {activeCards.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">{activeCards}</div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nothing active right now.</p>
-          )}
-          {closedCards.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors select-none">
-                Completed &amp; cancelled ({closedCards.length})
-              </summary>
-              <div className="grid gap-3 sm:grid-cols-2 mt-4">{closedCards}</div>
-            </details>
-          )}
-        </div>
+        <Tabs defaultValue="active">
+          <TabsList>
+            <TabsTrigger value="active">Active ({activeList.length})</TabsTrigger>
+            <TabsTrigger value="done">Done &amp; archived ({closedList.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active" className="mt-4">
+            {activeList.length > 0 ? renderCards(activeList) : <p className="text-sm text-muted-foreground">Nothing active right now.</p>}
+          </TabsContent>
+          <TabsContent value="done" className="mt-4">
+            {closedList.length > 0
+              ? renderCards(closedList)
+              : <EmptyState icon={Archive} title="Nothing here yet" description="Completed and archived plans show up here." />}
+          </TabsContent>
+        </Tabs>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -181,7 +192,7 @@ export function PlansClient({ planners, weddings, baseSymbol = "Rs" }: { planner
           <DialogHeader><DialogTitle>New plan</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Plan type">
-              {tiles.map((t) => (
+              {PLANNER_TYPES.map((t) => (
                 <button
                   key={t.value}
                   type="button"
@@ -199,10 +210,7 @@ export function PlansClient({ planners, weddings, baseSymbol = "Rs" }: { planner
               ))}
             </div>
 
-            {type === "WEDDING" ? (
-              <WeddingCreateForm baseSymbol={baseSymbol} onCreated={() => setOpen(false)} />
-            ) : (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="plan-name">Name</Label>
                   <Input id="plan-name" placeholder="e.g. Kitchen refresh" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") void onSubmit(); }} />
@@ -218,11 +226,12 @@ export function PlansClient({ planners, weddings, baseSymbol = "Rs" }: { planner
                 <Button type="button" className="w-full" onClick={onSubmit} disabled={loading || !form.name.trim()}>
                   {loading ? "Creating..." : "Create"}
                 </Button>
-              </div>
-            )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title={`Delete "${deleting?.name ?? ""}"?`} description="All its items will be permanently deleted." onConfirm={removePlan} />
     </>
   );
 }

@@ -14,6 +14,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { cn } from "@/lib/utils";
 import type { SerializedPlanner } from "@/lib/planner/store";
 import { lineForm, settingsForm } from "@/lib/planner/forms";
@@ -29,7 +31,7 @@ type Goal = Row["goals"][number];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthLabel = (m: number, y: number) => `${MONTHS[m - 1]} ${y}`;
 const rs = (paisas: number) => (paisas / 100).toLocaleString();
-const toUnits = (s: string) => Math.round(parseFloat(s) * 100); // rupees/dollars -> paisas/cents
+const toUnits = (n: number) => Math.round(n * 100); // major units -> minor units
 const monthInput = (m: number, y: number) => `${y}-${String(m).padStart(2, "0")}`;
 const parseMonthInput = (s: string) => {
   const [y, m] = s.split("-").map(Number);
@@ -44,7 +46,7 @@ async function report(p: Promise<{ success: boolean; error?: string }>, ok?: str
 }
 
 // One line cell: shows the amount; click to set it for this month or onward.
-function LineCell({ line, row }: { line: Line; row: Row }) {
+function LineCell({ line, row, baseSymbol }: { line: Line; row: Row; baseSymbol: string }) {
   const cell = row.cells.find((c) => c.lineId === line.id);
   const native = cell?.native ?? 0;
   const [open, setOpen] = useState(false);
@@ -52,9 +54,10 @@ function LineCell({ line, row }: { line: Line; row: Row }) {
   const [busy, setBusy] = useState(false);
 
   async function save(scope: "FROM_HERE" | "THIS_MONTH") {
-    if (value.trim() === "" || Number.isNaN(parseFloat(value)) || parseFloat(value) < 0) return;
+    const amount = parseMoney(value);
+    if (amount == null || amount < 0 || busy) return;
     setBusy(true);
-    const ok = await report(plannerSetCell(line.id, { month: row.month, year: row.year, amount: toUnits(value), scope }));
+    const ok = await report(plannerSetCell(line.id, { month: row.month, year: row.year, amount: toUnits(amount), scope }));
     setBusy(false);
     if (ok) setOpen(false);
   }
@@ -81,12 +84,26 @@ function LineCell({ line, row }: { line: Line; row: Row }) {
       <PopoverContent className="w-64 space-y-3" align="end">
         <div className="text-sm font-medium">{line.name} · {monthLabel(row.month, row.year)}</div>
         <div className="space-y-1.5">
-          <Label>Amount ({line.currency === "USD" ? "$" : "Rs"})</Label>
-          <Input autoFocus type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} />
+          <Label>Amount ({line.currency === "USD" ? "$" : baseSymbol})</Label>
+          <MoneyInput
+            autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              save(e.shiftKey ? "FROM_HERE" : "THIS_MONTH");
+            }}
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => save("THIS_MONTH")}>Just this month</Button>
-          <Button size="sm" disabled={busy} onClick={() => save("FROM_HERE")}>From this month on</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => save("THIS_MONTH")} className="h-auto flex-col gap-0 py-1.5">
+            Just this month<span className="text-[10px] font-normal text-muted-foreground">Enter</span>
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => save("FROM_HERE")} className="h-auto flex-col gap-0 py-1.5">
+            From this month on<span className="text-[10px] font-normal opacity-70">Shift+Enter</span>
+          </Button>
         </div>
         {cell?.isOverride && (
           <Button size="sm" variant="ghost" className="w-full text-muted-foreground" disabled={busy} onClick={clearOverride}>
@@ -99,7 +116,7 @@ function LineCell({ line, row }: { line: Line; row: Row }) {
 }
 
 // Goals cell: lists the month's goals; click to add/edit/delete.
-function GoalsCell({ row }: { row: Row }) {
+function GoalsCell({ row, baseSymbol }: { row: Row; baseSymbol: string }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const thisMonth = monthInput(row.month, row.year);
@@ -113,11 +130,13 @@ function GoalsCell({ row }: { row: Row }) {
       : { name: "", amount: "", note: "", month: thisMonth });
   }
 
-  async function save() {
-    if (!form.name.trim() || !(parseFloat(form.amount) > 0) || !form.month) return;
+  async function save(e?: React.FormEvent) {
+    e?.preventDefault();
+    const amount = parseMoney(form.amount);
+    if (!form.name.trim() || !(amount != null && amount > 0) || !form.month || busy) return;
     setBusy(true);
     // The month can be changed to move a goal; the table recalculates from there.
-    const payload = { name: form.name, ...parseMonthInput(form.month), amountPaisas: toUnits(form.amount), note: form.note.trim() || null };
+    const payload = { name: form.name, ...parseMonthInput(form.month), amountPaisas: toUnits(amount), note: form.note.trim() || null };
     const ok = await report(editing ? plannerUpdateGoal(editing.id, payload) : plannerAddGoal(payload));
     setBusy(false);
     if (ok) startEdit(null);
@@ -145,20 +164,20 @@ function GoalsCell({ row }: { row: Row }) {
             </button>
           </div>
         ))}
-        <div className="space-y-2 border-t border-border pt-3">
+        <form onSubmit={save} className="space-y-2 border-t border-border pt-3">
           <div className="text-xs text-muted-foreground">{editing ? `Edit "${editing.name}"` : "Add a goal"}</div>
-          <Input placeholder="Name (e.g. Engine Swap)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-          <Input type="number" min="0" placeholder="Amount (Rs)" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          <Input autoFocus placeholder="Name (e.g. Engine Swap)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <MoneyInput placeholder={`Amount (${baseSymbol})`} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
           <Input placeholder="Note (optional, e.g. reserved)" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
           <div className="flex items-center gap-2">
             <Label className="text-xs text-muted-foreground shrink-0">Month</Label>
             <Input type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} />
           </div>
           <div className="flex gap-2">
-            {editing && <Button size="sm" variant="ghost" onClick={() => startEdit(null)}>Cancel</Button>}
-            <Button size="sm" className="flex-1" disabled={busy} onClick={save}>{editing ? "Save" : "Add goal"}</Button>
+            {editing && <Button type="button" size="sm" variant="ghost" onClick={() => startEdit(null)}>Cancel</Button>}
+            <Button type="submit" size="sm" className="flex-1" disabled={busy}>{editing ? "Save" : "Add goal"}</Button>
           </div>
-        </div>
+        </form>
       </PopoverContent>
     </Popover>
   );
@@ -169,8 +188,9 @@ function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean;
   const [form, setForm] = useState(() => lineForm(line));
   const [busy, setBusy] = useState(false);
 
-  async function save() {
-    if (!form.name.trim()) return;
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim() || busy) return;
     setBusy(true);
     const ok = await report(line ? plannerUpdateLine(line.id, form) : plannerAddLine(form), line ? "Line updated" : "Line added");
     setBusy(false);
@@ -181,7 +201,7 @@ function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean;
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>{line ? "Edit line" : "Add a line"}</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <form onSubmit={save} className="space-y-4">
           <div className="space-y-1.5">
             <Label>Name</Label>
             <Input autoFocus placeholder="e.g. Base Savings, Car Loan" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -208,26 +228,28 @@ function LineDialog({ line, open, onClose }: { line: Line | null; open: boolean;
               </Select>
             </div>
           </div>
-          <Button className="w-full" disabled={busy} onClick={save}>{line ? "Save" : "Add line"}</Button>
-        </div>
+          <Button type="submit" className="w-full" disabled={busy}>{line ? "Save" : "Add line"}</Button>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlanner["settings"]; open: boolean; onClose: () => void }) {
+function SettingsDialog({ settings, open, onClose, baseSymbol }: { settings: SerializedPlanner["settings"]; open: boolean; onClose: () => void; baseSymbol: string }) {
   // Remounted on every open (see the key where it is rendered), so this is always the current settings.
   const [form, setForm] = useState(() => settingsForm(settings));
   const [busy, setBusy] = useState(false);
 
-  async function save() {
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
     const { month, year } = parseMonthInput(form.start);
     setBusy(true);
     const ok = await report(plannerUpdateSettings({
       startMonth: month,
       startYear: year,
       months: parseInt(form.months, 10),
-      startingCashPaisas: toUnits(form.startingCash || "0"),
+      startingCashPaisas: toUnits(parseMoney(form.startingCash) ?? 0),
       usdRate: parseFloat(form.usdRate),
     }), "Forecast updated");
     setBusy(false);
@@ -238,29 +260,30 @@ function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlann
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Forecast settings</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <form onSubmit={save} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Start month</Label><Input type="month" value={form.start} onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Months</Label><Input type="number" min="1" max="120" value={form.months} onChange={(e) => setForm((f) => ({ ...f, months: e.target.value }))} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>Starting cash (Rs)</Label><Input type="number" value={form.startingCash} onChange={(e) => setForm((f) => ({ ...f, startingCash: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>USD rate (Rs per $)</Label><Input type="number" min="0" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Starting cash ({baseSymbol})</Label><MoneyInput value={form.startingCash} onChange={(e) => setForm((f) => ({ ...f, startingCash: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>USD rate ({baseSymbol} per $)</Label><Input type="number" min="0" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: e.target.value }))} /></div>
           </div>
           <p className="text-xs text-muted-foreground">The forecast&apos;s own rate - it doesn&apos;t change the real one in Settings.</p>
-          <Button className="w-full" disabled={busy} onClick={save}>Save</Button>
-        </div>
+          <Button type="submit" className="w-full" disabled={busy}>Save</Button>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
+export function PlannerClient({ planner, baseSymbol }: { planner: SerializedPlanner; baseSymbol: string }) {
   const { settings, lines, rows } = planner;
   const [lineDialog, setLineDialog] = useState<{ open: boolean; line: Line | null }>({ open: false, line: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteLine, setDeleteLine] = useState<Line | null>(null);
   const last = rows[rows.length - 1];
+  useAddShortcut(lineDialog.open || settingsOpen, () => setLineDialog({ open: true, line: null }));
 
   function move(line: Line, dir: -1 | 1) {
     const ids = lines.map((l) => l.id);
@@ -296,7 +319,7 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
       ) : null}
 
       <p className="mt-4 mb-2 text-xs text-muted-foreground">
-        {`Starting cash Rs ${rs(settings.startingCashPaisas)} · USD rate ${settings.usdRate} · ${monthLabel(settings.startMonth, settings.startYear)} → ${last ? monthLabel(last.month, last.year) : ""} (${settings.months} months)`}
+        {`Starting cash ${baseSymbol} ${rs(settings.startingCashPaisas)} · USD rate ${settings.usdRate} · ${monthLabel(settings.startMonth, settings.startYear)} → ${last ? monthLabel(last.month, last.year) : ""} (${settings.months} months)`}
       </p>
       <div className="rounded-xl border border-border overflow-x-auto">
         <table className="w-full text-sm border-collapse">
@@ -339,9 +362,9 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
                     {monthLabel(row.month, row.year)}
                   </td>
                   {lines.map((line) => (
-                    <td key={line.id} className="p-0 whitespace-nowrap"><LineCell line={line} row={row} /></td>
+                    <td key={line.id} className="p-0 whitespace-nowrap"><LineCell line={line} row={row} baseSymbol={baseSymbol} /></td>
                   ))}
-                  <td className="p-0 min-w-[14rem]"><GoalsCell row={row} /></td>
+                  <td className="p-0 min-w-[14rem]"><GoalsCell row={row} baseSymbol={baseSymbol} /></td>
                   <td className={cn("px-3 py-2 text-right tabnum whitespace-nowrap", row.net < 0 ? "text-red-500 font-semibold" : "text-emerald-600 dark:text-emerald-400")}>
                     {rs(row.net)}
                   </td>
@@ -362,7 +385,7 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
         open={lineDialog.open}
         onClose={() => setLineDialog({ open: false, line: null })}
       />
-      <SettingsDialog key={settingsOpen ? "settings-open" : "settings-closed"} settings={settings} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsDialog key={settingsOpen ? "settings-open" : "settings-closed"} baseSymbol={baseSymbol} settings={settings} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConfirmDialog
         open={!!deleteLine}
         onOpenChange={(o) => !o && setDeleteLine(null)}

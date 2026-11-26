@@ -5,7 +5,7 @@ import { getUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { toPaisas } from "@/lib/utils";
 import { ActionResult } from "@/types";
-import { createTransaction } from "@/actions/expenses";
+import { createTransaction, deleteTransaction } from "@/actions/expenses";
 import { nextItemOrder, reorderPlanItems } from "@/lib/plans/store";
 
 export async function getPlanners() {
@@ -192,10 +192,15 @@ export async function deletePlannerItem(id: string): Promise<ActionResult> {
   }
 }
 
-// One-tap: mark a plan item bought and book a real expense for it (the flow
-// itemized goals had). Auto-provisions a "Plan Purchase" category so it stays
-// a single click, and reuses createTransaction for the income/notification checks.
-export async function logPlanItemExpense(itemId: string): Promise<ActionResult> {
+// Mark a plan item bought and book a real expense for it. Everything beyond the
+// item id is optional: `amount` (major units; default actual ?? estimate), `date`
+// (yyyy-MM-dd, the client's own calendar day), `categoryId` (default: an
+// auto-provisioned "Plan Purchase"). Reuses createTransaction for the
+// income/notification checks, then links the expense to the item so it can be undone.
+export async function logPlanItemExpense(
+  itemId: string,
+  opts: { amount?: number; date?: string; categoryId?: string } = {},
+): Promise<ActionResult<{ transactionId: string | null }>> {
   try {
     const userId = await getUserId();
     const item = await prisma.planItem.findFirst({
@@ -204,30 +209,71 @@ export async function logPlanItemExpense(itemId: string): Promise<ActionResult> 
     });
     if (!item || item.plan.userId !== userId) return { success: false, error: "Not found" };
 
-    const amountPaisas = item.actualCost ?? item.estimatedCost;
+    const amountPaisas = opts.amount !== undefined ? toPaisas(opts.amount) : (item.actualCost ?? item.estimatedCost);
     if (!amountPaisas || amountPaisas <= 0) return { success: false, error: "Set a cost for this item first" };
+    if (opts.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) return { success: false, error: "Invalid date" };
 
-    const category = await prisma.category.findFirst({ where: { userId, name: "Plan Purchase", type: "EXPENSE" } })
-      ?? await prisma.category.create({ data: { userId, name: "Plan Purchase", type: "EXPENSE", color: "#8b5cf6", icon: "🎯" } });
+    let categoryId: string | undefined;
+    if (opts.categoryId) {
+      categoryId = (await prisma.category.findFirst({ where: { id: opts.categoryId, userId }, select: { id: true } }))?.id;
+      if (!categoryId) return { success: false, error: "Category not found" };
+    } else {
+      categoryId = (await prisma.category.findFirst({ where: { userId, name: "Plan Purchase", type: "EXPENSE" } })
+        ?? await prisma.category.create({ data: { userId, name: "Plan Purchase", type: "EXPENSE", color: "#8b5cf6", icon: "🎯" } })).id;
+    }
 
+    const date = opts.date ?? new Date().toISOString().slice(0, 10);
     const result = await createTransaction({
       amount: amountPaisas / 100,
       type: "EXPENSE",
-      categoryId: category.id,
+      categoryId,
       description: item.name,
-      date: new Date().toISOString().slice(0, 10),
+      date,
       isRecurring: false,
       tags: "",
       fundingSource: "INCOME",
     });
-    if (!result.success) return result;
+    if (!result.success) return { success: false, error: result.error };
+
+    // createTransaction doesn't return the row, so pick up the one it just made.
+    const created = await prisma.transaction.findFirst({
+      where: { userId, categoryId, description: item.name, amount: amountPaisas, planItemId: null },
+      orderBy: { id: "desc" },
+      select: { id: true },
+    });
+    if (created) await prisma.transaction.update({ where: { id: created.id }, data: { planItemId: itemId } });
 
     await prisma.planItem.update({ where: { id: itemId }, data: { status: "PAID", actualCost: amountPaisas } });
     revalidatePath(`/plans/${item.plan.id}`);
-    return { success: true };
+    return { success: true, data: { transactionId: created?.id ?? null } };
   } catch (e) {
     console.error("[logPlanItemExpense]", e);
     return { success: false, error: "Failed to log expense" };
+  }
+}
+
+// Undo of logPlanItemExpense: removes the expense it booked and un-buys the item.
+export async function undoPlanItemExpense(itemId: string, transactionId: string | null): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const item = await prisma.planItem.findFirst({
+      where: { id: itemId },
+      select: { plan: { select: { userId: true, id: true } } },
+    });
+    if (!item || item.plan.userId !== userId) return { success: false, error: "Not found" };
+    if (transactionId) {
+      const linked = await prisma.transaction.findFirst({ where: { id: transactionId, userId, planItemId: itemId }, select: { id: true } });
+      if (linked) {
+        const r = await deleteTransaction(linked.id);
+        if (!r.success) return r;
+      }
+    }
+    await prisma.planItem.update({ where: { id: itemId }, data: { status: "PENDING" } });
+    revalidatePath(`/plans/${item.plan.id}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[undoPlanItemExpense]", e);
+    return { success: false, error: "Failed to undo" };
   }
 }
 

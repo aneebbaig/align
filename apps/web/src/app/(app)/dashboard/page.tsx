@@ -4,7 +4,6 @@ import { getCurrentPeriod } from "@/lib/month";
 import { getMonthlySummary, getSpendingByCategory, getMonthlyTrend, getTransactions, getRegretPurchaseStats } from "@/actions/expenses";
 import { getBudgetWithSpending } from "@/actions/budget";
 import { getTodaysTasks } from "@/actions/tasks";
-import { getTodaysEvents } from "@/actions/calendar";
 import { getSavingsPots, getCumulativeSavings, getAverageMonthlyExpenses } from "@/actions/savings";
 import { getUserSettings } from "@/actions/settings";
 import { getCurrencies } from "@/lib/currency-helpers";
@@ -14,7 +13,6 @@ import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { BudgetProgress } from "@/components/dashboard/budget-progress";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
 import { TodayTasks } from "@/components/dashboard/today-tasks";
-import { TodaySchedule } from "@/components/dashboard/today-schedule";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { RegretBuyCard } from "@/components/dashboard/regret-buy-card";
 
@@ -26,14 +24,13 @@ export default async function DashboardPage() {
   const { month, year } = getCurrentPeriod(userSettings?.currentBudgetMonth, userSettings?.currentBudgetYear);
   const now = new Date();
 
-  const [summary, spendingByCategory, trend, budgetData, todaysTasks, todaysEvents, savingsPots, recentTransactions, cumulativeSavings, avgMonthlyExpenses, regretStats, currencies] =
+  const [summary, spendingByCategory, trend, budgetData, todaysTasks, savingsPots, recentTransactions, cumulativeSavings, avgMonthlyExpenses, regretStats, currencies] =
     await Promise.all([
       getMonthlySummary(month, year),
       getSpendingByCategory(month, year),
       getMonthlyTrend(6),
       getBudgetWithSpending(month, year),
       getTodaysTasks(),
-      getTodaysEvents(),
       getSavingsPots(),
       getTransactions({ month, year }),
       getCumulativeSavings(),
@@ -153,11 +150,8 @@ export default async function DashboardPage() {
       {/* Regret buys */}
       <RegretBuyCard stats={regretStats} baseSymbol={baseSymbol} />
 
-      {/* Tasks + Schedule */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TodayTasks tasks={todaysTasks} />
-        <TodaySchedule events={todaysEvents} />
-      </div>
+      {/* Tasks */}
+      <TodayTasks tasks={todaysTasks} />
     </div>
   );
 }

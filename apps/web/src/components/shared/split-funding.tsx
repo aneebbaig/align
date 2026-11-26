@@ -4,6 +4,7 @@ import { CornerDownRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatAmount as fmt } from "@/lib/currency-utils";
 
 export interface SplitSourceRow {
   value: string;
@@ -19,7 +20,6 @@ export interface FundingOption {
   group: "income" | "pot";
 }
 
-const fmt = (paisas: number) => (paisas / 100).toLocaleString();
 
 /** Shared grouped dropdown content - income (period-scoped) vs savings pots
  * (global), reused by the single-source picker and both split-funding rows. */

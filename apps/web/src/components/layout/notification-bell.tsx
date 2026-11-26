@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Bell, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,9 +16,27 @@ const config: Record<AppNotification["type"], { icon: React.ElementType; classNa
   info:    { icon: Info,          className: "text-blue-500" },
 };
 
-function loadDismissed(): Set<string> {
+const listeners = new Set<() => void>();
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function getRawSnapshot(): string {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    return localStorage.getItem(STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function parseDismissed(raw: string): Set<string> {
+  try {
     return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
   } catch {
     return new Set();
@@ -33,35 +51,27 @@ function saveDismissed(ids: Set<string>) {
   } catch {
     // ignore
   }
+  listeners.forEach((l) => l());
 }
 
 export function NotificationBell({ notifications }: { notifications: AppNotification[] }) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setDismissed(loadDismissed());
-  }, []);
+  const raw = useSyncExternalStore(subscribe, getRawSnapshot, () => "");
+  const dismissed = useMemo(() => parseDismissed(raw), [raw]);
 
   const visible = notifications.filter((n) => !dismissed.has(n.id));
   const errorCount = visible.filter((n) => n.type === "error").length;
   const count = visible.length;
 
   function dismiss(id: string) {
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      saveDismissed(next);
-      return next;
-    });
+    const next = new Set(dismissed);
+    next.add(id);
+    saveDismissed(next);
   }
 
   function dismissAll() {
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      for (const n of notifications) next.add(n.id);
-      saveDismissed(next);
-      return next;
-    });
+    const next = new Set(dismissed);
+    for (const n of notifications) next.add(n.id);
+    saveDismissed(next);
   }
 
   return (

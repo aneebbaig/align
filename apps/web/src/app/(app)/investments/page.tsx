@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { getInvestments, getInvestmentPlan, getInvestmentSuggestion } from "@/actions/savings";
+import { getInvestments, getInvestmentPlan, getInvestmentSuggestion } from "@/actions/investments";
 import { getOpenBudgetPeriod } from "@/actions/budget";
 import { getCurrencies } from "@/lib/currency-helpers";
 import { InvestmentsClient } from "@/components/investments/investments-client";

@@ -515,7 +515,7 @@ async function main() {
     },
   });
 
-  // ─── tasks, projects, lists, calendar ─────────────────────────────────────
+  // ─── tasks, projects, lists ─────────────────────────────────────
   console.log("Seeding tasks, projects, and lists...");
   await prisma.task.createMany({
     data: [
@@ -643,21 +643,6 @@ async function main() {
         priority: "HIGH",
         status: "DONE",
         doneAt: daysFromNow(-12),
-        userId: user.id,
-      },
-    ],
-  });
-
-  await prisma.calendarEvent.createMany({
-    data: [
-      { title: "Salary lands", date: daysFromNow(6), type: "REMINDER", userId: user.id },
-      { title: "School fee due", date: daysFromNow(38), type: "DEADLINE", userId: user.id },
-      {
-        title: "Meridian handover call",
-        date: daysFromNow(12),
-        type: "EVENT",
-        startTime: "16:00",
-        isAllDay: false,
         userId: user.id,
       },
     ],

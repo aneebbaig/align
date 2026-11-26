@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Loader2, Check } from "lucide-react";
+import { DueDateChips } from "@/components/shared/due-date-chips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,6 @@ interface FormValues {
   name: string;
   client: string;
   description: string;
-  dueDate: string;
 }
 
 interface ExistingProject {
@@ -39,13 +39,13 @@ export function ProjectForm({ project, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
   const [status, setStatus] = useState(project?.status ?? "ACTIVE");
+  const [dueDate, setDueDate] = useState<string | null>(project?.dueDate ? new Date(project.dueDate).toISOString().split("T")[0] : null);
 
   const { register, handleSubmit } = useForm<FormValues>({
     defaultValues: {
       name: project?.name ?? "",
       client: project?.client ?? "",
       description: project?.description ?? "",
-      dueDate: project?.dueDate ? new Date(project.dueDate).toISOString().split("T")[0] : "",
     },
   });
 
@@ -58,11 +58,11 @@ export function ProjectForm({ project, onSuccess }: Props) {
         description: data.description || undefined,
         color,
         status,
-        dueDate: data.dueDate || undefined,
+        dueDate: dueDate || undefined,
       };
 
       const result = project
-        ? await updateProject(project.id, { ...payload, dueDate: data.dueDate || null })
+        ? await updateProject(project.id, { ...payload, dueDate: dueDate || null })
         : await createProject(payload);
 
       if (result.success) {
@@ -121,9 +121,9 @@ export function ProjectForm({ project, onSuccess }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 col-span-2">
           <Label>Due Date</Label>
-          <Input type="date" {...register("dueDate")} />
+          <DueDateChips value={dueDate} onChange={setDueDate} />
         </div>
       </div>
 

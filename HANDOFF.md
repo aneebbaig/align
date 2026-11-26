@@ -11,6 +11,11 @@ any hosting provider - no deployment integration, no environments, no deploy
 statuses. Anyone running the app deploys their own copy;
 [apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md) is the guide.
 
+**Web navigation**: the default landing page is `/expenses` (fast entry first,
+dashboard one tap away). There is no Calendar section any more, Wedding has its
+own menu entry, and individual sections can be hidden per household from
+Settings → Profile → Show in menu.
+
 **Mobile**: v1.0.0 is the latest release and the only tag - this repo's release
 history was restarted at 1.0.0 (signed APK on GitHub Releases,
 Obtainium-trackable). The APK no longer has a server URL compiled in: the app

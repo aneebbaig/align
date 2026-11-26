@@ -21,7 +21,7 @@ export default async function WeddingPlanPage({ params, searchParams }: { params
   const baseSymbol = currencies.find((c) => c.isBase)?.symbol ?? "Rs";
   return (
     <div className="max-w-3xl mx-auto">
-      <WeddingOverview plan={plan as any} baseSymbol={baseSymbol} />
+      <WeddingOverview plan={plan} baseSymbol={baseSymbol} />
     </div>
   );
 }

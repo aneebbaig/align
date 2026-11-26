@@ -106,7 +106,6 @@ export async function updateNotificationPreferences(data: {
   notifyLoanDue: boolean;
   notifyDailyDigest: boolean;
   notifyDigestTasks: boolean;
-  notifyDigestCalendar: boolean;
   notifyDigestBudget: boolean;
   notifyDigestFinancials: boolean;
 }): Promise<ActionResult> {
@@ -118,16 +117,4 @@ export async function updateNotificationPreferences(data: {
   } catch {
     return { success: false, error: "Failed to save notification preferences" };
   }
-}
-
-export async function getNotificationPreferences() {
-  const userId = await getAuthenticatedUserId();
-  return prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      notifyBudgetWarning: true, notifyDoomSpending: true, notifyLoanDue: true,
-      notifyDailyDigest: true, notifyDigestTasks: true, notifyDigestCalendar: true,
-      notifyDigestBudget: true, notifyDigestFinancials: true,
-    },
-  });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   ShoppingCart, Plus, Clock, Bell, CheckCircle2, XCircle, AlarmClock,
@@ -18,6 +18,11 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { addToWantList, dismissWantListItem, buyWantListItem, snoozeWantListItem, deleteWantListItem } from "@/actions/want-list";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/currency-utils";
+import { toDateStr } from "@/lib/day-strip";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
+import { PurchaseFields } from "@/components/lists/purchase-fields";
 import { PageHeader } from "@/components/shared/page-header";
 
 interface WantListItem {
@@ -49,24 +54,23 @@ interface Props {
   baseSymbol?: string;
 }
 
-function fmtWith(n: number, symbol: string) {
-  return symbol + " " + (n / 100).toLocaleString("en-PK", { minimumFractionDigits: 0 });
-}
-
 export function WantListClient({ cooling, resurface, history, categories, hideHeader, baseSymbol = "Rs" }: Props) {
-  const fmt = (n: number) => fmtWith(n, baseSymbol);
+  const fmt = (n: number) => formatMoney(n, baseSymbol);
   const [addOpen, setAddOpen] = useState(false);
   const [buyItem, setBuyItem] = useState<WantListItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const openAdd = useCallback(() => setAddOpen(true), []);
+  useAddShortcut(addOpen || !!buyItem, openAdd);
+
   const [form, setForm] = useState({
     name: "", description: "", estimatedCost: "", url: "", categoryHint: "", coolingHours: "48",
   });
 
   const [buyForm, setBuyForm] = useState({
-    categoryId: "", actualAmount: "", date: format(new Date(), "yyyy-MM-dd"),
+    categoryId: "", actualAmount: "", date: toDateStr(new Date()),
   });
 
   async function handleAdd() {
@@ -75,7 +79,7 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
     const result = await addToWantList({
       name: form.name,
       description: form.description || undefined,
-      estimatedCost: form.estimatedCost ? parseFloat(form.estimatedCost) : undefined,
+      estimatedCost: parseMoney(form.estimatedCost) ?? undefined,
       url: form.url || undefined,
       categoryHint: form.categoryHint || undefined,
       coolingHours: parseInt(form.coolingHours),
@@ -93,7 +97,7 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
     setLoading(true);
     const result = await buyWantListItem(buyItem.id, {
       categoryId: buyForm.categoryId,
-      actualAmount: buyForm.actualAmount ? parseFloat(buyForm.actualAmount) : undefined,
+      actualAmount: parseMoney(buyForm.actualAmount) ?? undefined,
       date: buyForm.date,
     });
     if (result.success) {
@@ -129,7 +133,7 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
     setBuyForm({
       categoryId: matchedCat?.id ?? "",
       actualAmount: item.estimatedCost ? String(item.estimatedCost / 100) : "",
-      date: format(new Date(), "yyyy-MM-dd"),
+      date: toDateStr(new Date()),
     });
   };
 
@@ -232,10 +236,11 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
           <p className="text-sm text-muted-foreground">
             Add it here instead of buying right now. You can decide later with a clearer head.
           </p>
-          <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); void handleAdd(); }} className="space-y-4">
             <div className="space-y-1.5">
               <Label>What do you want?</Label>
               <Input
+                autoFocus
                 placeholder="e.g. Noise-cancelling headphones"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -253,8 +258,7 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Estimated cost ({baseSymbol})</Label>
-                <Input
-                  type="number"
+                <MoneyInput
                   placeholder="0"
                   value={form.estimatedCost}
                   onChange={(e) => setForm((f) => ({ ...f, estimatedCost: e.target.value }))}
@@ -283,10 +287,10 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
               />
             </div>
-            <Button onClick={handleAdd} disabled={loading || !form.name.trim()} className="w-full">
+            <Button type="submit" disabled={loading || !form.name.trim()} className="w-full">
               Park It - Come Back Later
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -299,51 +303,23 @@ export function WantListClient({ cooling, resurface, history, categories, hideHe
           <p className="text-sm text-muted-foreground">
             This will create an expense transaction and mark the item as bought.
           </p>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Category <span className="text-destructive">*</span></Label>
-              <Select value={buyForm.categoryId} onValueChange={(v) => setBuyForm((f) => ({ ...f, categoryId: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>
-                  Actual amount ({baseSymbol})
-                  {buyItem?.estimatedCost && (
-                    <span className="text-muted-foreground ml-1 font-normal">
-                      est. {fmt(buyItem.estimatedCost)}
-                    </span>
-                  )}
-                </Label>
-                <Input
-                  type="number"
-                  placeholder={buyItem?.estimatedCost ? String(buyItem.estimatedCost / 100) : "0"}
-                  value={buyForm.actualAmount}
-                  onChange={(e) => setBuyForm((f) => ({ ...f, actualAmount: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={buyForm.date}
-                  onChange={(e) => setBuyForm((f) => ({ ...f, date: e.target.value }))}
-                />
-              </div>
-            </div>
-            <Button onClick={handleBuy} disabled={loading || !buyForm.categoryId} className="w-full">
+          <form onSubmit={(e) => { e.preventDefault(); if (!loading && buyForm.categoryId) void handleBuy(); }} className="space-y-4">
+            <PurchaseFields
+              categories={categories}
+              categoryId={buyForm.categoryId}
+              onCategoryChange={(v) => setBuyForm((f) => ({ ...f, categoryId: v }))}
+              amount={buyForm.actualAmount}
+              onAmountChange={(v) => setBuyForm((f) => ({ ...f, actualAmount: v }))}
+              date={buyForm.date}
+              onDateChange={(d) => setBuyForm((f) => ({ ...f, date: d }))}
+              symbol={baseSymbol}
+              estimateText={buyItem?.estimatedCost ? fmt(buyItem.estimatedCost) : null}
+            />
+            <Button type="submit" disabled={loading || !buyForm.categoryId} className="w-full">
               <ShoppingBag className="h-4 w-4 mr-2" />
               Confirm Purchase
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -375,7 +351,7 @@ function ResurfaceCard({ item, onBuy, onDismiss, onSnooze, baseSymbol }: {
           {item.description && <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>}
           <div className="flex items-center gap-2 flex-wrap">
             {item.estimatedCost && (
-              <span className="text-sm font-medium text-foreground">{baseSymbol} {(item.estimatedCost / 100).toLocaleString()}</span>
+              <span className="text-sm font-medium text-foreground">{formatMoney(item.estimatedCost, baseSymbol)}</span>
             )}
             <span className="text-xs text-muted-foreground">Added {formatDistanceToNow(item.addedAt)} ago</span>
           </div>
@@ -427,7 +403,8 @@ function ResurfaceCard({ item, onBuy, onDismiss, onSnooze, baseSymbol }: {
 function CoolingCard({ item, onDelete, baseSymbol }: { item: WantListItem; onDelete: () => void; baseSymbol: string; }) {
   const timeLeft = formatDistanceToNow(item.remindAt, { addSuffix: true });
   const totalMs = item.remindAt.getTime() - item.addedAt.getTime();
-  const elapsedMs = Date.now() - item.addedAt.getTime();
+  const [now] = useState(() => Date.now());
+  const elapsedMs = now - item.addedAt.getTime();
   const progress = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
 
   return (
@@ -439,7 +416,7 @@ function CoolingCard({ item, onDelete, baseSymbol }: { item: WantListItem; onDel
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {item.estimatedCost && (
-            <span className="text-sm font-medium text-foreground">{baseSymbol} {(item.estimatedCost / 100).toLocaleString()}</span>
+            <span className="text-sm font-medium text-foreground">{formatMoney(item.estimatedCost, baseSymbol)}</span>
           )}
           {item.url && (
             <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
@@ -481,7 +458,7 @@ function HistoryCard({ item, onDelete, baseSymbol }: { item: WantListItem; onDel
         </div>
       </div>
       {item.estimatedCost && (
-        <span className="text-sm text-muted-foreground shrink-0">{baseSymbol} {(item.estimatedCost / 100).toLocaleString()}</span>
+        <span className="text-sm text-muted-foreground shrink-0">{formatMoney(item.estimatedCost, baseSymbol)}</span>
       )}
       <button onClick={onDelete} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
         <Trash2 className="h-3.5 w-3.5" />

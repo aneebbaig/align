@@ -8,14 +8,6 @@ import { getCurrentPeriod, nextPeriod } from "@/lib/month";
 import { toPaisas } from "@/lib/utils";
 import { getIncomeCarry } from "@/lib/expenses/funding";
 
-export async function getBudget(month: number, year: number) {
-  await getUserId();
-  return prisma.budget.findUnique({
-    where: { month_year: { month, year } },
-    include: { budgetCategories: { include: { category: true } } },
-  });
-}
-
 export async function upsertBudget(data: {
   month: number;
   year: number;

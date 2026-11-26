@@ -37,7 +37,6 @@ model User {
   notifyLoanDue          Boolean   @default(true)
   notifyDailyDigest      Boolean   @default(true)
   notifyDigestTasks      Boolean   @default(true)
-  notifyDigestCalendar   Boolean   @default(true)
   notifyDigestBudget     Boolean   @default(true)
   notifyDigestFinancials Boolean   @default(true)
   createdAt              DateTime  @default(now())
@@ -50,7 +49,6 @@ model User {
   savingsPots    SavingsPot[]
   investments    Investment[]
   tasks          Task[]
-  calendarEvents CalendarEvent[]
   surprises      Surprise[]
   loans          Loan[]
   wantListItems  WantListItem[]
@@ -222,7 +220,6 @@ model Plan {
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   items          PlanItem[]
-  calendarEvents CalendarEvent[]
 
   @@index([userId])
   @@map("plans")
@@ -488,38 +485,11 @@ model Task {
   updatedAt      DateTime  @updatedAt
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  calendarEvents CalendarEvent[]
 
   @@index([userId])
   @@index([dueDate])
   @@index([status])
   @@map("tasks")
-}
-
-model CalendarEvent {
-  id              String   @id @default(cuid())
-  title           String
-  description     String?
-  date            DateTime
-  startTime       String?
-  endTime         String?
-  type            String   @default("EVENT") // "EVENT" | "REMINDER" | "DEADLINE"
-  color           String?
-  isAllDay        Boolean  @default(true)
-  reminder        String   @default("NONE") // "NONE" | "AT_TIME" | "MIN_15" | "MIN_30" | "HOUR_1" | "DAY_1"
-  linkedTaskId    String?
-  linkedPlanId    String?
-  userId          String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  linkedTask    Task?    @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
-  linkedPlan    Plan?    @relation(fields: [linkedPlanId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([date])
-  @@map("calendar_events")
 }
 
 // PRIVACY CRITICAL: All queries MUST filter by session userId. Never return another user's data.

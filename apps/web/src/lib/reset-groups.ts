@@ -13,7 +13,6 @@ export const RESET_GROUPS = [
   { key: "lists", label: "Want & Need Lists", description: "Want-list and need-list items" },
   { key: "tasks", label: "Tasks", description: "Daily and one-time tasks" },
   { key: "projects", label: "Projects", description: "Projects and their tasks" },
-  { key: "calendar", label: "Calendar", description: "Calendar events" },
   { key: "vault", label: "Vault", description: "Surprise plans and items" },
   { key: "perfumes", label: "Perfumes", description: "Perfume collection entries" },
   { key: "categories", label: "Custom Categories", description: "Categories you created (built-in categories are kept)" },

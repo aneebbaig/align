@@ -20,7 +20,6 @@ const DELETE_ORDER: ResetGroupKey[] = [
   "lists",
   "tasks",
   "projects",
-  "calendar",
   "vault",
   "perfumes",
   "categories",
@@ -107,11 +106,6 @@ export async function wipeAppData(
           case "projects": {
             const r = await tx.project.deleteMany({});
             deleted.projects = r.count;
-            break;
-          }
-          case "calendar": {
-            const r = await tx.calendarEvent.deleteMany({});
-            deleted.calendar = r.count;
             break;
           }
           case "vault": {

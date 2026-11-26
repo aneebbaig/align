@@ -4,38 +4,28 @@ import { useState } from "react";
 import { Plus, Minus, ShieldCheck, AlertTriangle, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { addMoneyToPot, transferBetweenPots, withdrawFromPot, createSavingsPot } from "@/actions/savings";
+import { createSavingsPot } from "@/actions/savings";
 import { updateEmergencyFundMonths } from "@/actions/settings";
 import { cn } from "@/lib/utils";
-import { fmt, potTotalBase, baseCurrencyOf, CurrencyPicker, type SavingsPot, type CurrencyLite } from "./savings-utils";
-import type { CurrencyAvailability } from "@/actions/savings";
+import { fmt, potTotalBase, baseCurrencyOf, type SavingsPot, type CurrencyLite } from "./savings-utils";
 
 interface FundTabProps {
   pots: SavingsPot[];
   currencies: CurrencyLite[];
   avgMonthlyExpenses: number;
   emergencyFundMonths: number;
-  totalIncome: number;
-  incomeAvailability: CurrencyAvailability[];
+  onAdd: (potId: string) => void;
+  onCorrect: (potId: string) => void;
   onDelete: (id: string) => void;
 }
 
 export function FundTab({
   pots, currencies,
   avgMonthlyExpenses, emergencyFundMonths,
-  totalIncome, incomeAvailability, onDelete,
+  onAdd, onCorrect, onDelete,
 }: FundTabProps) {
   const base = baseCurrencyOf(currencies);
-  const [potDialog, setPotDialog] = useState<{ type: "add" | "correct" | null; potId?: string }>({ type: null });
-  const [amount, setAmount] = useState("");
-  const [currencyId, setCurrencyId] = useState(base.id);
-  const [sourceType, setSourceType] = useState<"income" | "pot" | "manual">("income");
-  const [sourcePotId, setSourcePotId] = useState("");
-  const [correctNote, setCorrectNote] = useState("");
-  const [loading, setLoading] = useState(false);
   const [months, setMonths] = useState(emergencyFundMonths);
   const [editingMonths, setEditingMonths] = useState(false);
   const [savingMonths, setSavingMonths] = useState(false);
@@ -54,9 +44,6 @@ export function FundTab({
   else if (monthsCovered < months) status = "ok";
   else status = "safe";
 
-  const activePot = potDialog.potId ? pots.find((p) => p.id === potDialog.potId) : null;
-  const transferablePots = pots.filter((p) => p.type !== "EMERGENCY");
-  const availableForCurrency = incomeAvailability.find((c) => c.currencyId === currencyId);
 
   async function handleSaveMonths(newMonths: number) {
     setSavingMonths(true);
@@ -78,33 +65,6 @@ export function FundTab({
     setCreatingPot(false);
     if (result.success) toast.success("Emergency Fund pot created!");
     else toast.error(result.error ?? "Failed");
-  }
-
-  async function handleCorrect() {
-    if (!potDialog.potId || !amount) return;
-    setLoading(true);
-    const n = parseFloat(amount);
-    const result = await withdrawFromPot(potDialog.potId, n, currencyId, correctNote || "Balance correction");
-    if (result.success) {
-      toast.success("Balance corrected");
-      setPotDialog({ type: null }); setAmount(""); setCurrencyId(base.id); setCorrectNote("");
-    } else toast.error(result.error ?? "Failed");
-    setLoading(false);
-  }
-
-  async function handlePotAction() {
-    if (!potDialog.potId || !amount) return;
-    if (sourceType === "pot" && !sourcePotId) return;
-    setLoading(true);
-    const n = parseFloat(amount);
-    const result = sourceType === "pot"
-      ? await transferBetweenPots(sourcePotId, potDialog.potId, n, currencyId)
-      : await addMoneyToPot(potDialog.potId, n, currencyId, "From income", sourceType === "manual" ? "MANUAL" : "INCOME");
-    if (result.success) {
-      toast.success("Money added!");
-      setPotDialog({ type: null }); setAmount(""); setCurrencyId(base.id); setSourceType("income"); setSourcePotId("");
-    } else toast.error(result.error ?? "Failed");
-    setLoading(false);
   }
 
   if (avgMonthlyExpenses === 0) {
@@ -226,10 +186,10 @@ export function FundTab({
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Button size="sm" onClick={() => { setPotDialog({ type: "add", potId: pot.id }); setAmount(""); setCurrencyId(base.id); setSourceType("income"); setSourcePotId(""); }}>
+                    <Button size="sm" onClick={() => onAdd(pot.id)}>
                       <Plus className="h-3.5 w-3.5 mr-1" />Add
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => { setPotDialog({ type: "correct", potId: pot.id }); setAmount(""); setCurrencyId(base.id); setCorrectNote(""); }}>
+                    <Button size="sm" variant="outline" onClick={() => onCorrect(pot.id)}>
                       <Minus className="h-3.5 w-3.5 mr-1" />Correct
                     </Button>
                     <span className="text-xs text-muted-foreground">Spend → create expense, pick pot as source</span>
@@ -244,114 +204,6 @@ export function FundTab({
           </Button>
         </div>
       )}
-
-      <Dialog open={potDialog.type === "add"} onOpenChange={(o) => !o && setPotDialog({ type: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add to {activePot?.name ?? "Emergency Fund"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Source</Label>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setSourceType("income")}
-                  className={cn("flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
-                    sourceType === "income" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary"
-                  )}>Monthly income</button>
-                <button type="button" onClick={() => setSourceType("pot")} disabled={transferablePots.length === 0}
-                  className={cn("flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
-                    sourceType === "pot" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary",
-                    transferablePots.length === 0 && "opacity-50 cursor-not-allowed"
-                  )}>Transfer from pot</button>
-                <button type="button" onClick={() => setSourceType("manual")}
-                  className={cn("flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
-                    sourceType === "manual" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary"
-                  )}>Manual</button>
-              </div>
-              {sourceType === "manual" && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                  Use for corrections (e.g. re-adding after an over-deduction) or money from outside your tracked income. No income validation applied.
-                </div>
-              )}
-              {sourceType === "income" && (
-                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs space-y-0.5">
-                  {!(currencyId === base.id) ? (
-                    <div className={cn("flex justify-between font-semibold", (availableForCurrency?.available ?? 0) > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
-                      <span>Available from income</span><span>{availableForCurrency?.symbol} {fmt(availableForCurrency?.available ?? 0)}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between text-emerald-700 dark:text-emerald-300">
-                        <span>This month&apos;s income</span><span className="font-semibold">{base.symbol} {fmt(totalIncome)}</span>
-                      </div>
-                      <div className={cn("flex justify-between font-semibold", (availableForCurrency?.available ?? 0) > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
-                        <span>Available from income</span><span>{base.symbol} {fmt(availableForCurrency?.available ?? 0)}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              {sourceType === "pot" && (
-                <select value={sourcePotId} onChange={(e) => setSourcePotId(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm">
-                  <option value="">Select a pot…</option>
-                  {transferablePots.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} - {p.balances.length === 0 ? `${base.symbol} 0` : p.balances.map((b) => `${b.currency.symbol}${fmt(b.amount)}`).join(" / ")}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Currency</Label>
-              <CurrencyPicker currencies={currencies} value={currencyId} onChange={setCurrencyId} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" placeholder="Amount"
-                value={amount} onChange={(e) => setAmount(e.target.value)} className="text-lg" />
-            </div>
-            <Button className="w-full" onClick={handlePotAction} disabled={loading || !amount || (sourceType === "pot" && !sourcePotId)}>
-              Add Money
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={potDialog.type === "correct"} onOpenChange={(o) => !o && setPotDialog({ type: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Correct Balance - {activePot?.name ?? "Emergency Fund"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-lg bg-muted/50 border border-border px-3 py-2 text-xs space-y-0.5">
-              {activePot?.balances.map((b) => (
-                <div key={b.currency.id} className="flex justify-between text-foreground">
-                  <span>Current {b.currency.code} balance</span><span className="font-semibold">{b.currency.symbol} {fmt(b.amount)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Currency</Label>
-              <CurrencyPicker currencies={currencies} value={currencyId} onChange={setCurrencyId} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount to remove</Label>
-              <Input type="number" placeholder="Amount"
-                value={amount} onChange={(e) => setAmount(e.target.value)} className="text-lg" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Note <span className="text-muted-foreground font-normal text-xs">optional</span></Label>
-              <Input placeholder="e.g. Spent on car repair, balance error fix…"
-                value={correctNote} onChange={(e) => setCorrectNote(e.target.value)} />
-            </div>
-            <Button variant="destructive" className="w-full" onClick={handleCorrect} disabled={loading || !amount}>
-              <Minus className="h-4 w-4 mr-2" />{loading ? "Removing…" : "Remove Amount"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

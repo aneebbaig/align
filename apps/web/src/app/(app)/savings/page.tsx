@@ -34,6 +34,7 @@ export default async function SavingsPage() {
         readyToAssign={incomeData.readyToAssign}
         incomeAvailability={potAvailable.perCurrency}
         liquidAvailable={financialPosition.liquidAvailable}
+        currentPeriod={{ month, year }}
       />
     </div>
   );

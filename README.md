@@ -20,7 +20,7 @@ The core is a zero-based budget: income comes in, you assign all of it, and mone
 - Savings pots that hold a balance per currency (PKR is the base, USD comes set up, add your own), with deposits that have to declare a source. A pot with a target and deadline is a savings goal
 - Investments with deposits and withdrawals (each optionally booked as an expense or income) and loans you can top up, repay, or write off (settling a loan logs the expense for you)
 - Tasks (daily habits and one-offs) and a Work board for freelance/client projects
-- Plans for big life events, a dedicated wedding planner, a calendar, and want/need lists
+- Plans for big life events, a dedicated wedding planner, and want/need lists
 - A month-by-month Forecast: your own lines (savings, fees, loan instalments, freelance in USD) and one-off goals in a table, with net and available cash worked out for every month. Separate from your real income and expenses
 - A perfume collection tracker, and a private gift planner that only the super admin can see
 - Optional TOTP two-factor login

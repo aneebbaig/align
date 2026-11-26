@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle, RefreshCw, LayoutDashboard } from "lucide-react";
+import { AlertTriangle, RefreshCw, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -42,9 +42,9 @@ export default function Error({
             Try again
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/dashboard" className="gap-2 flex items-center">
-              <LayoutDashboard className="h-4 w-4" />
-              Dashboard
+            <Link href="/expenses" className="gap-2 flex items-center">
+              <Receipt className="h-4 w-4" />
+              Expenses
             </Link>
           </Button>
         </div>

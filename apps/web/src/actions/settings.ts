@@ -99,17 +99,6 @@ export async function updateCategory(id: string, data: {
   }
 }
 
-export async function hideCategory(id: string): Promise<ActionResult> {
-  try {
-    await prisma.category.update({ where: { id }, data: { isHidden: true } });
-    revalidatePath("/settings");
-    return { success: true };
-  } catch (e) {
-    console.error(e);
-    return { success: false, error: "Failed to hide category" };
-  }
-}
-
 export async function deleteCategory(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId();
@@ -200,7 +189,7 @@ export async function getUserSettings() {
       name: true, email: true, dateFormat: true,
       firstDayOfWeek: true, currentBudgetMonth: true, currentBudgetYear: true, emergencyFundMonths: true,
       notifyBudgetWarning: true, notifyDoomSpending: true, notifyLoanDue: true,
-      notifyDailyDigest: true, notifyDigestTasks: true, notifyDigestCalendar: true,
+      notifyDailyDigest: true, notifyDigestTasks: true,
       notifyDigestBudget: true, notifyDigestFinancials: true,
     } }),
     prisma.user.findUnique({ where: { id: ownerId }, select: { currentBudgetMonth: true, currentBudgetYear: true } }),

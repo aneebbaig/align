@@ -11,12 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createTask, updateTask } from "@/actions/tasks";
 import { TASK_CATEGORIES } from "@/lib/constants";
+import { DueDateChips } from "@/components/shared/due-date-chips";
 
 interface FormValues {
   title: string;
   description: string;
   priority: string;
-  dueDate: string;
   dueTime: string;
   category: string;
 }
@@ -43,13 +43,14 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
   const [taskType, setTaskType] = useState(task?.type ?? defaultType);
   const [priority, setPriority] = useState(task?.priority ?? "MEDIUM");
   const [category, setCategory] = useState(task?.category ?? "");
+  // Stored due dates are UTC-midnight calendar days.
+  const [dueDate, setDueDate] = useState<string | null>(task?.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : null);
 
   const { register, handleSubmit } = useForm<FormValues>({
     defaultValues: {
       title: task?.title ?? "",
       description: task?.description ?? "",
       priority: task?.priority ?? "MEDIUM",
-      dueDate: task?.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "",
       dueTime: task?.dueTime ?? "",
       category: task?.category ?? "",
     },
@@ -63,7 +64,7 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
         description: data.description || undefined,
         type: taskType,
         priority,
-        dueDate: data.dueDate || undefined,
+        dueDate: dueDate || undefined,
         dueTime: data.dueTime || undefined,
         category: category || undefined,
       };
@@ -132,10 +133,10 @@ export function TaskForm({ defaultType = "ONE_TIME", task, onSuccess }: Props) {
       </div>
 
       {taskType !== "DAILY" && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
           <div className="space-y-1">
             <Label>Due Date</Label>
-            <Input type="date" {...register("dueDate")} />
+            <DueDateChips value={dueDate} onChange={setDueDate} />
           </div>
           <div className="space-y-1">
             <Label>Due Time</Label>

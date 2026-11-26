@@ -1,35 +1,5 @@
-export const CURRENCIES = [
-  { code: "PKR", symbol: "Rs ", name: "Pakistani Rupee" },
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-];
 
-export const DEFAULT_CURRENCY = "PKR";
-
-export const TRANSACTION_TYPES = {
-  INCOME: "INCOME",
-  EXPENSE: "EXPENSE",
-} as const;
-
-export const CATEGORY_TYPES = {
-  EXPENSE: "EXPENSE",
-  INCOME: "INCOME",
-  BOTH: "BOTH",
-} as const;
-
-export const GOAL_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
-export const GOAL_STATUSES = ["ACTIVE", "PAUSED", "COMPLETED", "ABANDONED"] as const;
-
-export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
-export const TASK_TYPES = ["DAILY", "ONE_TIME"] as const;
-export const TASK_STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "SKIPPED"] as const;
 export const TASK_CATEGORIES = ["Home", "Work", "Personal", "Errands", "Finance"] as const;
-
-export const PLANNER_STATUSES = ["PLANNING", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
-export const PLANNER_ITEM_STATUSES = ["PENDING", "BOOKED", "PAID", "SKIPPED"] as const;
-
-export const SAVINGS_POT_TYPES = ["EMERGENCY", "GENERAL", "GOAL", "CUSTOM"] as const;
 
 export const INVESTMENT_TYPES = [
   "MUTUAL_FUND",
@@ -40,20 +10,6 @@ export const INVESTMENT_TYPES = [
   "OTHER",
 ] as const;
 
-export const RECURRING_FREQUENCIES = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
-
-export const SURPRISE_STATUSES = ["IDEA", "PLANNING", "BUYING", "READY", "DELIVERED"] as const;
-export const SURPRISE_ITEM_STATUSES = ["IDEA", "SHORTLISTED", "BOUGHT", "WRAPPED"] as const;
-
-export const CALENDAR_EVENT_TYPES = ["EVENT", "REMINDER", "DEADLINE"] as const;
-export const REMINDER_TYPES = ["NONE", "AT_TIME", "MIN_15", "MIN_30", "HOUR_1", "DAY_1"] as const;
-
-export const PRIORITY_COLORS: Record<string, string> = {
-  LOW: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  MEDIUM: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  HIGH: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  URGENT: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-};
 
 export const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-slate-100 text-slate-700",
@@ -100,14 +56,6 @@ export const PROJECT_TASK_STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: "In Progress",
   REVIEW: "Review",
   DONE: "Done",
-};
-
-// Dot color per priority - used on compact task rows.
-export const PROJECT_TASK_PRIORITY_DOT: Record<string, string> = {
-  LOW: "bg-slate-400",
-  MEDIUM: "bg-blue-500",
-  HIGH: "bg-amber-500",
-  URGENT: "bg-red-500",
 };
 
 // Dot color per project task status - used on tile previews and kanban cards.

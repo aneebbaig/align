@@ -5,15 +5,12 @@ import { Target, Plus, Trash2, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import {
-  upsertInvestmentPlan,
-  type InvestmentPlanCategoryInput,
-  type InvestmentSuggestion,
-} from "@/actions/savings";
+import { upsertInvestmentPlan, type InvestmentPlanCategoryInput, type InvestmentSuggestion } from "@/actions/investments";
 import { cn } from "@/lib/utils";
 
 const INVESTMENT_TYPES = [
@@ -100,13 +97,15 @@ export function InvestmentPlanCard({
     setRemoveConfirmIndex(null);
   }
 
-  async function handleSave() {
+  async function handleSave(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (loading) return;
     setLoading(true);
     const payload: InvestmentPlanCategoryInput[] = categories
       .filter((c) => c.name.trim())
       .map((c) => ({ id: c.id, name: c.name, investmentType: c.investmentType, percentage: parseFloat(c.percentage) || 0 }));
     const result = await upsertInvestmentPlan({
-      monthlyTarget: monthlyTarget ? parseFloat(monthlyTarget) : 0,
+      monthlyTarget: parseMoney(monthlyTarget) ?? 0,
       autoFromSurplus,
       categories: payload,
     });
@@ -191,7 +190,7 @@ export function InvestmentPlanCard({
           <DialogHeader>
             <DialogTitle>Investment Plan</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <Label>Auto-suggest from surplus</Label>
@@ -203,7 +202,7 @@ export function InvestmentPlanCard({
             {!autoFromSurplus && (
               <div>
                 <Label>Explicit monthly target ({baseSymbol})</Label>
-                <Input type="number" value={monthlyTarget} onChange={(e) => setMonthlyTarget(e.target.value)} placeholder="0" />
+                <MoneyInput value={monthlyTarget} onChange={(e) => setMonthlyTarget(e.target.value)} placeholder="0" />
               </div>
             )}
 
@@ -236,21 +235,21 @@ export function InvestmentPlanCard({
                     className="w-20"
                   />
                   <span className="text-xs text-muted-foreground">%</span>
-                  <Button variant="ghost" size="icon" onClick={() => removeCategory(i)}>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removeCategory(i)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={addCategory}>
+              <Button type="button" variant="outline" size="sm" onClick={addCategory}>
                 <Plus className="h-3.5 w-3.5" />
                 Add category
               </Button>
             </div>
 
-            <Button onClick={handleSave} disabled={loading} className="w-full">
+            <Button type="submit" disabled={loading} className="w-full">
               Save Plan
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 

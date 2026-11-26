@@ -3,7 +3,7 @@ import { addDays, differenceInCalendarDays, format } from "date-fns";
 /** Dates are local calendar days, written yyyy-MM-dd (same as the entry form's date field). */
 export const DATE_STR = "yyyy-MM-dd";
 export const LAST_ENTRY_DATE_KEY = "align:lastEntryDate";
-const LAST_USED_WINDOW_MS = 30 * 60 * 1000;
+const LAST_USED_WINDOW_MS = 3 * 60 * 60 * 1000;
 /** Today, Yesterday and 11 more days: 13 days back from today. */
 export const STRIP_DAYS = 14;
 
@@ -27,17 +27,18 @@ export function isInStrip(value: string, today: Date): boolean {
 }
 
 /**
- * Chips newest-first: [picked date if outside the strip] [Last: d MMM] Today, Yesterday,
- * "EEE d" for days 2-13. "Last" is skipped when it is today or already a chip in the strip.
+ * Chips: [Last: d MMM] [picked date if outside the strip] Today, Yesterday, "EEE d" for days 2-13.
+ * "Last" comes first (one tap to reuse the previous entry's date) and is skipped when it is
+ * already the selected date.
  */
 export function buildDayChips(opts: { today: Date; selected: string; lastUsed?: string | null }): DayChip[] {
   const { today, selected, lastUsed } = opts;
   const chips: DayChip[] = [];
+  if (lastUsed && lastUsed !== selected) {
+    chips.push({ value: lastUsed, label: `Last: ${format(parseDateStr(lastUsed), "d MMM")}`, kind: "last" });
+  }
   if (selected && !isInStrip(selected, today)) {
     chips.push({ value: selected, label: format(parseDateStr(selected), "d MMM"), kind: "picked" });
-  }
-  if (lastUsed && lastUsed !== selected && !isInStrip(lastUsed, today)) {
-    chips.push({ value: lastUsed, label: `Last: ${format(parseDateStr(lastUsed), "d MMM")}`, kind: "last" });
   }
   for (let i = 0; i < STRIP_DAYS; i++) {
     const d = addDays(today, -i);
@@ -52,7 +53,7 @@ export function stepDay(value: string, delta: -1 | 1, today: Date): string {
   return toDateStr(next > today ? today : next);
 }
 
-/** The remembered date if it was saved within 30 minutes and is not today. */
+/** The remembered date if it was saved within 3 hours and is not today. */
 export function readLastUsed(raw: string | null, now: Date): string | null {
   if (!raw) return null;
   try {

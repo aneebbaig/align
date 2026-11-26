@@ -13,6 +13,7 @@ import { nextPeriod } from "@/lib/month";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { formatAmount as fmt } from "@/lib/currency-utils";
 
 interface Category { id: string; name: string; color: string; type: string; }
 
@@ -60,7 +61,6 @@ interface Props {
   year: number;
 }
 
-function fmt(paisas: number) { return (paisas / 100).toLocaleString(); }
 function fmtUsd(cents: number) { return (cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function useDebouncedSave(callback: () => Promise<void>, deps: unknown[], delay = 900) {

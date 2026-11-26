@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Edit3, Loader2, Plus, Snowflake, SprayCan, Sun, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import { formatMoney } from "@/lib/currency-utils";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { createPerfume, deletePerfume, updatePerfume } from "@/actions/perfumes";
 import { cn } from "@/lib/utils";
@@ -51,10 +53,6 @@ const OCCASION_LABELS: Record<string, string> = {
   FORMAL_MEETING: "Formal meeting",
 };
 
-function formatPriceWith(price: number, symbol: string) {
-  return symbol + " " + (price / 100).toLocaleString("en-PK", { maximumFractionDigits: 0 });
-}
-
 export function PerfumesClient({ initialPerfumes, baseSymbol = "Rs" }: { initialPerfumes: Perfume[]; baseSymbol?: string }) {
   const router = useRouter();
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -62,6 +60,9 @@ export function PerfumesClient({ initialPerfumes, baseSymbol = "Rs" }: { initial
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+
+  const openAdd = useCallback(() => setIsAddOpen(true), []);
+  useAddShortcut(isAddOpen || !!editingPerfume || !!deleteId, openAdd);
 
   const counts = STATUS_TABS.reduce<Record<string, number>>((acc, tab) => {
     acc[tab.value] = initialPerfumes.filter((p) => p.status === tab.value).length;
@@ -297,7 +298,7 @@ function PerfumeCard({
   onMarkBought: () => void;
   baseSymbol: string;
 }) {
-  const formatPrice = (price: number) => formatPriceWith(price, baseSymbol);
+  const formatPrice = (price: number) => formatMoney(price, baseSymbol);
   const isOwned = perfume.status === "BOUGHT";
   const isWant = perfume.status === "WANT_TO_BUY";
 

@@ -1,5 +1,5 @@
 // ─── Investment contribution suggestion ─────────────────────────────────────
-// Pure math: no DB, no dates beyond what's handed in. src/actions/savings.ts
+// Pure math: no DB, no dates beyond what's handed in. src/actions/investments.ts
 // fetches the inputs and calls this.
 //
 //   suggestedTotal = max(0, income − obligationsDue − bufferUnmet)
