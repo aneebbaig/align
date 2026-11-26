@@ -54,6 +54,7 @@ export async function createWeddingPlan(data: {
       },
     });
     revalidatePath("/wedding");
+    revalidatePath("/plans");
     return { success: true, data: { id: plan.id } };
   } catch (e) {
     console.error("[createWeddingPlan]", e);
@@ -83,6 +84,7 @@ export async function updateWeddingPlan(id: string, data: Partial<{
       },
     });
     revalidatePath("/wedding");
+    revalidatePath("/plans");
     revalidatePath(`/wedding/${id}`);
     return { success: true };
   } catch (e) {
@@ -96,6 +98,7 @@ export async function deleteWeddingPlan(id: string): Promise<ActionResult> {
     const userId = await getUserId();
     await prisma.weddingPlan.deleteMany({ where: { id, userId } });
     revalidatePath("/wedding");
+    revalidatePath("/plans");
     return { success: true };
   } catch (e) {
     console.error("[deleteWeddingPlan]", e);

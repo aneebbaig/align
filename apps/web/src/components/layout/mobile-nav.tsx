@@ -31,7 +31,7 @@ const MORE_GROUPS = [
   {
     label: "Planning",
     items: [
-      { href: "/planner", label: "Planner", icon: Table2 },
+      { href: "/forecast", label: "Forecast", icon: Table2 },
       { href: "/plans", label: "Plans", icon: CalendarDays },
       { href: "/want-list", label: "Want List", icon: ShoppingCart },
       { href: "/need-list", label: "Need List", icon: ClipboardList },

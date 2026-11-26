@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ArrowDownUp, PiggyBank, CalendarDays,
   ListTodo, Calendar, Gift, Settings, TrendingUp, Wallet, HandCoins,
-  ChevronLeft, ChevronRight, LineChart, Heart,
+  ChevronLeft, ChevronRight, LineChart,
   FlaskConical, ClipboardList, FolderKanban, Table2, AlarmClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,9 +34,8 @@ const NAV_GROUPS = [
   {
     label: "Planning",
     items: [
-      { href: "/planner", label: "Planner", icon: Table2 },
+      { href: "/forecast", label: "Forecast", icon: Table2 },
       { href: "/plans", label: "Plans", icon: CalendarDays },
-      { href: "/wedding", label: "Wedding", icon: Heart },
       { href: "/lists", label: "Lists", icon: ClipboardList },
     ],
   },
@@ -94,7 +93,8 @@ export function Sidebar({ role }: { role?: string }) {
                 .map(({ href, label, icon: Icon }) => {
                   const active =
                     pathname === href ||
-                    pathname.startsWith(href + "/");
+                    pathname.startsWith(href + "/") ||
+                    (href === "/plans" && pathname.startsWith("/wedding/"));
                   return (
                     <Link
                       key={href}

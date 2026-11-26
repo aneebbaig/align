@@ -8,7 +8,7 @@ export const RESET_GROUPS = [
   { key: "savingsPots", label: "Savings Pots", description: "Pots (incl. targeted savings goals) and their history" },
   { key: "investments", label: "Investments", description: "Investment holdings and your investment plan" },
   { key: "loans", label: "Loans", description: "Loans given/received and their payments" },
-  { key: "planners", label: "Planner", description: "Planners and their line items" },
+  { key: "planners", label: "Plans", description: "Plans and their items" },
   { key: "wedding", label: "Wedding Planning", description: "Wedding plan, events, expenses, and vendor quotes" },
   { key: "lists", label: "Want & Need Lists", description: "Want-list and need-list items" },
   { key: "tasks", label: "Tasks", description: "Daily and one-time tasks" },

@@ -19,8 +19,8 @@ A private finance app for one household of one or two logins. Every login is an 
 | **Tasks** | Daily habits + one-time tasks with drag-to-reorder priority |
 | **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
 | **Plans** | Life event planning (house moves, trips, renovations) with itemised checklists |
-| **Planner** | Month-by-month table: your own money lines (in/out, rupees or dollars at the planner's own rate) and one-off goals; change a month "just this month" or "from this month on" and every later month recalculates. Not linked to real income/expenses |
-| **Wedding** | Dedicated wedding planner - events, vendors, and expenses per event |
+| **Forecast** | Month-by-month table: your own money lines (in/out, rupees or dollars at the planner's own rate) and one-off goals; change a month "just this month" or "from this month on" and every later month recalculates. Not linked to real income/expenses |
+| **Wedding** | Wedding planner, listed with the other Plans - events, vendors, and expenses per event |
 | **Calendar** | Events, reminders, and deadlines |
 | **Lists** | Needs (priority-grouped planned purchases with expense logging) and Wants (48-hour impulse-purchase cooling-off) on one page |
 | **Perfumes** | Perfume collection and buy-next shortlist |

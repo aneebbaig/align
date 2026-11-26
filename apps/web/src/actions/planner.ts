@@ -24,7 +24,7 @@ async function run<S extends z.ZodTypeAny>(
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   try {
     const id = await fn(await getUserId(), parsed.data);
-    revalidatePath("/planner");
+    revalidatePath("/forecast");
     return { success: true, ...(id ? { id } : {}) };
   } catch (e) {
     if (e instanceof store.PlannerError) return { success: false, error: e.message };

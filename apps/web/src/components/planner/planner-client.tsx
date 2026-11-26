@@ -229,7 +229,7 @@ function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlann
       months: parseInt(form.months, 10),
       startingCashPaisas: toUnits(form.startingCash || "0"),
       usdRate: parseFloat(form.usdRate),
-    }), "Planner updated");
+    }), "Forecast updated");
     setBusy(false);
     if (ok) onClose();
   }
@@ -237,7 +237,7 @@ function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlann
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Planner settings</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Forecast settings</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Start month</Label><Input type="month" value={form.start} onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} /></div>
@@ -247,7 +247,7 @@ function SettingsDialog({ settings, open, onClose }: { settings: SerializedPlann
             <div className="space-y-1.5"><Label>Starting cash (Rs)</Label><Input type="number" value={form.startingCash} onChange={(e) => setForm((f) => ({ ...f, startingCash: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>USD rate (Rs per $)</Label><Input type="number" min="0" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: e.target.value }))} /></div>
           </div>
-          <p className="text-xs text-muted-foreground">The planner&apos;s own rate - it doesn&apos;t change the real one in Settings.</p>
+          <p className="text-xs text-muted-foreground">The forecast&apos;s own rate - it doesn&apos;t change the real one in Settings.</p>
           <Button className="w-full" disabled={busy} onClick={save}>Save</Button>
         </div>
       </DialogContent>
@@ -275,8 +275,8 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
     <>
       <PageHeader
         section="Planning"
-        title="Planner"
-        description={`Starting cash Rs ${rs(settings.startingCashPaisas)} · USD rate ${settings.usdRate} · ${monthLabel(settings.startMonth, settings.startYear)} → ${last ? monthLabel(last.month, last.year) : ""} (${settings.months} months)`}
+        title="Forecast"
+        description="Your cash month by month – separate from your real money."
         action={
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-4 w-4" />Settings</Button>
@@ -295,7 +295,10 @@ export function PlannerClient({ planner }: { planner: SerializedPlanner }) {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-border overflow-x-auto mt-4">
+      <p className="mt-4 mb-2 text-xs text-muted-foreground">
+        {`Starting cash Rs ${rs(settings.startingCashPaisas)} · USD rate ${settings.usdRate} · ${monthLabel(settings.startMonth, settings.startYear)} → ${last ? monthLabel(last.month, last.year) : ""} (${settings.months} months)`}
+      </p>
+      <div className="rounded-xl border border-border overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/60 text-xs font-semibold text-muted-foreground">
