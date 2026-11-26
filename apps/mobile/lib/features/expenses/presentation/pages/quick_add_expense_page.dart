@@ -10,6 +10,8 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/utils/money_format.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/last_entry_store.dart';
@@ -20,6 +22,7 @@ import '../../../routines/data/log_nudge.dart';
 import '../../../../core/widgets/funding_source_field.dart';
 import '../../../home_widget/widget_service.dart';
 import '../../../savings/presentation/providers/savings_provider.dart';
+import '../../data/datasources/expense_list_datasource.dart';
 import '../../data/repositories/expense_repository_impl.dart';
 import '../../domain/entities/expense_entity.dart';
 import '../providers/categories_provider.dart';
@@ -29,6 +32,7 @@ import '../../data/models/quick_picks_model.dart';
 import '../providers/quick_picks_provider.dart';
 import '../widgets/category_chip_list.dart';
 import '../widgets/quick_add_helpers.dart';
+import '../widgets/regret_toggle.dart';
 import '../../../../core/providers/funding_context_provider.dart';
 import '../../../budget/presentation/providers/budget_provider.dart';
 
@@ -50,6 +54,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
   final _amountFocus = FocusNode();
   final _descFocus = FocusNode();
   DateTime? _lastUsed;
+  String? _lastCategoryId;
   String? _selectedCategoryId;
   DateTime _date = DateTime.now();
   bool _fileUnderDateBudget = false;
@@ -67,8 +72,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     super.initState();
     final e = _existing;
     if (e != null) {
-      final v = e.amountPaisas / 100;
-      _amountCtrl.text = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      _amountCtrl.text = paisasToFieldText(e.amountPaisas);
       _descCtrl.text = e.description;
       _notesCtrl.text = e.notes ?? '';
       _selectedCategoryId = e.category.id;
@@ -81,6 +85,22 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
         final d = lastChipDate(last, DateTime.now());
         if (mounted && d != null) setState(() => _lastUsed = d);
       });
+      // The last category used is shown first and already selected.
+      _loadLastCategory();
+    }
+  }
+
+  Future<void> _loadLastCategory() async {
+    final id = await LastEntryStore.readCategory('expense');
+    if (id == null) return;
+    try {
+      final cats = await ref.read(categoriesProvider.future);
+      if (!mounted || !cats.any((c) => c.id == id)) return;
+      setState(() {
+        _lastCategoryId = id;
+      });
+    } catch (_) {
+      // No categories yet: nothing to show first.
     }
   }
 
@@ -98,7 +118,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      context.go('/dashboard');
+      context.go('/money');
     }
   }
 
@@ -123,7 +143,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     setState(() {
       _descCtrl.text = r.description;
       if (cats.any((c) => c.id == r.categoryId)) _selectedCategoryId = r.categoryId;
-      _amountCtrl.text = amountFieldText(r.lastAmountPaisas);
+      _amountCtrl.text = paisasToFieldText(r.lastAmountPaisas);
       if (r.fundingSource == 'SAVINGS_POT' && pots.any((p) => p.id == r.fundingPotId)) {
         _fundingPotId = r.fundingPotId;
       } else if (r.fundingSource == 'INCOME') {
@@ -140,10 +160,19 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       _amountCtrl.clear();
       _descCtrl.clear();
       _notesCtrl.clear();
-      _selectedCategoryId = null;
       _isRegretPurchase = false;
     });
     _amountFocus.requestFocus();
+  }
+
+  /// Tells the home-screen widget what was really spent today.
+  Future<void> _refreshHomeWidget() async {
+    try {
+      final spend = await ref.read(expenseListDatasourceProvider).todaySpendPaisas();
+      await ref.read(widgetServiceProvider).update(todaySpendPaisas: spend);
+    } catch (_) {
+      // The widget just keeps its last value.
+    }
   }
 
   Future<void> _submit({bool another = false}) async {
@@ -200,8 +229,10 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
       if (_editing) ref.invalidate(savingsProvider);
       await ref.read(recentCategoriesProvider.notifier).record(_selectedCategoryId!);
       if (!_editing) {
-        unawaited(ref.read(widgetServiceProvider).update(todaySpendPaisas: 0));
+        unawaited(_refreshHomeWidget());
         await LastEntryStore.record(_date);
+        await LastEntryStore.recordCategory('expense', _selectedCategoryId!);
+        _lastCategoryId = _selectedCategoryId;
         unawaited(LogNudge.reschedule());
       }
 
@@ -266,34 +297,12 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
               QuickRepeatChips(repeats: picks!.repeats, onTap: _applyRepeat),
               const SizedBox(height: 8),
             ],
-            TextField(
+            BigAmountField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
               enabled: !_locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [AmountExprFormatter()],
-              style: AppTextStyles.displayLarge.copyWith(
-                color: AppColors.primary,
-                letterSpacing: -1,
-              ),
-              decoration: InputDecoration(
-                prefixText: 'Rs ',
-                prefixStyle: AppTextStyles.headlineMedium.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-                hintText: '0',
-                hintStyle: AppTextStyles.displayLarge.copyWith(
-                  color: AppColors.mutedForeground.withValues(alpha: 0.4),
-                  letterSpacing: -1,
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              onChanged: (_) => setState(() {}),
+              onChanged: () => setState(() {}),
             ),
-            if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
             const SizedBox(height: 8),
             DayStrip(
               selected: _date,
@@ -312,6 +321,7 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
                   picks?.topCategoryIds ?? const [],
                   recentAsync.asData?.value ?? const [],
                   cats.map((c) => c.id).toSet(),
+                  last: _lastCategoryId,
                 ),
                 selectedId: _selectedCategoryId,
                 onSelected: (cat) {
@@ -390,49 +400,19 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
 
             MoreOptions(
               children: [
-                _FormField(
+                AppTextField(
                   controller: _notesCtrl,
                   hint: 'Notes (optional)',
+                  dense: true,
                   maxLines: 3,
                   textCapitalization: TextCapitalization.sentences,
                 ),
-                GestureDetector(
+                RegretToggle(
+                  value: _isRegretPurchase,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() => _isRegretPurchase = !_isRegretPurchase);
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _isRegretPurchase
-                          ? AppColors.destructive.withValues(alpha: 0.12)
-                          : AppColors.card,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _isRegretPurchase
-                            ? AppColors.destructive.withValues(alpha: 0.5)
-                            : AppColors.border.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isRegretPurchase ? Icons.sentiment_dissatisfied : Icons.sentiment_dissatisfied_outlined,
-                          size: 16,
-                          color: _isRegretPurchase ? AppColors.destructive : AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Regret buy - wish I hadn\'t',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: _isRegretPurchase ? AppColors.destructive : AppColors.mutedForeground,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_isRegretPurchase) const Icon(Icons.check, size: 16, color: AppColors.destructive),
-                      ],
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -442,44 +422,3 @@ class _QuickAddExpensePageState extends ConsumerState<QuickAddExpensePage> {
     );
   }
 }
-
-class _FormField extends StatelessWidget {
-  const _FormField({
-    required this.controller,
-    required this.hint,
-    required this.maxLines,
-    this.textCapitalization = TextCapitalization.none,
-  });
-  final TextEditingController controller;
-  final String hint;
-  final int maxLines;
-  final TextCapitalization textCapitalization;
-
-  @override
-  Widget build(BuildContext context) => TextField(
-        controller: controller,
-        style: AppTextStyles.bodyMedium,
-        maxLines: maxLines,
-        textCapitalization: textCapitalization,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-          filled: true,
-          fillColor: AppColors.card,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
-          ),
-        ),
-      );
-}
-

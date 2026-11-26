@@ -10,6 +10,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../domain/entities/routine_entity.dart';
 import 'reminder_plan.dart';
 import 'tick_queue.dart';
+import '../../../core/utils/app_log.dart';
 
 const _doneAction = 'done';
 const _snoozeAction = 'snooze';
@@ -60,7 +61,7 @@ class ReminderService {
     try {
       tz.setLocalLocation(tz.getLocation((await FlutterTimezone.getLocalTimezone()).identifier));
     } catch (e) {
-      debugPrint('Timezone lookup failed, using UTC: $e');
+      appLog.w('Timezone lookup failed, using UTC', error: e);
     }
   }
 

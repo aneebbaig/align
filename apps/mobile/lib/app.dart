@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/theme/app_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -18,6 +19,7 @@ import 'features/savings/presentation/pages/savings_page.dart';
 import 'features/investments/presentation/pages/investments_page.dart';
 import 'features/planner/presentation/pages/planner_page.dart';
 import 'features/plans/presentation/pages/plans_page.dart';
+import 'features/wedding/wedding_routes.dart';
 import 'features/plans/presentation/pages/plan_detail_page.dart';
 import 'features/loans/presentation/pages/loans_page.dart';
 import 'features/settings/presentation/pages/settings_page.dart';
@@ -31,7 +33,6 @@ import 'features/projects/presentation/pages/project_detail_page.dart';
 import 'features/projects/presentation/pages/quick_add_project_page.dart';
 import 'features/income/presentation/pages/quick_add_income_page.dart';
 import 'features/loans/presentation/pages/quick_add_loan_page.dart';
-import 'features/settings/presentation/providers/menu_prefs_provider.dart';
 import 'shell/app_scaffold.dart';
 import 'shell/money_page.dart';
 import 'shell/more_page.dart';
@@ -79,9 +80,8 @@ GoRouter goRouter(Ref ref) {
 
       if (!isAuthenticated && !isOnLogin) return '/login';
       if (isAuthenticated && (isOnLogin || onSplash)) {
-        // Don't land on a section this person hid from their menu.
-        final hidden = ref.read(menuPrefsProvider).hidden;
-        final dest = pendingLink ?? (hidden.contains('dashboard') ? '/money' : '/dashboard');
+        // Money is the home tab and can never be hidden.
+        final dest = pendingLink ?? '/money';
         pendingLink = null;
         return dest;
       }
@@ -162,6 +162,7 @@ GoRouter goRouter(Ref ref) {
               ),
             ],
           ),
+          ...weddingRoutes,
           GoRoute(
             path: '/projects',
             builder: (_, __) => const ProjectsPage(),
@@ -223,7 +224,7 @@ class _ErrorPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFF0A0A0A),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -231,7 +232,7 @@ class _ErrorPage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.link_off_rounded, size: 48, color: Color(0xFFF59E0B)),
+                const Icon(Icons.link_off_rounded, size: 48, color: AppColors.warning),
                 const SizedBox(height: 24),
                 const Text(
                   'Page not found',
@@ -249,11 +250,11 @@ class _ErrorPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 GestureDetector(
-                  onTap: () => context.go('/dashboard'),
+                  onTap: () => context.go('/money'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B),
+                      color: AppColors.warning,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(

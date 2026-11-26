@@ -8,6 +8,7 @@ import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../../core/widgets/undo_delete.dart';
 import '../../data/datasources/tasks_datasource.dart';
 import '../../domain/entities/task_entity.dart';
 import '../providers/tasks_provider.dart';
@@ -99,18 +100,31 @@ class _TasksPageState extends ConsumerState<TasksPage>
     }
   }
 
-  Future<void> _delete(TaskEntity task) async {
+  // Swiped away but not yet deleted on the server (Undo is still possible).
+  final _pendingDelete = <String>{};
+
+  void _delete(TaskEntity task) {
     HapticFeedback.mediumImpact();
-    try {
-      await ref.read(tasksDatasourceProvider).deleteTask(task.id);
-      if (!mounted) return;
-      ref.invalidate(tasksProvider);
-      ref.read(toastServiceProvider).success(context, 'Task deleted');
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e is AppException ? e.message : 'Failed to delete task';
-      ref.read(toastServiceProvider).error(context, msg);
-    }
+    final ds = ref.read(tasksDatasourceProvider);
+    final container = ProviderScope.containerOf(context);
+    final toast = ref.read(toastServiceProvider);
+    final ctx = context;
+    setState(() => _pendingDelete.add(task.id));
+    deferDelete(
+      context,
+      message: 'Deleted · ${task.title}',
+      onUndo: () {
+        if (mounted) setState(() => _pendingDelete.remove(task.id));
+      },
+      commit: () async {
+        await ds.deleteTask(task.id);
+        container.invalidate(tasksProvider);
+        if (mounted) setState(() => _pendingDelete.remove(task.id));
+      },
+      onError: (e) {
+        if (ctx.mounted) toast.error(ctx, e is AppException ? e.message : 'Failed to delete task');
+      },
+    );
   }
 
   Future<void> _edit(TaskEntity task) async {
@@ -204,7 +218,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
             }
             if (dirty && mounted) setState(() {});
           });
-          final resolved = all.map(_resolve).toList();
+          final resolved = all.where((t) => !_pendingDelete.contains(t.id)).map(_resolve).toList();
           final daily = resolved.where((t) => t.isDaily).toList();
           final oneTime = resolved.where((t) => t.isOneTime).toList();
 
@@ -292,12 +306,45 @@ class _TaskTab extends StatelessWidget {
   final String emptyTitle;
   final String emptySubtitle;
   final Future<void> Function(TaskEntity) onToggle;
-  final Future<void> Function(TaskEntity) onDelete;
+  final void Function(TaskEntity) onDelete;
   final Future<void> Function(TaskEntity) onEdit;
   final Set<String> selectedIds;
   final void Function(TaskEntity) onLongPress;
   final void Function(TaskEntity) onToggleSelect;
   final bool groupDone;
+
+  Widget _row(TaskEntity t) => Dismissible(
+        key: ValueKey('task-${t.id}'),
+        // Right = done (or back to pending), left = delete with Undo.
+        background: SwipeBackground(
+          alignment: Alignment.centerLeft,
+          color: AppColors.success,
+          icon: t.isDone ? Icons.undo : Icons.check,
+        ),
+        secondaryBackground: const SwipeBackground(
+          alignment: Alignment.centerRight,
+          color: AppColors.destructive,
+          icon: Icons.delete_outline,
+        ),
+        direction: selectedIds.isNotEmpty ? DismissDirection.none : DismissDirection.horizontal,
+        confirmDismiss: (dir) async {
+          if (dir == DismissDirection.startToEnd) {
+            onToggle(t);
+            return false;
+          }
+          return true;
+        },
+        onDismissed: (_) => onDelete(t),
+        child: TaskListItem(
+          task: t,
+          onToggle: () => onToggle(t),
+          onEdit: () => onEdit(t),
+          selectionMode: selectedIds.isNotEmpty,
+          selected: selectedIds.contains(t.id),
+          onToggleSelect: () => onToggleSelect(t),
+          onLongPress: () => onLongPress(t),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -320,16 +367,7 @@ class _TaskTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: tasks.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, i) => TaskListItem(
-            task: tasks[i],
-            onToggle: () => onToggle(tasks[i]),
-            onDelete: () => onDelete(tasks[i]),
-            onEdit: () => onEdit(tasks[i]),
-            selectionMode: selectedIds.isNotEmpty,
-            selected: selectedIds.contains(tasks[i].id),
-            onToggleSelect: () => onToggleSelect(tasks[i]),
-            onLongPress: () => onLongPress(tasks[i]),
-          ),
+          itemBuilder: (_, i) => _row(tasks[i]),
         ),
       );
     }
@@ -348,16 +386,7 @@ class _TaskTab extends StatelessWidget {
             ...pending.map(
               (t) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: TaskListItem(
-                  task: t,
-                  onToggle: () => onToggle(t),
-                  onDelete: () => onDelete(t),
-                  onEdit: () => onEdit(t),
-                  selectionMode: selectedIds.isNotEmpty,
-                  selected: selectedIds.contains(t.id),
-                  onToggleSelect: () => onToggleSelect(t),
-                  onLongPress: () => onLongPress(t),
-                ),
+                child: _row(t),
               ),
             ),
           ],
@@ -378,16 +407,7 @@ class _TaskTab extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Opacity(
                   opacity: 0.5,
-                  child: TaskListItem(
-                    task: t,
-                    onToggle: () => onToggle(t),
-                    onDelete: () => onDelete(t),
-                    onEdit: () => onEdit(t),
-                    selectionMode: selectedIds.isNotEmpty,
-                    selected: selectedIds.contains(t.id),
-                    onToggleSelect: () => onToggleSelect(t),
-                    onLongPress: () => onLongPress(t),
-                  ),
+                  child: _row(t),
                 ),
               ),
             ),

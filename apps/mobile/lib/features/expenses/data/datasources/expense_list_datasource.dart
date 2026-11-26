@@ -48,6 +48,19 @@ class ExpenseListDatasource {
     }
   }
 
+  /// What was spent today, for the home-screen widget. Newest first, so the
+  /// first page of this month already holds all of today's expenses.
+  Future<int> todaySpendPaisas({DateTime? now}) async {
+    final n = now ?? DateTime.now();
+    final page = await getExpenses(month: n.month, year: n.year, limit: 50);
+    var total = 0;
+    for (final e in page.items) {
+      final d = e.date.toLocal();
+      if (d.year == n.year && d.month == n.month && d.day == n.day) total += e.amountPaisas;
+    }
+    return total;
+  }
+
   static ExpenseEntity _parse(Map<String, dynamic> m) {
     final cat = m['category'] as Map<String, dynamic>;
     return ExpenseEntity(

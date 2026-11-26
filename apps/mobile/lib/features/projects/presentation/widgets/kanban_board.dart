@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../domain/entities/project_entity.dart';
 import 'kanban_card.dart';
 
@@ -230,33 +231,14 @@ class _AddTaskFieldState extends State<_AddTaskField> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
+            child: AppTextField(
               controller: _ctrl,
               focusNode: _focus,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Add a task…',
+              dense: true,
               textCapitalization: TextCapitalization.sentences,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                hintText: 'Add a task…',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.card,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.primary),
-                ),
-              ),
             ),
           ),
           const SizedBox(width: 8),

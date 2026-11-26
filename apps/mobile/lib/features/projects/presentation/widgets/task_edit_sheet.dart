@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/priority_color.dart';
+import '../../../../core/widgets/app_sheet.dart';
+import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/due_date_chips.dart';
 import '../../domain/entities/project_entity.dart';
-import 'kanban_card.dart';
 import 'project_card.dart' show projectColor;
 
 const _statuses = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
@@ -30,23 +32,15 @@ Future<void> showTaskEditSheet(
   Future<TagEntity?> Function(String name, String color)? onCreateTag,
   Future<void> Function(String id)? onDeleteTag,
 }) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: _TaskEditSheet(
-        task: task,
-        onSave: onSave,
-        onDelete: onDelete,
-        allTags: allTags,
-        onCreateTag: onCreateTag,
-        onDeleteTag: onDeleteTag,
-      ),
+  return showAppSheet<void>(
+    context,
+    _TaskEditSheet(
+      task: task,
+      onSave: onSave,
+      onDelete: onDelete,
+      allTags: allTags,
+      onCreateTag: onCreateTag,
+      onDeleteTag: onDeleteTag,
     ),
   );
 }
@@ -118,32 +112,8 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
         _selectedTagIds.length != t.tags.length;
   }
 
-  Future<bool> _confirm(String title, String body, String action) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(title,
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-        content: Text(body,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(action,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
-  }
+  Future<bool> _confirm(String title, String body, String action) =>
+      confirmDestructive(context, title: title, body: body, confirmLabel: action);
 
   Future<void> _save() async {
     final title = _title.text.trim();
@@ -188,16 +158,6 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _dueDate = picked);
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -229,20 +189,20 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               ),
             ),
             _label('Title'),
-            TextField(
+            AppTextField(
               controller: _title,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Task title',
+              dense: true,
               textCapitalization: TextCapitalization.sentences,
-              decoration: _fieldDecoration('Task title'),
             ),
             const SizedBox(height: 16),
             _label('Details'),
-            TextField(
+            AppTextField(
               controller: _description,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Notes, links, acceptance criteria…',
+              dense: true,
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
-              decoration: _fieldDecoration('Notes, links, acceptance criteria…'),
             ),
             const SizedBox(height: 16),
             _label('Status'),
@@ -268,7 +228,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
                   _chip(
                     label: p[0] + p.substring(1).toLowerCase(),
                     selected: _priority == p,
-                    dotColor: kanbanPriorityColor(p),
+                    dotColor: priorityColor(p),
                     onTap: () => setState(() => _priority = p),
                   ),
               ],
@@ -311,12 +271,12 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
+                    child: AppTextField(
                       controller: _newTag,
-                      style: AppTextStyles.bodySmall,
+                      hint: 'New tag',
+                      dense: true,
                       textCapitalization: TextCapitalization.sentences,
                       onSubmitted: (_) => _createTag(),
-                      decoration: _fieldDecoration('New tag').copyWith(isDense: true),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -337,40 +297,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
             ],
             const SizedBox(height: 16),
             _label('Due date'),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.event_outlined, size: 16, color: AppColors.mutedForeground),
-                          const SizedBox(width: 8),
-                          Text(
-                            _dueDate == null ? 'No due date' : DateFormat('d MMM y').format(_dueDate!),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: _dueDate == null ? AppColors.mutedForeground : AppColors.foreground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (_dueDate != null)
-                  IconButton(
-                    onPressed: () => setState(() => _dueDate = null),
-                    icon: const Icon(Icons.close, size: 18, color: AppColors.mutedForeground),
-                  ),
-              ],
-            ),
+            DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -392,11 +319,8 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
             SizedBox(
               width: double.infinity,
               child: TextButton.icon(
+                // No dialog: the page deletes it after an Undo snackbar.
                 onPressed: () async {
-                  final ok = await _confirm(
-                      'Delete task?', 'This cannot be undone.', 'Delete');
-                  if (!ok) return;
-                  if (!context.mounted) return;
                   Navigator.pop(context);
                   await widget.onDelete();
                 },
@@ -417,27 +341,6 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
         child: Text(text,
             style: AppTextStyles.labelMedium
                 .copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w600)),
-      );
-
-  InputDecoration _fieldDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.background,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary),
-        ),
       );
 
   Widget _chip({

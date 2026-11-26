@@ -46,7 +46,7 @@ class RecentTransactionsList extends StatelessWidget {
                         style: AppTextStyles.currencySmall.copyWith(
                           color: t.type == 'EXPENSE'
                               ? AppColors.foreground
-                              : const Color(0xFF4CAF50),
+                              : AppColors.success,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

@@ -18,6 +18,22 @@ void main() {
     });
   });
 
+  group('allMenuSectionKeys', () {
+    test('has wedding and no calendar', () {
+      expect(allMenuSectionKeys, contains('wedding'));
+      expect(allMenuSectionKeys, isNot(contains('calendar')));
+      expect(allMenuSectionKeys, hasLength(15));
+    });
+  });
+
+  group('phoneSections', () {
+    test('includes wedding and only known keys', () {
+      final keys = phoneSections.map((s) => s.key).toList();
+      expect(keys, contains('wedding'));
+      expect(keys.toSet().difference(allMenuSectionKeys.toSet()), isEmpty);
+    });
+  });
+
   group('parseHiddenSections', () {
     test('reads the data envelope the API returns', () {
       expect(parseHiddenSections({'data': {'hiddenSections': ['tasks', 'loans']}}), ['tasks', 'loans']);

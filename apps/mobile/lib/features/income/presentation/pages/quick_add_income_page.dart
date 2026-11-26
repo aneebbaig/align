@@ -10,6 +10,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/utils/money_format.dart';
 import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/last_entry_store.dart';
@@ -42,6 +43,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
   final _amountFocus = FocusNode();
   final _descFocus = FocusNode();
   DateTime? _lastUsed;
+  String? _lastCategoryId;
   String? _selectedCategoryId;
   DateTime _date = DateTime.now();
   bool _fileUnderDateBudget = false;
@@ -57,8 +59,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
     super.initState();
     final e = _existing;
     if (e != null) {
-      final v = e.amountPaisas / 100;
-      _amountCtrl.text = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      _amountCtrl.text = paisasToFieldText(e.amountPaisas);
       _descCtrl.text = e.description;
       _selectedCategoryId = e.category.id;
       _date = e.date;
@@ -68,6 +69,22 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
         final d = lastChipDate(last, DateTime.now());
         if (mounted && d != null) setState(() => _lastUsed = d);
       });
+      // The last category used is shown first and already selected.
+      _loadLastCategory();
+    }
+  }
+
+  Future<void> _loadLastCategory() async {
+    final id = await LastEntryStore.readCategory('income');
+    if (id == null) return;
+    try {
+      final cats = await ref.read(incomeCategoriesProvider.future);
+      if (!mounted || !cats.any((c) => c.id == id)) return;
+      setState(() {
+        _lastCategoryId = id;
+      });
+    } catch (_) {
+      // No categories yet: nothing to show first.
     }
   }
 
@@ -84,7 +101,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      context.go('/dashboard');
+      context.go('/money');
     }
   }
 
@@ -107,7 +124,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
     setState(() {
       _descCtrl.text = r.description;
       if (cats.any((c) => c.id == r.categoryId)) _selectedCategoryId = r.categoryId;
-      _amountCtrl.text = amountFieldText(r.lastAmountPaisas);
+      _amountCtrl.text = paisasToFieldText(r.lastAmountPaisas);
     });
     _amountFocus.requestFocus();
     _amountCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _amountCtrl.text.length);
@@ -118,7 +135,6 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
       _loading = false;
       _amountCtrl.clear();
       _descCtrl.clear();
-      _selectedCategoryId = null;
     });
     _amountFocus.requestFocus();
   }
@@ -167,6 +183,8 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
       ref.invalidate(fundingContextProvider);
       if (!_editing) {
         await LastEntryStore.record(_date);
+        await LastEntryStore.recordCategory('income', _selectedCategoryId!);
+        _lastCategoryId = _selectedCategoryId;
         unawaited(LogNudge.reschedule());
       }
       if (!mounted) return;
@@ -229,34 +247,14 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
               QuickRepeatChips(repeats: picks!.repeats, onTap: _applyRepeat),
               const SizedBox(height: 8),
             ],
-            TextField(
+            BigAmountField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
               enabled: !_locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [AmountExprFormatter()],
-              style: AppTextStyles.displayLarge.copyWith(
-                color: const Color(0xFF4CAF50),
-                letterSpacing: -1,
-              ),
-              decoration: InputDecoration(
-                prefixText: '+ Rs ',
-                prefixStyle: AppTextStyles.headlineMedium.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-                hintText: '0',
-                hintStyle: AppTextStyles.displayLarge.copyWith(
-                  color: AppColors.mutedForeground.withValues(alpha: 0.4),
-                  letterSpacing: -1,
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              onChanged: (_) => setState(() {}),
+              color: AppColors.success,
+              prefix: '+ Rs ',
+              onChanged: () => setState(() {}),
             ),
-            if (!_locked) AmountExprBar(controller: _amountCtrl, onChanged: () => setState(() {})),
             const SizedBox(height: 8),
             DayStrip(
               selected: _date,
@@ -275,6 +273,7 @@ class _QuickAddIncomePageState extends ConsumerState<QuickAddIncomePage> {
                   picks?.topCategoryIds ?? const [],
                   const [],
                   cats.map((c) => c.id).toSet(),
+                  last: _lastCategoryId,
                 ),
                 selectedId: _selectedCategoryId,
                 onSelected: (cat) {

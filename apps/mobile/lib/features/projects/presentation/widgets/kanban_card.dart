@@ -3,15 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/priority_color.dart';
 import '../../domain/entities/project_entity.dart';
 import 'project_card.dart' show projectColor;
-
-Color kanbanPriorityColor(String p) => switch (p) {
-      'URGENT' => const Color(0xFFEF4444),
-      'HIGH' => const Color(0xFFF59E0B),
-      'MEDIUM' => const Color(0xFF3B82F6),
-      _ => const Color(0xFF94A3B8),
-    };
 
 class KanbanCard extends StatelessWidget {
   const KanbanCard({
@@ -56,7 +50,7 @@ class KanbanCard extends StatelessWidget {
                 Container(
                   width: 3,
                   decoration: BoxDecoration(
-                    color: kanbanPriorityColor(task.priority),
+                    color: priorityColor(task.priority),
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
                   ),
                 ),

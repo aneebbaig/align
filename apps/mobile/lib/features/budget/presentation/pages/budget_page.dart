@@ -146,7 +146,7 @@ class _OverviewCard extends StatelessWidget {
 
   Color get _color {
     if (_pct >= 1.0) return AppColors.destructive;
-    if (_pct >= 0.85) return const Color(0xFFE67E22);
+    if (_pct >= 0.85) return AppColors.warning;
     return AppColors.primary;
   }
 
@@ -206,7 +206,7 @@ class _CategoryBudgetRow extends StatelessWidget {
 
   Color get _color {
     if (cat.pct >= 100) return AppColors.destructive;
-    if (cat.pct >= 85) return const Color(0xFFE67E22);
+    if (cat.pct >= 85) return AppColors.warning;
     return AppColors.primary;
   }
 

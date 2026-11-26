@@ -81,4 +81,20 @@ class ApiConstants {
   static String projectTaskById(String projectId, String taskId) =>
       '/projects/$projectId/tasks/$taskId';
   static String tagById(String id) => '/tags/$id';
+
+  static const String wedding = '/wedding';
+  static String weddingById(String id) => '/wedding/$id';
+  static String weddingEvents(String id) => '/wedding/$id/events';
+  static String weddingEvent(String id, String eventId) => '/wedding/$id/events/$eventId';
+  static String weddingExpenses(String id) => '/wedding/$id/expenses';
+  static String weddingExpense(String id, String expenseId) => '/wedding/$id/expenses/$expenseId';
+  static String weddingExpensePay(String id, String expenseId) =>
+      '/wedding/$id/expenses/$expenseId/pay-in-full';
+  static String weddingQuotes(String id, String expenseId) => '/wedding/$id/expenses/$expenseId/quotes';
+  static String weddingQuotesClear(String id, String expenseId) =>
+      '/wedding/$id/expenses/$expenseId/quotes/clear';
+  static String weddingQuote(String id, String expenseId, String quoteId) =>
+      '/wedding/$id/expenses/$expenseId/quotes/$quoteId';
+  static String weddingQuoteChoose(String id, String expenseId, String quoteId) =>
+      '/wedding/$id/expenses/$expenseId/quotes/$quoteId/choose';
 }

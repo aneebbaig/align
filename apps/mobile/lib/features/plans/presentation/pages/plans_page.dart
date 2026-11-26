@@ -30,13 +30,11 @@ class PlansPage extends ConsumerWidget {
         backgroundColor: AppColors.background,
         elevation: 0,
         title: const Text('Plans', style: AppTextStyles.headlineSmall),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: AppColors.primary),
-            tooltip: 'New plan',
-            onPressed: () => showNewPlanSheet(context, ref),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'New plan',
+        onPressed: () => showNewPlanSheet(context, ref),
+        child: const Icon(Icons.add),
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
@@ -48,7 +46,7 @@ class PlansPage extends ConsumerWidget {
                   SizedBox(height: 120),
                   AppEmptyState(
                     title: 'No plans yet',
-                    subtitle: 'Create plans on the web to buy things over time and tick them off here.',
+                    subtitle: 'Tap + to plan something to buy over time, then tick items off as you go.',
                     icon: Icons.checklist_rtl,
                   ),
                 ])

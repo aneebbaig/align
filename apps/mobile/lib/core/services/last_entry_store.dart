@@ -11,7 +11,7 @@ class LastEntry {
 }
 
 /// How long after a save the "Last: d MMM" chip is still offered.
-const lastEntryWindow = Duration(minutes: 30);
+const lastEntryWindow = Duration(hours: 3);
 
 /// The date to offer as a "Last: d MMM" chip, or null: only within
 /// [lastEntryWindow] of the save, and only when that date isn't today.
@@ -33,6 +33,18 @@ class LastEntryStore {
     final s = DateTime.tryParse(prefs.getString(_kSavedAt) ?? '');
     if (d == null || s == null) return null;
     return LastEntry(date: d, savedAt: s);
+  }
+
+  /// The category last used for a new entry of [type] ('expense' | 'income').
+  static Future<String?> readCategory(String type) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getString('last_category_$type');
+  }
+
+  static Future<void> recordCategory(String type, String categoryId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_category_$type', categoryId);
   }
 
   static Future<void> record(DateTime date, {DateTime? now}) async {

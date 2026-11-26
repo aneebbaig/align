@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'app_text_field.dart';
 import '../utils/amount_expr.dart';
 
 /// Lets an amount field take a sum ("35+67"): digits, `.`, `+`, `-` and spaces,
@@ -107,5 +108,92 @@ class _OpKey extends StatelessWidget {
             child: Text(label, style: AppTextStyles.bodyLarge.copyWith(color: AppColors.foreground)),
           ),
         ),
+      );
+}
+
+/// The standard money input: "Rs" prefix, number pad, takes a sum ("35+67"),
+/// with +/- keys and the live result underneath. Read it with [parseAmount].
+class AmountExprField extends StatelessWidget {
+  const AmountExprField({
+    required this.controller,
+    this.hint = '0',
+    this.prefix = 'Rs ',
+    this.autofocus = false,
+    this.onChanged,
+    super.key,
+  });
+  final TextEditingController controller;
+  final String hint;
+  final String prefix;
+  final bool autofocus;
+  final VoidCallback? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            controller: controller,
+            hint: hint,
+            prefixText: prefix,
+            dense: true,
+            autofocus: autofocus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [AmountExprFormatter()],
+            onChanged: (_) => onChanged?.call(),
+          ),
+          const SizedBox(height: 6),
+          AmountExprBar(controller: controller, onChanged: onChanged),
+        ],
+      );
+}
+
+/// The large amount entry used at the top of quick-add forms: big number,
+/// takes a sum, with the +/- keys and live result underneath.
+class BigAmountField extends StatelessWidget {
+  const BigAmountField({
+    required this.controller,
+    required this.onChanged,
+    this.focusNode,
+    this.color = AppColors.primary,
+    this.prefix = 'Rs ',
+    this.enabled = true,
+    super.key,
+  });
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+  final FocusNode? focusNode;
+  final Color color;
+  final String prefix;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: controller,
+            focusNode: focusNode,
+            enabled: enabled,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [AmountExprFormatter()],
+            style: AppTextStyles.displayLarge.copyWith(color: color, letterSpacing: -1),
+            decoration: InputDecoration(
+              prefixText: prefix,
+              prefixStyle: AppTextStyles.headlineMedium.copyWith(color: AppColors.mutedForeground),
+              hintText: '0',
+              hintStyle: AppTextStyles.displayLarge.copyWith(
+                color: AppColors.mutedForeground.withValues(alpha: 0.4),
+                letterSpacing: -1,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+          if (enabled) AmountExprBar(controller: controller, onChanged: onChanged),
+        ],
       );
 }

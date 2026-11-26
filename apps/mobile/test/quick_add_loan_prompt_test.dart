@@ -31,7 +31,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(0), '5000');
     await tester.enterText(find.byType(TextField).at(1), '  ahmed ');
     await tester.pump();
-    await tester.tap(find.text('Create'));
+    await tester.tap(find.text('Create loan'));
     await tester.pumpAndSettle();
 
     expect(find.text('Add to the existing loan?'), findsOneWidget);

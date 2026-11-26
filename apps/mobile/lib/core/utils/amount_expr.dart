@@ -55,3 +55,14 @@ AmountParse parseAmount(String input) {
   if (total == 0) return const AmountParse.error('Amount must be greater than zero');
   return AmountParse.ok(total, isExpression: tokens.length > 1);
 }
+
+/// For optional amounts (zero allowed):
+/// returns null for blank, 0 for zeros, paisas for a number or sum, and
+/// [badAmount] (-1) when the text is not an amount.
+const int badAmount = -1;
+int? parseOptionalAmount(String text) {
+  final t = text.trim();
+  if (t.isEmpty) return null;
+  if (RegExp(r'^0+(\.0*)?$').hasMatch(t)) return 0;
+  return parseAmount(t).paisas ?? badAmount;
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -18,6 +19,12 @@ class DashboardPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        shape: const StadiumBorder(),
+        onPressed: () => context.push('/quick-add'),
+        icon: const Icon(Icons.add),
+        label: const Text('Add expense'),
+      ),
       body: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.card,

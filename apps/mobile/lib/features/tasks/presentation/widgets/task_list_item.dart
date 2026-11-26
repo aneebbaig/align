@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/theme/priority_color.dart';
 import '../../../../../core/widgets/app_card.dart';
 import '../../domain/entities/task_entity.dart';
 
@@ -10,7 +11,6 @@ class TaskListItem extends StatefulWidget {
   const TaskListItem({
     required this.task,
     required this.onToggle,
-    required this.onDelete,
     required this.onEdit,
     this.selectionMode = false,
     this.selected = false,
@@ -21,7 +21,6 @@ class TaskListItem extends StatefulWidget {
 
   final TaskEntity task;
   final VoidCallback onToggle;
-  final VoidCallback onDelete;
   final VoidCallback onEdit;
   final bool selectionMode;
   final bool selected;
@@ -70,13 +69,6 @@ class _TaskListItemState extends State<TaskListItem>
   }
 
   TaskEntity get task => widget.task;
-
-  Color get _priorityColor => switch (task.priority) {
-    'URGENT' => const Color(0xFFEF4444),
-    'HIGH' => const Color(0xFFF97316),
-    'MEDIUM' => AppColors.primary,
-    _ => AppColors.mutedForeground,
-  };
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -146,7 +138,7 @@ class _TaskListItemState extends State<TaskListItem>
                       margin: const EdgeInsets.only(left: 8, top: 6),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _priorityColor,
+                        color: priorityColor(task.priority),
                       ),
                     ),
                   ],
@@ -194,20 +186,6 @@ class _TaskListItemState extends State<TaskListItem>
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        if (!widget.selectionMode)
-          GestureDetector(
-            onTap: widget.onDelete,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.delete_outline,
-                size: 16,
-                color: AppColors.destructive.withValues(alpha: 0.7),
-              ),
-            ),
-          ),
       ],
     ),
   );

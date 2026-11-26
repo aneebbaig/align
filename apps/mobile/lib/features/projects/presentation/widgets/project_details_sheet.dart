@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../domain/entities/project_entity.dart';
 
 Future<void> showProjectDetailsSheet(
@@ -143,13 +144,13 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
             const SizedBox(height: 16),
 
             _sectionLabel('Notes'),
-            TextField(
+            AppTextField(
               controller: _notes,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Scope, decisions, reminders…',
+              dense: true,
               maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
-              onEditingComplete: _saveNotesIfChanged,
-              decoration: _fieldDecoration('Scope, decisions, reminders…'),
+              onSubmitted: (_) => _saveNotesIfChanged(),
             ),
             const SizedBox(height: 20),
 
@@ -214,19 +215,15 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
                 ),
                 child: Column(
                   children: [
-                    TextField(
-                      controller: _label,
-                      style: AppTextStyles.bodyMedium,
-                      decoration: _fieldDecoration('Label (e.g. Figma)'),
-                    ),
+                    AppTextField(controller: _label, hint: 'Label (e.g. Figma)', dense: true),
                     const SizedBox(height: 8),
-                    TextField(
+                    AppTextField(
                       controller: _url,
-                      style: AppTextStyles.bodyMedium,
+                      hint: 'https://…',
+                      dense: true,
                       keyboardType: TextInputType.url,
                       autofocus: true,
                       onSubmitted: (_) => _addLink(),
-                      decoration: _fieldDecoration('https://…'),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -291,26 +288,5 @@ class _ProjectDetailsSheetState extends State<_ProjectDetailsSheet> {
         child: Text(text,
             style: AppTextStyles.labelMedium
                 .copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w600)),
-      );
-
-  InputDecoration _fieldDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary),
-        ),
       );
 }
