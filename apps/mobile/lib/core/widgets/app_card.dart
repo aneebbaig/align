@@ -10,6 +10,7 @@ class AppCard extends StatelessWidget {
     this.borderColor,
     this.radius = 12.0,
     this.onTap,
+    this.onLongPress,
     this.margin,
     super.key,
   });
@@ -20,6 +21,7 @@ class AppCard extends StatelessWidget {
   final Color? borderColor;
   final double radius;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final EdgeInsetsGeometry? margin;
 
   @override
@@ -35,10 +37,11 @@ class AppCard extends StatelessWidget {
       child: child,
     );
 
-    if (onTap == null) return container;
+    if (onTap == null && onLongPress == null) return container;
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: container,
     );
   }

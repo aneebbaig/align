@@ -5,47 +5,67 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, ArrowDownUp, PiggyBank, ListTodo,
-  Calendar, Gift, Settings, TrendingUp, CalendarDays, Wallet,
-  HandCoins, ShoppingCart, LineChart, MoreHorizontal, X,
+  Gift, Settings, TrendingUp, CalendarDays, Wallet,
+  HandCoins, LineChart, MoreHorizontal, X, Heart,
   FlaskConical, ClipboardList, FolderKanban, Table2, AlarmClock,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isHrefHidden } from "@/lib/hidden-sections";
 
-const PRIMARY_NAV = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/expenses", label: "Expenses", icon: ArrowDownUp },
-  { href: "/budget", label: "Budget", icon: PiggyBank },
-  { href: "/tasks", label: "Tasks", icon: ListTodo },
-];
+type NavItem = { href: string; label: string; icon: LucideIcon };
 
-const MORE_GROUPS = [
+// Expenses is never hidable; the rest of the primary tabs are, and the next
+// visible section (SECONDARY_NAV order) takes the freed slot.
+const PRIMARY_NAV: NavItem[] = [
+  { href: "/expenses", label: "Expenses", icon: ArrowDownUp },
+  { href: "/wedding", label: "Wedding", icon: Heart },
+  { href: "/projects", label: "Work", icon: FolderKanban },
+  { href: "/plans", label: "Plans", icon: CalendarDays },
+];
+const PRIMARY_SLOTS = 4;
+
+// One entry per section, grouped like the desktop sidebar.
+const ALL_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Money",
     items: [
+      { href: "/expenses", label: "Expenses", icon: ArrowDownUp },
       { href: "/income", label: "Income", icon: TrendingUp },
+      { href: "/budget", label: "Budget", icon: PiggyBank },
+    ],
+  },
+  {
+    label: "Planning",
+    items: [
+      { href: "/wedding", label: "Wedding", icon: Heart },
+      { href: "/plans", label: "Plans", icon: CalendarDays },
+      { href: "/forecast", label: "Forecast", icon: Table2 },
+      { href: "/lists", label: "Lists", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Wealth",
+    items: [
       { href: "/savings", label: "Savings", icon: Wallet },
       { href: "/investments", label: "Invest", icon: LineChart },
       { href: "/loans", label: "Loans", icon: HandCoins },
     ],
   },
   {
-    label: "Planning",
+    label: "Life",
     items: [
-      { href: "/forecast", label: "Forecast", icon: Table2 },
-      { href: "/plans", label: "Plans", icon: CalendarDays },
-      { href: "/want-list", label: "Want List", icon: ShoppingCart },
-      { href: "/need-list", label: "Need List", icon: ClipboardList },
-      { href: "/calendar", label: "Calendar", icon: Calendar },
+      { href: "/projects", label: "Work", icon: FolderKanban },
+      { href: "/tasks", label: "Tasks", icon: ListTodo },
       { href: "/routines", label: "Routines", icon: AlarmClock },
+      { href: "/vault", label: "Vault", icon: Gift },
+      { href: "/perfumes", label: "Perfumes", icon: FlaskConical },
     ],
   },
   {
-    label: "Other",
+    label: "Overview",
     items: [
-      { href: "/projects", label: "Work", icon: FolderKanban },
-      { href: "/perfumes", label: "Perfumes", icon: FlaskConical },
-      { href: "/vault", label: "Vault", icon: Gift },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
@@ -56,14 +76,21 @@ export function MobileNav({ role, hiddenSections = [] }: { role?: string; hidden
   const [showMore, setShowMore] = useState(false);
   const isSuperAdmin = role === "SUPER_ADMIN";
 
-  const visibleGroups = MORE_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections)),
-  })).filter((group) => group.items.length > 0);
+  const isVisible = ({ href }: NavItem) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections);
+  const visibleGroups = ALL_GROUPS.map((group) => ({ ...group, items: group.items.filter(isVisible) }))
+    .filter((group) => group.items.length > 0);
+
+  // Preferred tabs first, then the next visible sections fill any hidden slot.
+  const fillers = visibleGroups.flatMap((g) => g.items).filter((i) => i.href !== "/settings");
+  const primary = [...PRIMARY_NAV.filter(isVisible)];
+  for (const item of fillers) {
+    if (primary.length >= PRIMARY_SLOTS) break;
+    if (!primary.some((p) => p.href === item.href)) primary.push(item);
+  }
 
   const isMoreActive = visibleGroups
     .flatMap((g) => g.items)
-    .some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
+    .some((item) => !primary.some((p) => p.href === item.href) && (pathname === item.href || pathname.startsWith(item.href + "/")));
 
   return (
     <>
@@ -120,7 +147,7 @@ export function MobileNav({ role, hiddenSections = [] }: { role?: string; hidden
       )}
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border flex items-center justify-around h-16 px-1">
-        {PRIMARY_NAV.filter(({ href }) => !isHrefHidden(href, hiddenSections)).map(({ href, label, icon: Icon }) => {
+        {primary.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(href + "/");
           return (

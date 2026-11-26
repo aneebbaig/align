@@ -5,7 +5,7 @@ import { BudgetPeriodOverride } from "@/components/shared/budget-period-override
 import { DayStrip } from "@/components/shared/day-strip";
 import { LAST_ENTRY_DATE_KEY, isOtherPeriod, readLastUsed } from "@/lib/day-strip";
 
-/** A recent date from the last entry saved (within 30 min), read once - offered as a chip, never preselected. */
+/** A recent date from the last entry saved (within 3 hours), read once - offered as a chip, never preselected. */
 export function useLastUsedDate(): string | null {
   const [last] = useState<string | null>(() =>
     typeof window !== "undefined" ? readLastUsed(window.localStorage.getItem(LAST_ENTRY_DATE_KEY), new Date()) : null,

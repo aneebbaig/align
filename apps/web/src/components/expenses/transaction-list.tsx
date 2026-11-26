@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import { Pencil, Trash2, AlertTriangle, Frown } from "lucide-react";
-import { toast } from "sonner";
 import { deleteTransaction } from "@/actions/expenses";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { useUndoDelete } from "@/components/shared/use-undo-delete";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { ShoppingBag } from "lucide-react";
@@ -48,20 +46,10 @@ export function TransactionList({
   baseSymbol?: string;
   onEdit: (tx: Transaction) => void;
 }) {
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const { hiddenIds, requestDelete } = useUndoDelete(deleteTransaction);
+  const visible = transactions.filter((t) => !hiddenIds.has(t.id));
 
-  async function handleDelete() {
-    if (!deleteId) return;
-    setDeleting(true);
-    const result = await deleteTransaction(deleteId);
-    if (result.success) toast.success("Transaction deleted");
-    else toast.error("Failed to delete");
-    setDeleting(false);
-    setDeleteId(null);
-  }
-
-  if (transactions.length === 0) {
+  if (visible.length === 0) {
     return (
       <EmptyState
         icon={ShoppingBag}
@@ -72,7 +60,7 @@ export function TransactionList({
     );
   }
 
-  const groups = groupByDate(transactions);
+  const groups = groupByDate(visible);
 
   return (
     <>
@@ -141,16 +129,18 @@ export function TransactionList({
                       )}
                     </div>
 
-                    <div className="flex gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                    <div className="flex gap-0.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 group-focus-within:!opacity-100 transition-opacity shrink-0">
                       <button
                         onClick={() => onEdit(tx)}
-                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground/70 hover:text-foreground transition-colors"
+                        aria-label="Edit"
+                        className="p-2 sm:p-1.5 rounded-md hover:bg-muted text-muted-foreground/70 hover:text-foreground transition-colors"
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button
-                        onClick={() => setDeleteId(tx.id)}
-                        className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground/70 hover:text-red-500 transition-colors"
+                        aria-label="Delete"
+                        onClick={() => requestDelete(tx.id, tx.type === "INCOME" ? "Income" : "Expense")}
+                        className="p-2 sm:p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground/70 hover:text-red-500 transition-colors"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -163,14 +153,6 @@ export function TransactionList({
         ))}
       </div>
 
-      <ConfirmDialog
-        open={!!deleteId}
-        onOpenChange={(open) => !open && setDeleteId(null)}
-        title="Delete transaction?"
-        description="This action cannot be undone."
-        onConfirm={handleDelete}
-        loading={deleting}
-      />
     </>
   );
 }

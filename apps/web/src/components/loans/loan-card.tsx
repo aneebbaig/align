@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { DueChip } from "@/components/shared/due-chip";
 import { isLoanClosed } from "@/lib/loans/balance";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/currency-utils";
 
 export interface LoanPayment {
   id: string; kind: string; amount: number; date: Date; notes: string | null; transactionId: string | null;
@@ -31,7 +32,7 @@ function History({ loan, baseSymbol, onEditPayment, onDeletePayment }: {
   loan: Loan; baseSymbol: string; onEditPayment: (p: LoanPayment) => void; onDeletePayment: (id: string) => void;
 }) {
   const isGiven = loan.type === "GIVEN";
-  const money = (n: number) => `${baseSymbol} ${(n / 100).toLocaleString()}`;
+  const money = (n: number) => formatMoney(n, baseSymbol);
   // Newest first; the loan's own start closes the list.
   const rows = [...loan.payments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return (
@@ -72,7 +73,7 @@ export function LoanCard({ loan, baseSymbol, expanded, onToggle, onPay, onMarkPa
 }) {
   const closed = isLoanClosed(loan.status);
   const isGiven = loan.type === "GIVEN";
-  const money = (n: number) => `${baseSymbol} ${(n / 100).toLocaleString()}`;
+  const money = (n: number) => formatMoney(n, baseSymbol);
   const paid = loan.principalAmount - loan.remainingAmount;
   const pct = loan.principalAmount > 0 ? Math.round((paid / loan.principalAmount) * 100) : 0;
   const tone = isGiven ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400";

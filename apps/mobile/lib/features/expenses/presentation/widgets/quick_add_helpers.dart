@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../data/models/quick_picks_model.dart';
 
 /// Up to [max] saved descriptions for [query]: prefix matches first, then
@@ -34,17 +35,17 @@ bool needsBudgetChoice(DateTime date, {int? openMonth, int? openYear, DateTime? 
   return date.month != m || date.year != y;
 }
 
-/// Category ids to show first: the server's top categories, then recents,
-/// restricted to ids that exist in [known].
-List<String> orderedCategoryIds(List<String> top, List<String> recent, Set<String> known) => [
-      ...top,
-      ...recent.where((id) => !top.contains(id)),
-    ].where(known.contains).toList();
-
-String amountFieldText(int paisas) {
-  final v = paisas / 100;
-  return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+/// Category ids to show first: the [last] one used, then the server's top
+/// categories, then recents, restricted to ids that exist in [known].
+List<String> orderedCategoryIds(List<String> top, List<String> recent, Set<String> known, {String? last}) {
+  final ids = <String>[
+    if (last != null) last,
+    ...top.where((id) => id != last),
+    ...recent.where((id) => id != last && !top.contains(id)),
+  ];
+  return ids.where(known.contains).toList();
 }
+
 
 /// Horizontally scrolling "description · amount" chips; tap to fill the form.
 class QuickRepeatChips extends StatelessWidget {
@@ -89,11 +90,6 @@ class DescriptionAutocomplete extends StatelessWidget {
   final ValueChanged<QuickDescription> onPicked;
   final String hint;
 
-  OutlineInputBorder _b(Color c) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: c),
-      );
-
   @override
   Widget build(BuildContext context) => RawAutocomplete<QuickDescription>(
         textEditingController: controller,
@@ -101,22 +97,12 @@ class DescriptionAutocomplete extends StatelessWidget {
         displayStringForOption: (o) => o.description,
         optionsBuilder: (v) => suggestDescriptions(descriptions, v.text),
         onSelected: onPicked,
-        fieldViewBuilder: (context, ctrl, node, onSubmit) => TextField(
+        fieldViewBuilder: (context, ctrl, node, onSubmit) => AppTextField(
           controller: ctrl,
           focusNode: node,
-          style: AppTextStyles.bodyMedium,
-          maxLines: 1,
+          hint: hint,
+          dense: true,
           textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-            filled: true,
-            fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            border: _b(AppColors.border.withValues(alpha: 0.5)),
-            enabledBorder: _b(AppColors.border.withValues(alpha: 0.5)),
-            focusedBorder: _b(AppColors.primary.withValues(alpha: 0.6)),
-          ),
         ),
         optionsViewBuilder: (context, onSelected, options) => Align(
           alignment: Alignment.topLeft,
@@ -144,7 +130,7 @@ class DescriptionAutocomplete extends StatelessWidget {
       );
 }
 
-/// Bottom action bar: primary button, and an optional "Save & add another".
+/// Bottom action bar: primary "Add" button, and an optional "Add another".
 class QuickAddActions extends StatelessWidget {
   const QuickAddActions({
     required this.primaryLabel,
@@ -188,7 +174,7 @@ class QuickAddActions extends StatelessWidget {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: loading ? null : onAddAnother,
-                    child: const Text('Save & add another'),
+                    child: const Text('Add another'),
                   ),
                 ),
               ],

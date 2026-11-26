@@ -9,6 +9,8 @@ import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_sheet.dart';
+import '../../../../core/widgets/undo_delete.dart';
 import '../../data/datasources/projects_datasource.dart';
 import '../../data/datasources/tags_datasource.dart';
 import '../../domain/entities/project_entity.dart';
@@ -17,6 +19,7 @@ import '../providers/tags_provider.dart';
 import '../widgets/kanban_board.dart';
 import '../widgets/project_card.dart';
 import '../widgets/project_details_sheet.dart';
+import '../widgets/project_pickers.dart';
 import '../widgets/task_edit_sheet.dart';
 
 const _statusOrder = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
@@ -122,7 +125,7 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
               context, e is AppException ? e.message : 'Failed to save task');
         }
       },
-      onDelete: () => _deleteTask(task),
+      onDelete: () async => _deleteTask(task),
       onCreateTag: (name, color) async {
         try {
           final created = await ref.read(tagsDatasourceProvider).createTag(name: name, color: color);
@@ -167,43 +170,36 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
     );
   }
 
-  Future<void> _deleteTask(ProjectTaskEntity task) async {
+  /// Hides the task now; the real delete waits for the Undo snackbar to close.
+  void _deleteTask(ProjectTaskEntity task) {
     HapticFeedback.mediumImpact();
-    try {
-      await ref.read(projectsDatasourceProvider).deleteTask(widget.projectId, task.id);
-      if (!mounted) return;
-      _refresh();
-      ref.read(toastServiceProvider).success(context, 'Task deleted');
-    } catch (e) {
-      if (!mounted) return;
-      ref.read(toastServiceProvider).error(
-          context, e is AppException ? e.message : 'Failed to delete task');
-    }
+    final ds = ref.read(projectsDatasourceProvider);
+    final container = ProviderScope.containerOf(context);
+    final toast = ref.read(toastServiceProvider);
+    final ctx = context;
+    final projectId = widget.projectId;
+    setState(() => _columns[task.status]?.removeWhere((t) => t.id == task.id));
+    deferDelete(
+      context,
+      message: 'Deleted · ${task.title}',
+      onUndo: () {
+        if (!mounted) return;
+        // Rebuild the columns from the server copy, which still has the task.
+        setState(() => _syncedSignature = null);
+      },
+      commit: () async {
+        await ds.deleteTask(projectId, task.id);
+        container.invalidate(projectProvider(projectId));
+        container.invalidate(projectsProvider);
+      },
+      onError: (e) {
+        if (ctx.mounted) toast.error(ctx, e is AppException ? e.message : 'Failed to delete task');
+      },
+    );
   }
 
   Future<void> _changeStatus(ProjectEntity project) async {
-    final next = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final s in ['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'])
-              ListTile(
-                title: Text(projectStatusMeta(s).$1, style: AppTextStyles.bodyMedium),
-                trailing: project.status == s
-                    ? const Icon(Icons.check, color: AppColors.primary, size: 18)
-                    : null,
-                onTap: () => Navigator.pop(ctx, s),
-              ),
-          ],
-        ),
-      ),
-    );
+    final next = await pickProjectStatus(context, project.status);
     if (next == null || next == project.status) return;
     try {
       await ref.read(projectsDatasourceProvider).updateProject(widget.projectId, {'status': next});
@@ -217,37 +213,7 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
   }
 
   Future<void> _editName(ProjectEntity project) async {
-    final controller = TextEditingController(text: project.name);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text('Rename project',
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: AppTextStyles.bodyMedium,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'Project name'),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Save',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+    final newName = await askProjectName(context, project.name);
     if (newName == null || newName.isEmpty || newName == project.name) return;
     try {
       await ref.read(projectsDatasourceProvider).updateProject(widget.projectId, {'name': newName});
@@ -261,30 +227,12 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
   }
 
   Future<void> _deleteProject() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text('Delete project?',
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-        content: Text('This deletes the project and all its tasks. This cannot be undone.',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+    final confirm = await confirmDestructive(
+      context,
+      title: 'Delete project?',
+      body: 'This deletes the project and all its tasks. This cannot be undone.',
     );
-    if (confirm != true) return;
+    if (!confirm) return;
     try {
       await ref.read(projectsDatasourceProvider).deleteProject(widget.projectId);
       if (!mounted) return;

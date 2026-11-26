@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/currency-utils";
 
 interface Props {
   totalIncome: number;
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export function OverviewCards({ totalIncome, totalExpenses, remainingBudget, netSavings, baseSymbol = "Rs" }: Props) {
-  const fmt = (n: number) => `${baseSymbol} ${(Math.abs(n) / 100).toLocaleString()}`;
+  const fmt = (n: number) => formatMoney(Math.abs(n), baseSymbol);
 
   const stats = [
     {

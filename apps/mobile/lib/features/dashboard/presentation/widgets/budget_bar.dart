@@ -17,7 +17,7 @@ class BudgetBar extends StatelessWidget {
 
   Color get _barColor {
     if (_pct >= 1.0) return AppColors.destructive;
-    if (_pct >= 0.85) return const Color(0xFFE67E22);
+    if (_pct >= 0.85) return AppColors.warning;
     return AppColors.primary;
   }
 

@@ -7,6 +7,10 @@ import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/utils/money_format.dart';
+import '../../../../core/widgets/amount_expr_field.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/day_strip.dart';
@@ -44,11 +48,8 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
   void initState() {
     super.initState();
     // Pre-fill with the existing payment amount when editing, else the remaining balance.
-    final prefill = (widget.editPayment?.amountPaisas ?? widget.loan.remainingPaisas) / 100;
     _amountCtrl = TextEditingController(
-      text: prefill == prefill.truncateToDouble()
-          ? prefill.toInt().toString()
-          : prefill.toStringAsFixed(2),
+      text: paisasToFieldText(widget.editPayment?.amountPaisas ?? widget.loan.remainingPaisas),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _amountFocus.requestFocus();
@@ -67,11 +68,7 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
     super.dispose();
   }
 
-  int? get _amountPaisas {
-    final v = double.tryParse(_amountCtrl.text.trim());
-    if (v == null || v <= 0) return null;
-    return (v * 100).round();
-  }
+  int? get _amountPaisas => parseAmount(_amountCtrl.text).paisas;
 
   bool get _canSubmit {
     final p = _amountPaisas;
@@ -148,32 +145,11 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !submitting ? _submit : null,
-              child: submitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(
-                      _isEditing ? 'Save' : 'Record',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: _isEditing ? 'Save changes' : 'Record payment',
+        loading: submitting,
+        onPrimary: _canSubmit ? _submit : null,
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -203,7 +179,7 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
                     style: AppTextStyles.labelMedium.copyWith(
                       color: widget.loan.type == 'RECEIVED'
                           ? AppColors.destructive
-                          : const Color(0xFFE67E22),
+                          : AppColors.warning,
                     ),
                   ),
                 ],
@@ -212,31 +188,10 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
 
             const SizedBox(height: 16),
 
-            TextField(
+            BigAmountField(
               controller: _amountCtrl,
               focusNode: _amountFocus,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [_DecimalFormatter()],
-              style: AppTextStyles.displayLarge.copyWith(
-                color: AppColors.primary,
-                letterSpacing: -1,
-              ),
-              decoration: InputDecoration(
-                prefixText: 'Rs ',
-                prefixStyle: AppTextStyles.headlineMedium.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-                hintText: '0',
-                hintStyle: AppTextStyles.displayLarge.copyWith(
-                  color: AppColors.mutedForeground.withValues(alpha: 0.4),
-                  letterSpacing: -1,
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              onChanged: (_) => setState(() {}),
+              onChanged: () => setState(() {}),
             ),
 
             const SizedBox(height: 12),
@@ -292,30 +247,11 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
 
             MoreOptions(
               children: [
-                TextField(
+                AppTextField(
                   controller: _notesCtrl,
-                  style: AppTextStyles.bodyMedium,
-                  maxLines: 1,
+                  hint: 'Notes (optional)',
+                  dense: true,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    hintText: 'Notes (optional)',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-                    filled: true,
-                    fillColor: AppColors.card,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -323,15 +259,5 @@ class _RecordPaymentPageState extends ConsumerState<RecordPaymentPage> {
         ),
       ),
     );
-  }
-}
-
-class _DecimalFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue val) {
-    final text = val.text;
-    if (text.isEmpty) return val;
-    if (!RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(text)) return old;
-    return val;
   }
 }

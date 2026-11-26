@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { createSurpriseItem, updateSurpriseItem, updateSurprise, deleteSurprise, deleteSurpriseItem } from "@/actions/vault";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 
 interface SurpriseItem {
   id: string; surpriseId: string; name: string; description: string | null;
@@ -53,6 +55,9 @@ export function VaultDetailClient({ surprise, baseSymbol = "Rs" }: { surprise: S
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(surprise.status);
 
+  const openAdd = useCallback(() => setAddOpen(true), []);
+  useAddShortcut(addOpen || editOpen || deleteOpen || !!deleteItemId, openAdd);
+
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   async function handleAddItem() {
@@ -60,7 +65,7 @@ export function VaultDetailClient({ surprise, baseSymbol = "Rs" }: { surprise: S
     setLoading(true);
     const result = await createSurpriseItem(surprise.id, {
       name: newItem.name,
-      estimatedCost: parseFloat(newItem.estimatedCost) || 0,
+      estimatedCost: parseMoney(newItem.estimatedCost) ?? 0,
       purchaseLink: newItem.purchaseLink || undefined,
       notes: newItem.notes || undefined,
     });
@@ -92,8 +97,8 @@ export function VaultDetailClient({ surprise, baseSymbol = "Rs" }: { surprise: S
     setLoading(true);
     const result = await updateSurpriseItem(surprise.id, editItem.id, {
       name: editItem.name,
-      estimatedCost: parseFloat(editItem.estimatedCost) || 0,
-      actualCost: editItem.actualCost !== "" ? parseFloat(editItem.actualCost) : undefined,
+      estimatedCost: parseMoney(editItem.estimatedCost) ?? 0,
+      actualCost: parseMoney(editItem.actualCost) ?? undefined,
       purchaseLink: editItem.purchaseLink || undefined,
       notes: editItem.notes || undefined,
     });
@@ -241,15 +246,15 @@ export function VaultDetailClient({ surprise, baseSymbol = "Rs" }: { surprise: S
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add Gift Item 🎁</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Item Name</Label><Input value={newItem.name} onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Perfume, Book, Flowers" /></div>
-            <div><Label>Estimated Cost ({baseSymbol})</Label><Input type="number" value={newItem.estimatedCost} onChange={(e) => setNewItem((p) => ({ ...p, estimatedCost: e.target.value }))} placeholder="0" /></div>
+          <form onSubmit={(e) => { e.preventDefault(); if (!loading && newItem.name) void handleAddItem(); }} className="space-y-4">
+            <div><Label>Item Name</Label><Input autoFocus value={newItem.name} onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Perfume, Book, Flowers" /></div>
+            <div><Label>Estimated Cost ({baseSymbol})</Label><MoneyInput value={newItem.estimatedCost} onChange={(e) => setNewItem((p) => ({ ...p, estimatedCost: e.target.value }))} placeholder="0" /></div>
             <div><Label>Product Link (optional)</Label><Input value={newItem.purchaseLink} onChange={(e) => setNewItem((p) => ({ ...p, purchaseLink: e.target.value }))} placeholder="https://..." /></div>
             <div><Label>Notes (optional)</Label><Input value={newItem.notes} onChange={(e) => setNewItem((p) => ({ ...p, notes: e.target.value }))} placeholder="Size, colour, etc." /></div>
-            <Button className="w-full bg-rose-500 hover:bg-rose-600" onClick={handleAddItem} disabled={loading || !newItem.name}>
+            <Button type="submit" className="w-full bg-rose-500 hover:bg-rose-600" disabled={loading || !newItem.name}>
               {loading ? "Adding..." : "Add Item"}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -258,19 +263,19 @@ export function VaultDetailClient({ surprise, baseSymbol = "Rs" }: { surprise: S
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Gift Item ✏️</DialogTitle></DialogHeader>
           {editItem && (
-            <div className="space-y-4">
-              <div><Label>Item Name</Label><Input value={editItem.name} onChange={(e) => setEditItem((p) => p ? { ...p, name: e.target.value } : p)} placeholder="e.g. Perfume" /></div>
-              <div><Label>Estimated Cost ({baseSymbol})</Label><Input type="number" value={editItem.estimatedCost} onChange={(e) => setEditItem((p) => p ? { ...p, estimatedCost: e.target.value } : p)} placeholder="0" /></div>
+            <form onSubmit={(e) => { e.preventDefault(); if (!loading && editItem.name) void handleEditItem(); }} className="space-y-4">
+              <div><Label>Item Name</Label><Input autoFocus value={editItem.name} onChange={(e) => setEditItem((p) => p ? { ...p, name: e.target.value } : p)} placeholder="e.g. Perfume" /></div>
+              <div><Label>Estimated Cost ({baseSymbol})</Label><MoneyInput value={editItem.estimatedCost} onChange={(e) => setEditItem((p) => p ? { ...p, estimatedCost: e.target.value } : p)} placeholder="0" /></div>
               <div>
                 <Label>Actual Cost ({baseSymbol}) <span className="text-muted-foreground text-xs font-normal">- fill once bought</span></Label>
-                <Input type="number" value={editItem.actualCost} onChange={(e) => setEditItem((p) => p ? { ...p, actualCost: e.target.value } : p)} placeholder="Leave blank if not purchased yet" />
+                <MoneyInput value={editItem.actualCost} onChange={(e) => setEditItem((p) => p ? { ...p, actualCost: e.target.value } : p)} placeholder="Leave blank if not purchased yet" />
               </div>
               <div><Label>Product Link (optional)</Label><Input value={editItem.purchaseLink} onChange={(e) => setEditItem((p) => p ? { ...p, purchaseLink: e.target.value } : p)} placeholder="https://..." /></div>
               <div><Label>Notes (optional)</Label><Input value={editItem.notes} onChange={(e) => setEditItem((p) => p ? { ...p, notes: e.target.value } : p)} placeholder="Size, colour, etc." /></div>
-              <Button className="w-full bg-rose-500 hover:bg-rose-600" onClick={handleEditItem} disabled={loading || !editItem.name}>
+              <Button type="submit" className="w-full bg-rose-500 hover:bg-rose-600" disabled={loading || !editItem.name}>
                 {loading ? "Saving..." : "Save Changes"}
               </Button>
-            </div>
+            </form>
           )}
         </DialogContent>
       </Dialog>

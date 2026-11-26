@@ -1,3 +1,5 @@
+import { formatMoney } from "@/lib/currency-utils";
+
 export interface WeddingEvent {
   id: string;
   weddingPlanId: string;
@@ -115,7 +117,7 @@ export const PLAN_STATUS_CONFIG: Record<string, { label: string; badge: string }
 };
 
 export function fmt(n: number, symbol = "Rs") {
-  return symbol + " " + (n / 100).toLocaleString("en-PK", { minimumFractionDigits: 0 });
+  return formatMoney(n, symbol, "en-PK");
 }
 
 /** Compact money for tight spots: Rs 1.2M, Rs 345k. The full value belongs in a title. */

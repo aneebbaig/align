@@ -25,8 +25,8 @@ class AppBadge extends StatelessWidget {
     if (color != null) return color!.withValues(alpha: 0.15);
     return switch (variant) {
       AppBadgeVariant.primary => AppColors.primary.withValues(alpha: 0.15),
-      AppBadgeVariant.success => const Color(0xFF4CAF50).withValues(alpha: 0.15),
-      AppBadgeVariant.warning => const Color(0xFFE67E22).withValues(alpha: 0.15),
+      AppBadgeVariant.success => AppColors.success.withValues(alpha: 0.15),
+      AppBadgeVariant.warning => AppColors.warning.withValues(alpha: 0.15),
       AppBadgeVariant.destructive => AppColors.destructive.withValues(alpha: 0.15),
       AppBadgeVariant.neutral => AppColors.muted,
     };
@@ -37,8 +37,8 @@ class AppBadge extends StatelessWidget {
     if (color != null) return color!;
     return switch (variant) {
       AppBadgeVariant.primary => AppColors.primary,
-      AppBadgeVariant.success => const Color(0xFF4CAF50),
-      AppBadgeVariant.warning => const Color(0xFFE67E22),
+      AppBadgeVariant.success => AppColors.success,
+      AppBadgeVariant.warning => AppColors.warning,
       AppBadgeVariant.destructive => AppColors.destructive,
       AppBadgeVariant.neutral => AppColors.mutedForeground,
     };

@@ -35,14 +35,16 @@ export function PlanHeader({ plan, onEdit, onChanged }: { plan: WeddingPlan; onE
   }
   async function remove() {
     const r = await deleteWeddingPlan(plan.id);
-    if (r.success) { toast.success("Wedding plan deleted"); router.push("/plans"); } else toast.error(r.error ?? "Failed");
+    if (r.success) { toast.success("Wedding plan deleted"); router.push("/wedding?all=1"); } else toast.error(r.error ?? "Failed");
   }
 
   return (
     <div className="space-y-3">
-      <Link href="/plans" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="h-3.5 w-3.5" />All plans
-      </Link>
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <Link href="/wedding?all=1" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+          <ArrowLeft className="h-3.5 w-3.5" />All weddings
+        </Link>
+      </div>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="text-2xl font-semibold">

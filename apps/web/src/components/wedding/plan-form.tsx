@@ -10,15 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateWeddingPlan } from "@/actions/wedding";
-import { evaluateAmount } from "@/lib/amount-expr";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 import { allocatedTotal } from "@/lib/wedding/totals";
 import { WeddingPlan, PLAN_STATUS_CONFIG, fmt } from "./wedding-types";
 
 /** "" -> undefined (leave alone... handled by caller), number/sum -> value, bad -> null */
 function money(text: string): number | null | undefined {
   if (!text.trim()) return undefined;
-  const r = evaluateAmount(text);
-  return r.ok ? r.value : null;
+  return parseMoney(text);
 }
 
 function PlanForm({ plan, baseSymbol, onDone }: { plan: WeddingPlan; baseSymbol: string; onDone: () => void }) {
@@ -74,13 +73,13 @@ function PlanForm({ plan, baseSymbol, onDone }: { plan: WeddingPlan; baseSymbol:
       </div>
       <div>
         <Label>Total budget ({baseSymbol})</Label>
-        <Input inputMode="decimal" placeholder="e.g. 2500000" value={f.totalBudget} onChange={(e) => set({ totalBudget: e.target.value })} />
+        <MoneyInput placeholder="e.g. 2500000" value={f.totalBudget} onChange={(e) => set({ totalBudget: e.target.value })} />
         {allocated > 0 && <p className="mt-1 text-xs text-muted-foreground">Events have {fmt(allocated, baseSymbol)} set aside so far.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Haq Mehr ({baseSymbol})</Label>
-          <Input inputMode="decimal" value={f.haqMehr} onChange={(e) => set({ haqMehr: e.target.value })} />
+          <MoneyInput value={f.haqMehr} onChange={(e) => set({ haqMehr: e.target.value })} />
         </div>
         <div><Label>Haq Mehr note</Label><Input placeholder="e.g. 10 tola gold" value={f.haqMehrNote} onChange={(e) => set({ haqMehrNote: e.target.value })} /></div>
       </div>

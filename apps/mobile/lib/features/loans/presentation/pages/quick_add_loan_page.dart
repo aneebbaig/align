@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/widgets/amount_expr_field.dart';
+import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
+import '../../../../core/widgets/due_date_chips.dart';
 import '../../../../core/widgets/budget_period_field.dart';
 import '../../../../core/widgets/day_strip.dart';
 import '../../../budget/presentation/providers/budget_provider.dart';
@@ -55,11 +58,7 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
     super.dispose();
   }
 
-  int? get _amountPaisas {
-    final v = double.tryParse(_amountCtrl.text.trim());
-    if (v == null || v <= 0) return null;
-    return (v * 100).round();
-  }
+  int? get _amountPaisas => parseAmount(_amountCtrl.text).paisas;
 
   String _norm(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
@@ -76,7 +75,7 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      context.go('/dashboard');
+      context.go('/money');
     }
   }
 
@@ -90,30 +89,7 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
 
   bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
 
-  /// Only the optional due date still uses the calendar; the loan date is a day strip.
-  Future<void> _pickDate(bool isDue) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isDue ? (_dueDate ?? now) : _date,
-      firstDate: isDue ? now : DateTime(2020),
-      lastDate: isDue ? DateTime(2030) : now,
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked == null) return;
-    setState(() => _dueDate = picked);
-  }
-
-  Future<void> _submit() async {
+  Future<void> _submit({bool another = false}) async {
     final paisas = _amountPaisas;
     if (paisas == null || _nameCtrl.text.trim().isEmpty) return;
     final existing = _findOpenLoanForSamePerson();
@@ -167,7 +143,19 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
       ref.invalidate(loansProvider);
       ref.read(toastServiceProvider).success(context, 'Loan created');
       HapticFeedback.lightImpact();
-      _close();
+      if (another) {
+        // Keep the type and date; the next loan is usually a different person.
+        setState(() {
+          _loading = false;
+          _nameCtrl.clear();
+          _amountCtrl.clear();
+          _descCtrl.clear();
+          _dueDate = null;
+        });
+        _nameFocus.requestFocus();
+      } else {
+        _close();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -191,34 +179,14 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
         title: const Text('New Loan', style: AppTextStyles.headlineSmall),
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.foreground),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _close,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !creating ? _submit : null,
-              child: creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(
-                      'Create',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: 'Create loan',
+        loading: creating,
+        onPrimary: _canSubmit ? _submit : null,
+        onAddAnother: _canSubmit ? () => _submit(another: true) : null,
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -252,32 +220,10 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
             const SizedBox(height: 20),
 
             // Amount
-            TextField(
+            BigAmountField(
               controller: _amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [_DecimalFormatter()],
-              style: AppTextStyles.displayLarge.copyWith(
-                color: _type == 'RECEIVED'
-                    ? AppColors.destructive
-                    : const Color(0xFFE67E22),
-                letterSpacing: -1,
-              ),
-              decoration: InputDecoration(
-                prefixText: 'Rs ',
-                prefixStyle: AppTextStyles.headlineMedium.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-                hintText: '0',
-                hintStyle: AppTextStyles.displayLarge.copyWith(
-                  color: AppColors.mutedForeground.withValues(alpha: 0.4),
-                  letterSpacing: -1,
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              onChanged: (_) => setState(() {}),
+              color: _type == 'RECEIVED' ? AppColors.destructive : AppColors.warning,
+              onChanged: () => setState(() {}),
             ),
 
             const SizedBox(height: 12),
@@ -285,11 +231,13 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
             const SizedBox(height: 16),
 
             // Person name
-            _Field(
+            AppTextField(
               controller: _nameCtrl,
               focusNode: _nameFocus,
               hint: 'Person name',
-              onChanged: () => setState(() {}),
+              dense: true,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (_) => setState(() {}),
             ),
 
             const SizedBox(height: 20),
@@ -329,16 +277,20 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
 
             MoreOptions(
               children: [
-                _Field(
+                AppTextField(
                   controller: _descCtrl,
                   hint: 'Description (optional)',
+                  dense: true,
+                  textCapitalization: TextCapitalization.words,
                 ),
-                _DateButton(
-                  label: _dueDate != null
-                      ? 'Due ${DateFormat('d MMM y').format(_dueDate!)}'
-                      : 'Due date (optional)',
-                  muted: _dueDate == null,
-                  onTap: () => _pickDate(true),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Due date (optional)',
+                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground)),
+                    const SizedBox(height: 8),
+                    DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
+                  ],
                 ),
               ],
             ),
@@ -382,82 +334,4 @@ class _TypeTab extends StatelessWidget {
           ),
         ),
       );
-}
-
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.controller,
-    required this.hint,
-    this.focusNode,
-    this.onChanged,
-  });
-  final TextEditingController controller;
-  final String hint;
-  final FocusNode? focusNode;
-  final VoidCallback? onChanged;
-
-  @override
-  Widget build(BuildContext context) => TextField(
-        controller: controller,
-        focusNode: focusNode,
-        style: AppTextStyles.bodyMedium,
-        textCapitalization: TextCapitalization.words,
-        onChanged: onChanged != null ? (_) => onChanged!() : null,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-          filled: true,
-          fillColor: AppColors.card,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
-          ),
-        ),
-      );
-}
-
-class _DateButton extends StatelessWidget {
-  const _DateButton({required this.label, required this.onTap, this.muted = false});
-  final String label;
-  final VoidCallback onTap;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-          ),
-          child: Text(
-            label,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: muted ? AppColors.mutedForeground : AppColors.foreground,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      );
-}
-
-class _DecimalFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue val) {
-    final text = val.text;
-    if (text.isEmpty) return val;
-    if (!RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(text)) return old;
-    return val;
-  }
 }

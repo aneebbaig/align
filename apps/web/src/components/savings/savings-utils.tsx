@@ -9,13 +9,7 @@ export interface SavingsPot {
   targetAmount: number; targetDate?: string | Date | null; type: string; balances: PotBalance[];
 }
 
-export function fmt(amount: number) {
-  return (amount / 100).toLocaleString();
-}
-
-export function fmtPrecise(amount: number) {
-  return (amount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+export { formatAmount as fmt, formatAmountPrecise as fmtPrecise } from "@/lib/currency-utils";
 
 /** Sum a pot's per-currency balances into base-currency smallest units. */
 export function potTotalBase(pot: SavingsPot): number {

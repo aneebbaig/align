@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Plus, Gift } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -15,6 +15,9 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { createSurprise } from "@/actions/vault";
 import { cn } from "@/lib/utils";
 import { getDaysUntil } from "@/lib/utils";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
+import { DueDateChips } from "@/components/shared/due-date-chips";
 
 interface Surprise {
   id: string; name: string; description: string | null; forWhom: string; occasion: string | null;
@@ -34,10 +37,13 @@ export function VaultClient({ surprises, baseSymbol = "Rs" }: { surprises: Surpr
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", forWhom: "", occasion: "", targetDate: "", estimatedBudget: "" });
 
+  const openAdd = useCallback(() => setOpen(true), []);
+  useAddShortcut(open, openAdd);
+
   async function handleCreate() {
     if (!form.name || !form.forWhom) return;
     setLoading(true);
-    const result = await createSurprise({ ...form, estimatedBudget: parseFloat(form.estimatedBudget) || 0, targetDate: form.targetDate || undefined });
+    const result = await createSurprise({ ...form, estimatedBudget: parseMoney(form.estimatedBudget) ?? 0, targetDate: form.targetDate || undefined });
     if (result.success) { toast.success("Surprise created! 🎁"); setOpen(false); setForm({ name: "", description: "", forWhom: "", occasion: "", targetDate: "", estimatedBudget: "" }); }
     else toast.error(result.error ?? "Failed");
     setLoading(false);
@@ -102,15 +108,15 @@ export function VaultClient({ surprises, baseSymbol = "Rs" }: { surprises: Surpr
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Plan a Surprise 🎁</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Surprise Name</Label><Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Birthday Gift for Wife" /></div>
+          <form onSubmit={(e) => { e.preventDefault(); if (!loading) void handleCreate(); }} className="space-y-4">
+            <div><Label>Surprise Name</Label><Input autoFocus value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Birthday Gift for Wife" /></div>
             <div><Label>For Whom</Label><Input value={form.forWhom} onChange={(e) => setForm((p) => ({ ...p, forWhom: e.target.value }))} placeholder="e.g. Wife, Mum, Friend" /></div>
             <div><Label>Occasion (optional)</Label><Input value={form.occasion} onChange={(e) => setForm((p) => ({ ...p, occasion: e.target.value }))} placeholder="e.g. Birthday, Anniversary, Eid" /></div>
-            <div><Label>Target Date</Label><Input type="date" value={form.targetDate} onChange={(e) => setForm((p) => ({ ...p, targetDate: e.target.value }))} /></div>
-            <div><Label>Estimated Budget ({baseSymbol})</Label><Input type="number" value={form.estimatedBudget} onChange={(e) => setForm((p) => ({ ...p, estimatedBudget: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Target Date</Label><DueDateChips value={form.targetDate || null} onChange={(d) => setForm((p) => ({ ...p, targetDate: d ?? "" }))} /></div>
+            <div><Label>Estimated Budget ({baseSymbol})</Label><MoneyInput value={form.estimatedBudget} onChange={(e) => setForm((p) => ({ ...p, estimatedBudget: e.target.value }))} /></div>
             <div><Label>Notes (optional)</Label><Textarea rows={2} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Ideas, notes..." /></div>
-            <Button className="w-full bg-rose-500 hover:bg-rose-600" onClick={handleCreate} disabled={loading}>{loading ? "Creating..." : "Create Surprise 🎁"}</Button>
-          </div>
+            <Button type="submit" className="w-full bg-rose-500 hover:bg-rose-600" disabled={loading || !form.name || !form.forWhom}>{loading ? "Creating..." : "Create Surprise 🎁"}</Button>
+          </form>
         </DialogContent>
       </Dialog>
     </>

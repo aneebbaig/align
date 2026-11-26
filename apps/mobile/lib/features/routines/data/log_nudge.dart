@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/services/last_entry_store.dart';
 import 'reminder_service.dart';
+import '../../../core/utils/app_log.dart';
 
 const _kEnabled = 'log_nudge_enabled';
 const _kMinutes = 'log_nudge_minutes';
@@ -91,7 +91,7 @@ class LogNudge {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
-      debugPrint('Log nudge scheduling failed: $e');
+      appLog.w('Log nudge scheduling failed', error: e);
     }
   }
 }

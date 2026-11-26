@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ArrowDownUp, PiggyBank, CalendarDays,
-  ListTodo, Calendar, Gift, Settings, TrendingUp, Wallet, HandCoins,
+  ListTodo, Gift, Heart, Settings, TrendingUp, Wallet, HandCoins,
   ChevronLeft, ChevronRight, LineChart,
   FlaskConical, ClipboardList, FolderKanban, Table2, AlarmClock,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlignLogo } from "@/components/shared/align-logo";
@@ -14,18 +15,26 @@ import { APP_NAME } from "@/lib/brand";
 import { useState } from "react";
 import { isHrefHidden } from "@/lib/hidden-sections";
 
-const NAV_GROUPS = [
+const NAV_GROUPS: { label: string | null; items: { href: string; label: string; icon: LucideIcon }[] }[] = [
   {
-    label: "Money Flow",
+    label: null,
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/expenses", label: "Expenses", icon: ArrowDownUp },
       { href: "/income", label: "Income", icon: TrendingUp },
       { href: "/budget", label: "Budget", icon: PiggyBank },
     ],
   },
   {
-    label: "Savings & Wealth",
+    label: "Planning",
+    items: [
+      { href: "/wedding", label: "Wedding", icon: Heart },
+      { href: "/plans", label: "Plans", icon: CalendarDays },
+      { href: "/forecast", label: "Forecast", icon: Table2 },
+      { href: "/lists", label: "Lists", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Wealth",
     items: [
       { href: "/savings", label: "Savings", icon: Wallet },
       { href: "/investments", label: "Investments", icon: LineChart },
@@ -33,23 +42,18 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: "Planning",
-    items: [
-      { href: "/forecast", label: "Forecast", icon: Table2 },
-      { href: "/plans", label: "Plans", icon: CalendarDays },
-      { href: "/lists", label: "Lists", icon: ClipboardList },
-    ],
-  },
-  {
     label: "Life",
     items: [
+      { href: "/projects", label: "Work", icon: FolderKanban },
       { href: "/tasks", label: "Tasks", icon: ListTodo },
       { href: "/routines", label: "Routines", icon: AlarmClock },
-      { href: "/projects", label: "Work", icon: FolderKanban },
-      { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/vault", label: "Vault", icon: Gift },
       { href: "/perfumes", label: "Perfumes", icon: FlaskConical },
     ],
+  },
+  {
+    label: "Overview",
+    items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
 ];
 
@@ -81,21 +85,18 @@ export function Sidebar({ role, hiddenSections = [] }: { role?: string; hiddenSe
       {/* Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
         {NAV_GROUPS.filter((g) => g.items.some(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections))).map((group) => (
-          <div key={group.label} className="mb-1">
-            {!collapsed && (
+          <div key={group.label ?? "main"} className="mb-1">
+            {group.label && !collapsed && (
               <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45 px-5 py-1.5">
                 {group.label}
               </div>
             )}
-            {collapsed && <div className="my-1 mx-2 border-b border-sidebar-border" />}
+            {group.label && collapsed && <div className="my-1 mx-2 border-b border-sidebar-border" />}
             <div>
               {group.items
                 .filter(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections))
                 .map(({ href, label, icon: Icon }) => {
-                  const active =
-                    pathname === href ||
-                    pathname.startsWith(href + "/") ||
-                    (href === "/plans" && pathname.startsWith("/wedding/"));
+                  const active = pathname === href || pathname.startsWith(href + "/");
                   return (
                     <Link
                       key={href}

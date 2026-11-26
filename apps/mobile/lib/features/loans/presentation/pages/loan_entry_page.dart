@@ -7,6 +7,9 @@ import '../../../../core/extensions/currency_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/amount_expr.dart';
+import '../../../../core/utils/money_format.dart';
+import '../../../../core/widgets/amount_expr_field.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
@@ -54,7 +57,7 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
     super.initState();
     final prefill = widget.prefillPaisas ?? (_isTopUp ? null : widget.loan.remainingPaisas);
     _amountCtrl = TextEditingController(
-      text: prefill == null ? '' : (prefill % 100 == 0 ? '${prefill ~/ 100}' : (prefill / 100).toStringAsFixed(2)),
+      text: prefill == null ? '' : paisasToFieldText(prefill),
     );
   }
 
@@ -65,11 +68,7 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
     super.dispose();
   }
 
-  int? get _amountPaisas {
-    final v = double.tryParse(_amountCtrl.text.trim());
-    if (v == null || v <= 0) return null;
-    return (v * 100).round();
-  }
+  int? get _amountPaisas => parseAmount(_amountCtrl.text).paisas;
 
   bool get _canSubmit {
     final p = _amountPaisas;
@@ -128,16 +127,11 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          TextButton(
-            onPressed: _canSubmit && !_loading ? _submit : null,
-            child: Text('Save',
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: _canSubmit ? AppColors.primary : AppColors.mutedForeground,
-                  fontWeight: FontWeight.w600,
-                )),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: 'Save',
+        loading: _loading,
+        onPrimary: _canSubmit ? _submit : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -149,12 +143,7 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
             ),
             const SizedBox(height: 12),
-            AppTextField(
-              controller: _amountCtrl,
-              hint: '0',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
-            ),
+            BigAmountField(controller: _amountCtrl, onChanged: () => setState(() {})),
             if (!_isTopUp) ...[
               const SizedBox(height: 6),
               const Text('Lower it to write off only part.', style: AppTextStyles.bodySmall),
@@ -189,7 +178,7 @@ class _LoanEntryPageState extends ConsumerState<LoanEntryPage> {
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
               ),
             const SizedBox(height: 16),
-            AppTextField(controller: _notesCtrl, hint: 'Notes (optional)'),
+            AppTextField(controller: _notesCtrl, hint: 'Notes (optional)', dense: true),
           ],
         ),
       ),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProjectCard, ProjectCardData } from "@/components/projects/project-card";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { ProjectForm } from "@/components/projects/project-form";
 
 type Filter = "ALL" | "ACTIVE" | "ON_HOLD" | "COMPLETED";
@@ -27,6 +28,9 @@ export function ProjectsClient({ projects }: { projects: ProjectCardData[] }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("ACTIVE");
   const [sort, setSort] = useState<SortMode>("updated");
+
+  const openAdd = useCallback(() => setOpen(true), []);
+  useAddShortcut(open, openAdd);
 
   const visible = useMemo(
     () => (filter === "ALL" ? projects : projects.filter((p) => p.status === filter)),

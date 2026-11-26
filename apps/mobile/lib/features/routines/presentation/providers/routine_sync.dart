@@ -8,6 +8,7 @@ import '../../data/reminder_service.dart';
 import '../../data/tick_queue.dart';
 import '../../domain/entities/routine_entity.dart';
 import 'routines_provider.dart';
+import '../../../../core/utils/app_log.dart';
 
 /// Sends any ticks queued while offline, then re-reads the routines and
 /// replaces the phone's alarms to match. If the server cannot be reached the
@@ -74,7 +75,7 @@ class _RoutineSyncHostState extends ConsumerState<RoutineSyncHost> with WidgetsB
       await LogNudge.reschedule();
       await syncRoutines(ref);
     } catch (e) {
-      debugPrint('Routine sync failed: $e');
+      appLog.w('Routine sync failed', error: e);
     }
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 export interface FontPair {
   id: string;
@@ -42,21 +42,37 @@ export function useFontTheme() {
   return useContext(FontThemeContext);
 }
 
+const FONT_KEY = "font-theme";
+const fontListeners = new Set<() => void>();
+
+function subscribeFont(cb: () => void) {
+  fontListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    fontListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function getFontSnapshot(): FontThemeId {
+  const stored = localStorage.getItem(FONT_KEY);
+  return stored && FONT_PAIRS.some((p) => p.id === stored) ? stored : "outfit";
+}
+
 export function FontThemeProvider({ children }: { children: React.ReactNode }) {
-  const [fontTheme, setFontThemeState] = useState<FontThemeId>("outfit");
+  const fontTheme = useSyncExternalStore<FontThemeId>(
+    subscribeFont,
+    getFontSnapshot,
+    () => "outfit"
+  );
 
   useEffect(() => {
-    const stored = localStorage.getItem("font-theme") as FontThemeId | null;
-    const valid = FONT_PAIRS.map((p) => p.id);
-    const id = stored && valid.includes(stored) ? stored : "outfit";
-    setFontThemeState(id);
-    applyFontTheme(id);
-  }, []);
+    applyFontTheme(fontTheme);
+  }, [fontTheme]);
 
   function setFontTheme(id: FontThemeId) {
-    setFontThemeState(id);
-    localStorage.setItem("font-theme", id);
-    applyFontTheme(id);
+    localStorage.setItem(FONT_KEY, id);
+    fontListeners.forEach((l) => l());
   }
 
   const currentPair = FONT_PAIRS.find((p) => p.id === fontTheme) ?? FONT_PAIRS[0];

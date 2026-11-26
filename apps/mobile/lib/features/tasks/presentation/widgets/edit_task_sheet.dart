@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/priority_color.dart';
+import '../../../../core/widgets/app_sheet.dart';
+import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/due_date_chips.dart';
 import '../../domain/entities/task_entity.dart';
 
 const _priorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-
-Color _priorityColor(String p) => switch (p) {
-      'URGENT' => const Color(0xFFEF4444),
-      'HIGH' => const Color(0xFFF59E0B),
-      'MEDIUM' => const Color(0xFF3B82F6),
-      _ => const Color(0xFF94A3B8),
-    };
 
 /// Edit sheet for a personal task. Persistence is handled by [onSave] so the
 /// page owns the datasource + refresh.
@@ -21,18 +17,7 @@ Future<void> showEditTaskSheet(
   required TaskEntity task,
   required Future<void> Function(Map<String, dynamic> changes) onSave,
 }) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: _EditTaskSheet(task: task, onSave: onSave),
-    ),
-  );
+  return showAppSheet<void>(context, _EditTaskSheet(task: task, onSave: onSave));
 }
 
 class _EditTaskSheet extends StatefulWidget {
@@ -80,16 +65,6 @@ class _EditTaskSheetState extends State<_EditTaskSheet> {
     if (mounted) Navigator.pop(context);
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _dueDate = picked);
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -110,20 +85,20 @@ class _EditTaskSheetState extends State<_EditTaskSheet> {
             Text('Edit task', style: AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
             _label('Title'),
-            TextField(
+            AppTextField(
               controller: _title,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Task title',
+              dense: true,
               textCapitalization: TextCapitalization.sentences,
-              decoration: _dec('Task title'),
             ),
             const SizedBox(height: 16),
             _label('Details'),
-            TextField(
+            AppTextField(
               controller: _description,
-              style: AppTextStyles.bodyMedium,
+              hint: 'Notes, links…',
+              dense: true,
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
-              decoration: _dec('Notes, links…'),
             ),
             const SizedBox(height: 16),
             _label('Priority'),
@@ -135,47 +110,14 @@ class _EditTaskSheetState extends State<_EditTaskSheet> {
                   _chip(
                     label: p[0] + p.substring(1).toLowerCase(),
                     selected: _priority == p,
-                    dotColor: _priorityColor(p),
+                    dotColor: priorityColor(p),
                     onTap: () => setState(() => _priority = p),
                   ),
               ],
             ),
             const SizedBox(height: 16),
             _label('Due date'),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.event_outlined, size: 16, color: AppColors.mutedForeground),
-                          const SizedBox(width: 8),
-                          Text(
-                            _dueDate == null ? 'No due date' : DateFormat('d MMM y').format(_dueDate!),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: _dueDate == null ? AppColors.mutedForeground : AppColors.foreground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (_dueDate != null)
-                  IconButton(
-                    onPressed: () => setState(() => _dueDate = null),
-                    icon: const Icon(Icons.close, size: 18, color: AppColors.mutedForeground),
-                  ),
-              ],
-            ),
+            DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -206,27 +148,6 @@ class _EditTaskSheetState extends State<_EditTaskSheet> {
                 .copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w600)),
       );
 
-  InputDecoration _dec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.background,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary),
-        ),
-      );
-
   Widget _chip({
     required String label,
     required bool selected,
@@ -238,7 +159,7 @@ class _EditTaskSheetState extends State<_EditTaskSheet> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.background,
+          color: selected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.card,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.border.withValues(alpha: 0.5),

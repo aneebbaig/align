@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Flame, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { addDays } from "@/lib/routines/schedule";
 import { addRoutine, editRoutine, removeRoutine, tickRoutine, untickRoutine, type RoutinesPage } from "@/actions/routines";
 
@@ -38,6 +39,9 @@ export function RoutinesClient({ data }: { data: RoutinesPage }) {
   const [, startTransition] = useTransition();
   const [editing, setEditing] = useState<Routine | "new" | null>(null);
   const [deleting, setDeleting] = useState<Routine | null>(null);
+
+  const openNew = useCallback(() => setEditing("new"), []);
+  useAddShortcut(editing !== null, openNew);
 
   const done = data.day.filter((i) => i.done).length;
   const goTo = (date: string) => router.push(date === data.today ? "/routines" : `/routines?date=${date}`);
@@ -171,10 +175,10 @@ function RoutineDialog({ routine, defaultDate, onClose, onSaved }: {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>{routine ? "Edit routine" : "Add routine"}</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); if (!saving) void save(); }} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="r-title">Title</Label>
-            <Input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Learn Japanese" />
+            <Input id="r-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Learn Japanese" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="r-time">Time</Label>
@@ -203,10 +207,10 @@ function RoutineDialog({ routine, defaultDate, onClose, onSaved }: {
             <Switch id="r-active" checked={active} onCheckedChange={setActive} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving || !title.trim()}>{saving ? "Saving…" : "Save"}</Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

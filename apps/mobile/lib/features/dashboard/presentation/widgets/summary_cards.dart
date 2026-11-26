@@ -24,7 +24,7 @@ class SummaryCards extends StatelessWidget {
             child: _SummaryCard(
               label: 'Income',
               amountPaisas: totalIncomePaisas,
-              color: const Color(0xFF4CAF50),
+              color: AppColors.success,
             ),
           ),
           const SizedBox(width: 10),

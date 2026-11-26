@@ -16,6 +16,7 @@ import {
   PROJECT_TASK_PRIORITIES, PROJECT_TASK_PRIORITY_LABELS,
 } from "@/lib/constants";
 import type { ProjectTaskData } from "@/components/projects/project-task-card";
+import { DueDateChips } from "@/components/shared/due-date-chips";
 import { TagPicker, type TagOption } from "@/components/projects/tag-picker";
 
 export function ProjectTaskDialog({
@@ -32,15 +33,15 @@ export function ProjectTaskDialog({
   const [description, setDescription] = useState(task.description ?? "");
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
-  const [dueDate, setDueDate] = useState(
-    task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : ""
+  const [dueDate, setDueDate] = useState<string | null>(
+    task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : null
   );
   const [tagIds, setTagIds] = useState<string[]>(task.tags?.map((t) => t.id) ?? []);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const initialDue = task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "";
+  const initialDue = task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : null;
   const initialTagIds = task.tags?.map((t) => t.id) ?? [];
   const dirty =
     title !== task.title ||
@@ -98,7 +99,7 @@ export function ProjectTaskDialog({
           <DialogTitle>Task</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-4">
           <div className="space-y-1">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
@@ -141,7 +142,7 @@ export function ProjectTaskDialog({
 
           <div className="space-y-1">
             <Label>Due date</Label>
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DueDateChips value={dueDate} onChange={setDueDate} />
           </div>
 
           <div className="space-y-1">
@@ -149,7 +150,7 @@ export function ProjectTaskDialog({
             <TagPicker allTags={allTags} selectedIds={tagIds} onChange={setTagIds} onTagsChanged={onTagsChanged} />
           </div>
 
-          <Button onClick={save} className="w-full" disabled={saving || !title.trim()}>
+          <Button type="submit" className="w-full" disabled={saving || !title.trim()}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
           <Button
@@ -161,7 +162,7 @@ export function ProjectTaskDialog({
           >
             Delete task
           </Button>
-        </div>
+        </form>
       </DialogContent>
       <ConfirmDialog
         open={confirmOpen}

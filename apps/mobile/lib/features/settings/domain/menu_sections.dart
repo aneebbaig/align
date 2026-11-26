@@ -9,11 +9,11 @@ const allMenuSectionKeys = [
   'loans',
   'forecast',
   'plans',
+  'wedding',
   'lists',
   'tasks',
   'routines',
   'work',
-  'calendar',
   'vault',
   'perfumes',
 ];
@@ -26,7 +26,7 @@ class PhoneSection {
 }
 
 /// Keys that have a screen on the phone, in the order the Settings switches
-/// are shown. Keys not listed here (income, lists, calendar, vault, perfumes)
+/// are shown. Keys not listed here (income, lists, vault, perfumes)
 /// have no phone screen; they are only ever carried along untouched.
 const phoneSections = [
   PhoneSection('dashboard', 'Home'),
@@ -39,6 +39,7 @@ const phoneSections = [
   PhoneSection('forecast', 'Forecast'),
   PhoneSection('routines', 'Routines'),
   PhoneSection('plans', 'Plans'),
+  PhoneSection('wedding', 'Wedding'),
 ];
 
 /// The hidden list after switching [key] on/off. Every other entry - including

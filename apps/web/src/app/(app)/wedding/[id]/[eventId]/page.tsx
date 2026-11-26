@@ -15,7 +15,7 @@ export default async function WeddingEventPage({ params }: { params: Promise<{ i
 
   return (
     <div className="max-w-3xl mx-auto">
-      <EventPage plan={plan as any} eventId={eventId} baseSymbol={baseSymbol} />
+      <EventPage plan={plan} eventId={eventId} baseSymbol={baseSymbol} />
     </div>
   );
 }

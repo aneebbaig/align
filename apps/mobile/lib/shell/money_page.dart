@@ -1,19 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../features/expenses/presentation/pages/expenses_list_page.dart';
 import '../features/income/presentation/pages/income_list_page.dart';
+import '../features/settings/presentation/providers/menu_prefs_provider.dart';
 
-class MoneyPage extends StatefulWidget {
+/// Expenses and Income side by side; with the Income section hidden in the
+/// menu, just the expenses list.
+class MoneyPage extends ConsumerWidget {
   const MoneyPage({super.key});
 
   @override
-  State<MoneyPage> createState() => _MoneyPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final incomeHidden = ref.watch(menuPrefsProvider).hidden.contains('income');
+    return incomeHidden ? const _ExpensesOnly() : const _MoneyTabs();
+  }
 }
 
-class _MoneyPageState extends State<MoneyPage> with SingleTickerProviderStateMixin {
+class _ExpensesOnly extends StatelessWidget {
+  const _ExpensesOnly();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          title: const Text('Money', style: AppTextStyles.headlineSmall),
+        ),
+        body: const _ExpensesBody(),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => context.push('/quick-add'),
+          tooltip: 'Add expense',
+          child: const Icon(Icons.add, size: 28, color: Colors.black),
+        ),
+      );
+}
+
+class _MoneyTabs extends StatefulWidget {
+  const _MoneyTabs();
+
+  @override
+  State<_MoneyTabs> createState() => _MoneyTabsState();
+}
+
+class _MoneyTabsState extends State<_MoneyTabs> with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -61,7 +95,7 @@ class _MoneyPageState extends State<MoneyPage> with SingleTickerProviderStateMix
             _tab.index == 0 ? '/quick-add' : '/quick-add-income',
           ),
           tooltip: _tab.index == 0 ? 'Add expense' : 'Add income',
-          backgroundColor: _tab.index == 0 ? AppColors.primary : const Color(0xFF4CAF50),
+          backgroundColor: _tab.index == 0 ? AppColors.primary : AppColors.success,
           child: const Icon(Icons.add, size: 28, color: Colors.black),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

@@ -18,15 +18,15 @@ typedef _Tab = ({IconData icon, IconData activeIcon, String label, String path, 
 class _AppScaffoldState extends ConsumerState<AppScaffold> {
   // `section` is the key from the web's hidden-sections list. Null = always shown.
   static const List<_Tab> _tabs = [
-    (icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Home', path: '/dashboard', section: 'dashboard'),
     (icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet, label: 'Money', path: '/money', section: null),
-    (icon: Icons.checklist_outlined, activeIcon: Icons.checklist, label: 'Tasks', path: '/tasks', section: 'tasks'),
+    (icon: Icons.favorite_border, activeIcon: Icons.favorite, label: 'Wedding', path: '/wedding', section: 'wedding'),
     (icon: Icons.folder_outlined, activeIcon: Icons.folder, label: 'Work', path: '/projects', section: 'work'),
+    (icon: Icons.checklist_rtl, activeIcon: Icons.checklist_rtl, label: 'Plans', path: '/plans', section: 'plans'),
     (icon: Icons.more_horiz, activeIcon: Icons.more_horiz, label: 'More', path: '/more', section: null),
   ];
 
   // Sub-routes that live under "More" tab (keep More highlighted)
-  static const _morePaths = ['/budget', '/loans', '/savings', '/investments', '/plans', '/planner', '/routines', '/settings'];
+  static const _morePaths = ['/dashboard', '/tasks', '/budget', '/loans', '/savings', '/investments', '/planner', '/routines', '/settings'];
 
   @override
   void initState() {

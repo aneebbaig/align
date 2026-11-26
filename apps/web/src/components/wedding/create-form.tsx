@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
 import { createWeddingPlan } from "@/actions/wedding";
 
 /** The new-wedding form. On success it opens the new wedding plan. */
@@ -20,13 +21,16 @@ export function WeddingCreateForm({ baseSymbol = "Rs", onCreated }: { baseSymbol
 
   async function onSubmit() {
     if (!form.brideName.trim() || !form.groomName.trim()) return;
+    const totalBudget = form.totalBudget.trim() ? parseMoney(form.totalBudget) : undefined;
+    const haqMehr = form.haqMehr.trim() ? parseMoney(form.haqMehr) : undefined;
+    if (totalBudget === null || haqMehr === null) { toast.error("Check the amounts - use a number or a sum like 300000+50000"); return; }
     setLoading(true);
     const result = await createWeddingPlan({
       brideName: form.brideName,
       groomName: form.groomName,
       weddingDate: form.weddingDate || undefined,
-      totalBudget: form.totalBudget ? parseFloat(form.totalBudget) : undefined,
-      haqMehr: form.haqMehr ? parseFloat(form.haqMehr) : undefined,
+      totalBudget,
+      haqMehr,
       haqMehrNote: form.haqMehrNote || undefined,
       notes: form.notes || undefined,
     });
@@ -58,12 +62,12 @@ export function WeddingCreateForm({ baseSymbol = "Rs", onCreated }: { baseSymbol
       </div>
       <div>
         <Label>Total budget - {baseSymbol} (optional)</Label>
-        <Input type="number" placeholder="e.g. 2000000" value={form.totalBudget} onChange={(e) => set({ totalBudget: e.target.value })} />
+        <MoneyInput placeholder="e.g. 2000000" value={form.totalBudget} onChange={(e) => set({ totalBudget: e.target.value })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Haq Mehr - {baseSymbol} (optional)</Label>
-          <Input type="number" placeholder="e.g. 500000" value={form.haqMehr} onChange={(e) => set({ haqMehr: e.target.value })} />
+          <MoneyInput placeholder="e.g. 500000" value={form.haqMehr} onChange={(e) => set({ haqMehr: e.target.value })} />
         </div>
         <div>
           <Label>Haq Mehr note (optional)</Label>

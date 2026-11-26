@@ -6,12 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Header } from "@/components/layout/header";
 import { DateLangSetter } from "@/components/shared/date-lang-setter";
-
-function dateLang(fmt: string): string {
-  if (fmt.startsWith("MM/dd")) return "en-US";
-  if (fmt.startsWith("yyyy")) return "sv";
-  return "en-GB";
-}
+import { dateFormatToLang } from "@/lib/date-lang";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, settings, notifications, hiddenSections] = await Promise.all([
@@ -20,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     getNotifications(),
     getHiddenSections(),
   ]);
-  const lang = dateLang(settings?.dateFormat ?? "dd/MM/yyyy");
+  const lang = dateFormatToLang(settings?.dateFormat ?? "dd/MM/yyyy");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

@@ -9,21 +9,21 @@ export const SECTIONS = [
   { key: "loans", label: "Loans", hrefs: ["/loans"] },
   { key: "forecast", label: "Forecast", hrefs: ["/forecast"] },
   { key: "plans", label: "Plans", hrefs: ["/plans"] },
+  { key: "wedding", label: "Wedding", hrefs: ["/wedding"] },
   { key: "lists", label: "Lists", hrefs: ["/lists", "/want-list", "/need-list"] },
   { key: "tasks", label: "Tasks", hrefs: ["/tasks"] },
   { key: "routines", label: "Routines", hrefs: ["/routines"] },
   { key: "work", label: "Work", hrefs: ["/projects"] },
-  { key: "calendar", label: "Calendar", hrefs: ["/calendar"] },
   { key: "vault", label: "Vault", hrefs: ["/vault"] },
   { key: "perfumes", label: "Perfumes", hrefs: ["/perfumes"] },
 ] as const;
 
 export const SECTION_KEYS: string[] = SECTIONS.map((s) => s.key);
 
-/** Validates a hiddenSections value: every entry must be a known key. Returns the deduped list (in menu order), or null when invalid. */
+/** Validates a hiddenSections value: every entry must be a string. Unknown keys (e.g. "calendar" from an old phone build) are silently dropped. Returns the deduped list (in menu order), or null when invalid. */
 export function parseHiddenSections(input: unknown): string[] | null {
   if (!Array.isArray(input)) return null;
-  if (!input.every((k) => typeof k === "string" && SECTION_KEYS.includes(k))) return null;
+  if (!input.every((k) => typeof k === "string")) return null;
   const set = new Set<string>(input as string[]);
   return SECTION_KEYS.filter((k) => set.has(k));
 }

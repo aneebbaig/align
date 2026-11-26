@@ -6,17 +6,20 @@ describe("parseHiddenSections", () => {
     expect(parseHiddenSections(["tasks", "budget", "tasks"])).toEqual(["budget", "tasks"]);
   });
   it("accepts an empty list", () => expect(parseHiddenSections([])).toEqual([]));
-  it("rejects unknown keys, expenses and settings", () => {
-    expect(parseHiddenSections(["nope"])).toBeNull();
-    expect(parseHiddenSections(["expenses"])).toBeNull();
-    expect(parseHiddenSections(["settings"])).toBeNull();
+  it("silently drops unknown keys, expenses, settings and the removed calendar", () => {
+    expect(parseHiddenSections(["nope"])).toEqual([]);
+    expect(parseHiddenSections(["expenses", "settings", "calendar", "tasks"])).toEqual(["tasks"]);
   });
   it("rejects non-arrays and non-strings", () => {
     expect(parseHiddenSections("tasks")).toBeNull();
     expect(parseHiddenSections([1])).toBeNull();
     expect(parseHiddenSections(undefined)).toBeNull();
   });
-  it("has the 15 shared keys", () => expect(SECTION_KEYS).toHaveLength(15));
+  it("has the 15 shared keys incl. wedding", () => expect(SECTION_KEYS).toHaveLength(15));
+  it("includes wedding and not calendar", () => {
+    expect(SECTION_KEYS).toContain("wedding");
+    expect(SECTION_KEYS).not.toContain("calendar");
+  });
 });
 
 describe("isHrefHidden", () => {

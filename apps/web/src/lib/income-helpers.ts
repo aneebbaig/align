@@ -16,12 +16,6 @@ export interface IncomeIntegrityData {
   perCurrency: CurrencyIncomeIntegrity[];
 }
 
-export function baseIntegrity(data: IncomeIntegrityData): CurrencyIncomeIntegrity {
-  const base = data.perCurrency.find((c) => c.isBase);
-  if (!base) throw new Error("No base currency configured");
-  return base;
-}
-
 export async function fetchMonthIncomeIntegrityData(
   userId: string,
   month: number,

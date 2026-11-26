@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { Plus, Search, X, Filter } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TransactionForm } from "@/components/expenses/transaction-form";
 import { TransactionList } from "@/components/expenses/transaction-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { PeriodFilterBar, usePeriodFilter } from "@/components/shared/period-filter";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAddShortcut } from "@/lib/use-add-shortcut";
 import type { QuickPicks } from "@/actions/expenses";
+import { formatAmount as fmt } from "@/lib/currency-utils";
 
 interface CurrencyLite { id: string; code: string; symbol: string; rateToBase: number; isBase: boolean; }
 interface Transaction {
@@ -31,11 +30,6 @@ interface FundingContext {
   pots: { id: string; name: string; type: string; balances: { amount: number; currency: CurrencyLite }[] }[];
 }
 
-const THIS_PERIOD = "THIS_PERIOD";
-const LAST_PERIOD = "LAST_PERIOD";
-const CUSTOM = "CUSTOM";
-
-const fmt = (n: number) => (n / 100).toLocaleString();
 
 export function ExpensesClient({
   transactions,
@@ -65,60 +59,10 @@ export function ExpensesClient({
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const openNew = useCallback(() => { setEditingTx(null); setOpen(true); }, []);
   useAddShortcut(open, openNew);
-  const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("ALL");
-  const [filterPeriod, setFilterPeriod] = useState(THIS_PERIOD);
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const filter = usePeriodFilter(transactions, currentPeriod, lastPeriod);
 
   const expenseCategories = categories.filter((c) => c.type === "EXPENSE" || c.type === "BOTH");
   const baseSymbol = fundingContext.currencies.find((c) => c.isBase)?.symbol ?? "Rs";
-
-  const periodKey = (m: number, y: number) => `${y}-${String(m).padStart(2, "0")}`;
-  const currentKey = periodKey(currentPeriod.month, currentPeriod.year);
-  const lastKey = periodKey(lastPeriod.month, lastPeriod.year);
-
-  const periodOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const opts: { label: string; value: string }[] = [];
-    for (const t of transactions) {
-      const key = periodKey(t.budgetMonth, t.budgetYear);
-      if (!seen.has(key)) {
-        seen.add(key);
-        const label = new Date(t.budgetYear, t.budgetMonth - 1).toLocaleString("default", { month: "long", year: "numeric" });
-        opts.push({ value: key, label });
-      }
-    }
-    return opts.sort((a, b) => b.value.localeCompare(a.value));
-  }, [transactions]);
-
-  const filtered = useMemo(() => {
-    return transactions.filter((t) => {
-      const key = periodKey(t.budgetMonth, t.budgetYear);
-
-      if (filterPeriod === THIS_PERIOD) {
-        if (key !== currentKey) return false;
-      } else if (filterPeriod === LAST_PERIOD) {
-        if (key !== lastKey) return false;
-      } else if (filterPeriod === CUSTOM) {
-        const d = new Date(t.date);
-        if (customStart && d < new Date(customStart)) return false;
-        if (customEnd && d > new Date(customEnd + "T23:59:59.999")) return false;
-      } else if (filterPeriod !== "ALL") {
-        if (key !== filterPeriod) return false;
-      }
-
-      if (search && !t.description.toLowerCase().includes(search.toLowerCase()) && !t.category.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterCategory !== "ALL" && t.categoryId !== filterCategory) return false;
-      return true;
-    });
-  }, [transactions, search, filterCategory, filterPeriod, customStart, customEnd, currentKey, lastKey]);
-
-  const isFiltered = !!(search || filterCategory !== "ALL" || filterPeriod !== THIS_PERIOD);
-
-  function clearFilters() {
-    setSearch(""); setFilterCategory("ALL"); setFilterPeriod(THIS_PERIOD); setCustomStart(""); setCustomEnd("");
-  }
 
   const overUnder = budgetTotal - thisMonthSpent;
   const monthlyIncomeAvailable = fundingContext.monthlyIncomeAvailable;
@@ -170,67 +114,10 @@ export function ExpensesClient({
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[160px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-              <Input className="pl-9 h-8 text-sm" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-36 h-8 text-sm">
-                <Filter className="h-3 w-3 mr-1 text-muted-foreground/50" />
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Categories</SelectItem>
-                {expenseCategories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
-                      {c.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterPeriod} onValueChange={(v) => { setFilterPeriod(v); if (v !== CUSTOM) { setCustomStart(""); setCustomEnd(""); } }}>
-              <SelectTrigger className="w-44 h-8 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={THIS_PERIOD}>This month</SelectItem>
-                <SelectItem value={LAST_PERIOD}>Last month</SelectItem>
-                <SelectItem value={CUSTOM}>Custom range…</SelectItem>
-                <SelectItem value="ALL">All time</SelectItem>
-                {periodOptions.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {isFiltered && (
-              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-8 px-2 text-muted-foreground/60 hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
-          {filterPeriod === CUSTOM && (
-            <div className="flex items-center gap-2">
-              <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="h-8 text-sm w-36" />
-              <span className="text-xs text-muted-foreground">to</span>
-              <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-8 text-sm w-36" />
-            </div>
-          )}
-        </div>
-
-        {isFiltered && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground -mt-3">
-            <span>Showing {filtered.length} of {transactions.length}</span>
-            {filterCategory !== "ALL" && <Badge variant="outline" className="text-xs">{expenseCategories.find((c) => c.id === filterCategory)?.name}</Badge>}
-            {filterPeriod !== "ALL" && filterPeriod !== THIS_PERIOD && filterPeriod !== LAST_PERIOD && filterPeriod !== CUSTOM && (
-              <Badge variant="outline" className="text-xs">{periodOptions.find((m) => m.value === filterPeriod)?.label}</Badge>
-            )}
-          </div>
-        )}
+        <PeriodFilterBar filter={filter} categories={expenseCategories} total={transactions.length} />
 
         <TransactionList
-          transactions={filtered}
+          transactions={filter.filtered}
           budgetByCategoryId={budgetByCategoryId}
           baseSymbol={baseSymbol}
           onEdit={(tx) => { setEditingTx(tx); setOpen(true); }}

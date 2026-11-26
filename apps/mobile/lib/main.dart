@@ -5,6 +5,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'app.dart';
 import 'core/network/server_url.dart';
+import 'core/theme/app_colors.dart';
 import 'core/services/storage_service.dart';
 import 'features/settings/data/menu_prefs_store.dart';
 import 'features/settings/presentation/providers/menu_prefs_provider.dart';
@@ -28,7 +29,7 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarBrightness: Brightness.dark,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFF040201),
+    systemNavigationBarColor: AppColors.background,
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 

@@ -1,6 +1,6 @@
 # Align - Personal Finance Manager
 
-A private finance app for one household of one or two logins. Every login is an admin over the same data (scoped by the household owner, the oldest user); only login/security, profile, notification preferences and the Vault are personal. The `one_household` migration folded any existing per-login data onto the owner. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a calendar, and a secret gift vault.
+A private finance app for one household of one or two logins. Every login is an admin over the same data (scoped by the household owner, the oldest user); only login/security, profile, notification preferences and the Vault are personal. The `one_household` migration folded any existing per-login data onto the owner. Tracks expenses, budgets, savings and goals, investments, loans, tasks, projects, plans, a wedding planner, and a secret gift vault.
 
 **Stack:** Next.js 16 · Prisma 7 · PostgreSQL (Neon) · better-auth · Tailwind CSS v4
 
@@ -20,12 +20,13 @@ A private finance app for one household of one or two logins. Every login is an 
 | **Work** | Freelance/client project management (`/projects`) - projects → sub-tasks with statuses, priorities, tags, and due dates; project notes and links; separate from personal tasks |
 | **Plans** | Life event planning (house moves, trips, renovations) with itemised checklists |
 | **Forecast** | Month-by-month table: your own money lines (in/out, rupees or dollars at the planner's own rate) and one-off goals; change a month "just this month" or "from this month on" and every later month recalculates. Not linked to real income/expenses |
-| **Wedding** | Wedding planner, listed with the other Plans - events, vendors, and expenses per event |
-| **Calendar** | Events, reminders, and deadlines |
+| **Wedding** | Wedding planner, its own menu item - events, vendors, and expenses per event |
 | **Lists** | Needs (priority-grouped planned purchases with expense logging) and Wants (48-hour impulse-purchase cooling-off) on one page |
 | **Perfumes** | Perfume collection and buy-next shortlist |
 | **Vault** | 🔒 Secret surprise/gift planner - Super Admin only |
 | **Settings** | Profile, security (password, TOTP two-factor), categories, currencies and rates, notifications, data export/reset, user management (Super Admin) |
+
+Signing in lands on **Expenses** (`/expenses`), not the dashboard. There is no Calendar section; Wedding has its own menu entry. Sections you don't use can be hidden from the menu in **Settings → Profile → Show in menu**.
 
 ---
 

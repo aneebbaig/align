@@ -52,11 +52,11 @@ List<DayChipSpec> buildDayChips({
 
   final chips = <DayChipSpec>[];
   final showLast = last != null && last != t;
-  if (!inStrip(sel) && sel != last) {
-    chips.add(DayChipSpec(DayChipKind.picked, DateFormat('d MMM').format(sel), sel, selected: true));
-  }
   if (showLast) {
     chips.add(DayChipSpec(DayChipKind.last, 'Last: ${DateFormat('d MMM').format(last)}', last, selected: sel == last));
+  }
+  if (!inStrip(sel) && sel != last) {
+    chips.add(DayChipSpec(DayChipKind.picked, DateFormat('d MMM').format(sel), sel, selected: true));
   }
   for (var i = 0; i <= dayStripSpan; i++) {
     final d = DateTime(t.year, t.month, t.day - i);

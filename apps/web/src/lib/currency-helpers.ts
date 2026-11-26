@@ -16,14 +16,6 @@ export async function getCurrencies(db: PrismaTx | typeof prisma = prisma) {
 }
 
 /** Convert an amount (in `currencyId`'s smallest unit) to base-currency smallest units. */
-export async function toBaseAmount(
-  amount: number,
-  currencyId: string,
-  db: PrismaTx | typeof prisma = prisma,
-): Promise<number> {
-  const currency = await db.currency.findUniqueOrThrow({ where: { id: currencyId } });
-  return Math.round(amount * currency.rateToBase);
-}
 
 /** Sum every pot balance (across all currencies) for a user, converted to base-currency units. */
 export async function getPotBalancesInBase(userId: string, db: PrismaTx | typeof prisma = prisma): Promise<number> {

@@ -11,10 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { addMoneyToPot, transferBetweenPots, withdrawFromPot, createSavingsPot, deleteSavingsPot, type CurrencyAvailability } from "@/actions/savings";
+import { createSavingsPot, deleteSavingsPot, type CurrencyAvailability } from "@/actions/savings";
 import { updateCurrency } from "@/actions/currencies";
 import { cn } from "@/lib/utils";
-import { fmt, potTotalBase, baseCurrencyOf, CurrencyPicker, type SavingsPot, type CurrencyLite } from "./savings-utils";
+import { fmt, potTotalBase, baseCurrencyOf, type SavingsPot, type CurrencyLite } from "./savings-utils";
+import { PotMoneyDialogs, type PotMoneyTarget } from "./pot-money-dialogs";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { FundTab } from "./fund-tab";
 import { PageHeader } from "@/components/shared/page-header";
 
@@ -31,6 +34,7 @@ interface Props {
   readyToAssign: number;
   incomeAvailability: CurrencyAvailability[];
   liquidAvailable: number;
+  currentPeriod: { month: number; year: number };
 }
 
 function ExchangeRatesBanner({ currencies: initial }: { currencies: CurrencyLite[] }) {
@@ -63,12 +67,12 @@ function ExchangeRatesBanner({ currencies: initial }: { currencies: CurrencyLite
             <span className="font-semibold">1 {c.code}</span> = <span className="font-bold">{base.symbol} {c.rateToBase.toLocaleString()}</span>
           </div>
           {editingId === c.id ? (
-            <div className="flex items-center gap-2">
-              <input type="number" step="0.01" value={draft} onChange={(e) => setDraft(e.target.value)}
+            <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); save(c.id); }}>
+              <input autoFocus type="number" step="0.01" value={draft} onChange={(e) => setDraft(e.target.value)}
                 className="w-24 px-2 py-1 rounded-lg border border-blue-300 dark:border-blue-600 bg-white dark:bg-blue-900 text-sm text-blue-800 dark:text-blue-200 focus:outline-none" />
-              <Button size="sm" disabled={saving} onClick={() => save(c.id)}>{saving ? "..." : "Save"}</Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
-            </div>
+              <Button type="submit" size="sm" disabled={saving}>{saving ? "..." : "Save"}</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+            </form>
           ) : (
             <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 h-7 px-2"
               onClick={() => { setDraft(String(c.rateToBase)); setEditingId(c.id); }}>
@@ -130,20 +134,15 @@ function PotCard({ pot, base, onAdd, onCorrect, onDelete }: {
   );
 }
 
-export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyExpenses, emergencyFundMonths, totalIncome, readyToAssign, incomeAvailability, liquidAvailable }: Props) {
+export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyExpenses, emergencyFundMonths, totalIncome, readyToAssign, incomeAvailability, liquidAvailable, currentPeriod }: Props) {
   const base = baseCurrencyOf(currencies);
-  const [potDialog, setPotDialog] = useState<{ type: "add" | "correct" | "new" | null; potId?: string }>({ type: null });
-  const [amount, setAmount] = useState("");
-  const [potCurrencyId, setPotCurrencyId] = useState(base.id);
-  const [potSourceType, setPotSourceType] = useState<"income" | "pot" | "manual">("income");
-  const [potSourcePotId, setPotSourcePotId] = useState("");
-  const [correctNote, setCorrectNote] = useState("");
-  const [newPot, setNewPot] = useState({ name: "", targetAmount: "", targetDate: "", color: "#3b82f6", type: "GENERAL" });
+  const [moneyDialog, setMoneyDialog] = useState<PotMoneyTarget | null>(null);
+  const [newPotOpen, setNewPotOpen] = useState(false);
+  const [newPot, setNewPot] = useState({ name: "", targetAmount: "", targetDate: "", color: "#3b82f6" });
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const regularPots = pots.filter((p) => p.type !== "EMERGENCY");
-  const activePot = potDialog.potId ? pots.find((p) => p.id === potDialog.potId) : null;
 
   const totalAllPotsBase = pots.reduce((s, p) => s + potTotalBase(p), 0);
   const regularTotalBase = regularPots.reduce((s, p) => s + potTotalBase(p), 0);
@@ -159,39 +158,20 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
     efMonthsCovered < emergencyFundMonths ? "ok" : "safe";
 
   const { months } = cumulativeSavings;
-  const availableForCurrency = incomeAvailability.find((c) => c.currencyId === potCurrencyId);
 
-  async function handlePotAction() {
-    if (!potDialog.potId || !amount) return;
-    if (potSourceType === "pot" && !potSourcePotId) return;
-    setLoading(true);
-    const n = parseFloat(amount);
-    const result = potSourceType === "pot"
-      ? await transferBetweenPots(potSourcePotId, potDialog.potId, n, potCurrencyId)
-      : await addMoneyToPot(potDialog.potId, n, potCurrencyId, "From income", potSourceType === "manual" ? "MANUAL" : "INCOME");
-    if (result.success) {
-      toast.success("Money added!");
-      setPotDialog({ type: null }); setAmount(""); setPotCurrencyId(base.id); setPotSourceType("income"); setPotSourcePotId("");
-    } else toast.error(result.error ?? "Failed");
-    setLoading(false);
-  }
+  // N: add money to the first pot (regular pots first), or start a new pot when there are none.
+  const firstPotId = (regularPots[0] ?? pots[0])?.id;
+  const addFromShortcut = () => {
+    if (firstPotId) setMoneyDialog({ kind: "add", potId: firstPotId });
+    else setNewPotOpen(true);
+  };
+  useAddShortcut(!!moneyDialog || newPotOpen, addFromShortcut);
 
-  async function handleCorrect() {
-    if (!potDialog.potId || !amount) return;
+  async function handleCreatePot(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newPot.name.trim() || loading) return;
     setLoading(true);
-    const n = parseFloat(amount);
-    const result = await withdrawFromPot(potDialog.potId, n, potCurrencyId, correctNote || "Balance correction");
-    if (result.success) {
-      toast.success("Balance corrected");
-      setPotDialog({ type: null }); setAmount(""); setPotCurrencyId(base.id); setCorrectNote("");
-    } else toast.error(result.error ?? "Failed");
-    setLoading(false);
-  }
-
-  async function handleCreatePot() {
-    if (!newPot.name) return;
-    setLoading(true);
-    const target = parseFloat(newPot.targetAmount) || 0;
+    const target = parseMoney(newPot.targetAmount) ?? 0;
     const result = await createSavingsPot({
       name: newPot.name,
       icon: "PiggyBank",
@@ -201,7 +181,7 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
       type: target > 0 ? "GOAL" : "GENERAL",
       targetDate: newPot.targetDate || undefined,
     });
-    if (result.success) { toast.success("Pot created!"); setPotDialog({ type: null }); setNewPot({ name: "", targetAmount: "", targetDate: "", color: "#3b82f6", type: "GENERAL" }); }
+    if (result.success) { toast.success("Pot created!"); setNewPotOpen(false); setNewPot({ name: "", targetAmount: "", targetDate: "", color: "#3b82f6" }); }
     else toast.error(result.error ?? "Failed");
     setLoading(false);
   }
@@ -315,8 +295,8 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
       <TabsContent value="emergency" className="mt-4">
         <FundTab pots={pots} currencies={currencies}
           avgMonthlyExpenses={avgMonthlyExpenses} emergencyFundMonths={emergencyFundMonths}
-          totalIncome={totalIncome}
-          incomeAvailability={incomeAvailability}
+          onAdd={(potId) => setMoneyDialog({ kind: "add", potId })}
+          onCorrect={(potId) => setMoneyDialog({ kind: "correct", potId })}
           onDelete={setDeleteId} />
       </TabsContent>
 
@@ -326,7 +306,7 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
             <div className="text-xs text-muted-foreground">Total in savings pots ({base.code} eq.)</div>
             <div className="text-2xl font-bold text-foreground">{base.symbol} {fmt(regularTotalBase)}</div>
           </div>
-          <Button onClick={() => setPotDialog({ type: "new" })}>
+          <Button onClick={() => setNewPotOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />New Pot
           </Button>
         </div>
@@ -334,132 +314,36 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
         {regularPots.length === 0 ? (
           <EmptyState icon={PiggyBank} title="No savings pots"
             description="Create pots for goals or any savings bucket. Emergency Fund is on its own tab."
-            action={{ label: "Create a pot", onClick: () => setPotDialog({ type: "new" }) }} />
+            action={{ label: "Create a pot", onClick: () => setNewPotOpen(true) }} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {regularPots.map((pot) => (
               <PotCard key={pot.id} pot={pot} base={base}
-                onAdd={() => { setPotDialog({ type: "add", potId: pot.id }); setAmount(""); setPotCurrencyId(base.id); setPotSourceType("income"); setPotSourcePotId(""); }}
-                onCorrect={() => { setPotDialog({ type: "correct", potId: pot.id }); setAmount(""); setPotCurrencyId(base.id); setCorrectNote(""); }}
+                onAdd={() => setMoneyDialog({ kind: "add", potId: pot.id })}
+                onCorrect={() => setMoneyDialog({ kind: "correct", potId: pot.id })}
                 onDelete={() => setDeleteId(pot.id)} />
             ))}
           </div>
         )}
       </TabsContent>
 
-      <Dialog open={potDialog.type === "add"} onOpenChange={(o) => !o && setPotDialog({ type: null })}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Money - {activePot?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Source</Label>
-              <div className="flex gap-2">
-                {(["income", "pot", "manual"] as const).map((src) => (
-                  <button key={src} type="button" onClick={() => setPotSourceType(src)}
-                    disabled={src === "pot" && pots.filter((p) => p.id !== activePot?.id).length === 0}
-                    className={cn("flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
-                      potSourceType === src ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary",
-                      src === "pot" && pots.filter((p) => p.id !== activePot?.id).length === 0 && "opacity-50 cursor-not-allowed"
-                    )}>{src === "income" ? "Monthly income" : src === "pot" ? "Transfer from pot" : "Manual"}</button>
-                ))}
-              </div>
-              {potSourceType === "manual" && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                  Use for corrections (e.g. re-adding after an over-deduction) or money from outside your tracked income. No income validation applied.
-                </div>
-              )}
-              {potSourceType === "income" && (
-                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs space-y-0.5">
-                  {potCurrencyId !== base.id ? (
-                    <div className={cn("flex justify-between font-semibold", (availableForCurrency?.available ?? 0) > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
-                      <span>Available from income</span><span>{availableForCurrency?.symbol} {fmt(availableForCurrency?.available ?? 0)}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between text-emerald-700 dark:text-emerald-300">
-                        <span>This month&apos;s income</span><span className="font-semibold">{base.symbol} {fmt(totalIncome)}</span>
-                      </div>
-                      <div className={cn("flex justify-between font-semibold", (availableForCurrency?.available ?? 0) > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
-                        <span>Available from income</span><span>{base.symbol} {fmt(availableForCurrency?.available ?? 0)}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              {potSourceType === "pot" && (
-                <select value={potSourcePotId} onChange={(e) => setPotSourcePotId(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm">
-                  <option value="">Select a pot…</option>
-                  {pots.filter((p) => p.id !== activePot?.id).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} - {p.balances.length === 0 ? `${base.symbol} 0` : p.balances.map((b) => `${b.currency.symbol}${fmt(b.amount)}`).join(" / ")}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Currency</Label>
-              <CurrencyPicker currencies={currencies} value={potCurrencyId} onChange={setPotCurrencyId} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" placeholder="Amount"
-                value={amount} onChange={(e) => setAmount(e.target.value)} className="text-lg" />
-            </div>
-            <Button className="w-full" onClick={handlePotAction} disabled={loading || !amount || (potSourceType === "pot" && !potSourcePotId)}>
-              Add Money
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PotMoneyDialogs target={moneyDialog} onClose={() => setMoneyDialog(null)} pots={pots} currencies={currencies}
+        currentPeriod={currentPeriod} totalIncome={totalIncome} incomeAvailability={incomeAvailability} />
 
-      <Dialog open={potDialog.type === "correct"} onOpenChange={(o) => !o && setPotDialog({ type: null })}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Correct Balance - {activePot?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-lg bg-muted/50 border border-border px-3 py-2 text-xs space-y-0.5">
-              {activePot?.balances.map((b) => (
-                <div key={b.currency.id} className="flex justify-between text-foreground">
-                  <span>Current {b.currency.code} balance</span><span className="font-semibold">{b.currency.symbol} {fmt(b.amount)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Currency</Label>
-              <CurrencyPicker currencies={currencies} value={potCurrencyId} onChange={setPotCurrencyId} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount to remove</Label>
-              <Input type="number" placeholder="Amount"
-                value={amount} onChange={(e) => setAmount(e.target.value)} className="text-lg" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Note <span className="text-muted-foreground font-normal text-xs">optional</span></Label>
-              <Input placeholder="e.g. Spent on car repair, balance error fix…"
-                value={correctNote} onChange={(e) => setCorrectNote(e.target.value)} />
-            </div>
-            <Button variant="destructive" className="w-full" onClick={handleCorrect} disabled={loading || !amount}>
-              <Minus className="h-4 w-4 mr-2" />{loading ? "Removing…" : "Remove Amount"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={potDialog.type === "new"} onOpenChange={(o) => !o && setPotDialog({ type: null })}>
+      <Dialog open={newPotOpen} onOpenChange={setNewPotOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create Savings Pot</DialogTitle></DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={handleCreatePot} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Name</Label>
-              <Input value={newPot.name} onChange={(e) => setNewPot((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Holiday, New Car, MacBook…" />
+              <Input autoFocus value={newPot.name} onChange={(e) => setNewPot((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Holiday, New Car, MacBook…" />
             </div>
             <div className="space-y-1.5">
               <Label>Target Amount ({base.code}) <span className="text-muted-foreground font-normal text-xs">optional</span></Label>
-              <Input type="number" value={newPot.targetAmount} onChange={(e) => setNewPot((p) => ({ ...p, targetAmount: e.target.value }))} placeholder="0" />
+              <MoneyInput value={newPot.targetAmount} onChange={(e) => setNewPot((p) => ({ ...p, targetAmount: e.target.value }))} placeholder="0" />
               <p className="text-xs text-muted-foreground">Target in {base.code}. You can add balances in any configured currency after creating.</p>
             </div>
-            {(parseFloat(newPot.targetAmount) || 0) > 0 && (
+            {(parseMoney(newPot.targetAmount) ?? 0) > 0 && (
               <div className="space-y-1.5">
                 <Label>Target Date <span className="text-muted-foreground font-normal text-xs">optional</span></Label>
                 <Input type="date" value={newPot.targetDate} onChange={(e) => setNewPot((p) => ({ ...p, targetDate: e.target.value }))} />
@@ -470,10 +354,10 @@ export function SavingsClient({ pots, currencies, cumulativeSavings, avgMonthlyE
               <Label>Color</Label>
               <input type="color" value={newPot.color} onChange={(e) => setNewPot((p) => ({ ...p, color: e.target.value }))} className="w-10 h-8 rounded cursor-pointer border border-border" />
             </div>
-            <Button className="w-full" onClick={handleCreatePot} disabled={loading || !newPot.name}>
+            <Button type="submit" className="w-full" disabled={loading || !newPot.name.trim()}>
               {loading ? "Creating..." : "Create Pot"}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 

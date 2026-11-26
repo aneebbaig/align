@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   ClipboardList, Plus, CheckCircle2, XCircle, Trash2,
@@ -18,6 +18,11 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { addToNeedList, doneNeedListItem, skipNeedListItem, deleteNeedListItem } from "@/actions/need-list";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/currency-utils";
+import { toDateStr } from "@/lib/day-strip";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
+import { MoneyInput, parseMoney } from "@/components/shared/money-input";
+import { PurchaseFields } from "@/components/lists/purchase-fields";
 import { PageHeader } from "@/components/shared/page-header";
 
 interface NeedListItem {
@@ -68,24 +73,23 @@ const PRIORITY_CONFIG: Record<string, { label: string; badge: string; border: st
   },
 };
 
-function fmtWith(n: number, symbol: string) {
-  return symbol + " " + (n / 100).toLocaleString("en-PK", { minimumFractionDigits: 0 });
-}
-
 export function NeedListClient({ items, history, categories, hideHeader, baseSymbol = "Rs" }: Props) {
-  const fmt = (n: number) => fmtWith(n, baseSymbol);
+  const fmt = (n: number) => formatMoney(n, baseSymbol);
   const [addOpen, setAddOpen] = useState(false);
   const [doneItem, setDoneItem] = useState<NeedListItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const openAdd = useCallback(() => setAddOpen(true), []);
+  useAddShortcut(addOpen || !!doneItem, openAdd);
+
   const [form, setForm] = useState({
     name: "", description: "", estimatedCost: "", url: "", categoryHint: "", priority: "MEDIUM",
   });
 
   const [doneForm, setDoneForm] = useState({
-    categoryId: "", actualAmount: "", date: format(new Date(), "yyyy-MM-dd"), logExpense: false,
+    categoryId: "", actualAmount: "", date: toDateStr(new Date()), logExpense: false,
   });
 
   async function handleAdd() {
@@ -94,7 +98,7 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
     const result = await addToNeedList({
       name: form.name,
       description: form.description || undefined,
-      estimatedCost: form.estimatedCost ? parseFloat(form.estimatedCost) : undefined,
+      estimatedCost: parseMoney(form.estimatedCost) ?? undefined,
       url: form.url || undefined,
       categoryHint: form.categoryHint || undefined,
       priority: form.priority,
@@ -113,7 +117,7 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
     const result = await doneNeedListItem(
       doneItem.id,
       doneForm.logExpense && doneForm.categoryId
-        ? { categoryId: doneForm.categoryId, actualAmount: doneForm.actualAmount ? parseFloat(doneForm.actualAmount) : undefined, date: doneForm.date }
+        ? { categoryId: doneForm.categoryId, actualAmount: parseMoney(doneForm.actualAmount) ?? undefined, date: doneForm.date }
         : undefined,
     );
     if (result.success) {
@@ -143,7 +147,7 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
     setDoneForm({
       categoryId: matchedCat?.id ?? "",
       actualAmount: item.estimatedCost ? String(item.estimatedCost / 100) : "",
-      date: format(new Date(), "yyyy-MM-dd"),
+      date: toDateStr(new Date()),
       logExpense: false,
     });
   };
@@ -227,14 +231,14 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
           <p className="text-sm text-muted-foreground">
             Something you actually have to take care of - not a want.
           </p>
-          <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); void handleAdd(); }} className="space-y-4">
             <div className="space-y-1.5">
               <Label>What do you need?</Label>
               <Input
                 placeholder="e.g. Refill prescription"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                autoFocus
               />
             </div>
             <div className="space-y-1.5">
@@ -249,8 +253,7 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Estimated cost ({baseSymbol})</Label>
-                <Input
-                  type="number"
+                <MoneyInput
                   placeholder="0"
                   value={form.estimatedCost}
                   onChange={(e) => setForm((f) => ({ ...f, estimatedCost: e.target.value }))}
@@ -278,10 +281,10 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
               />
             </div>
-            <Button onClick={handleAdd} disabled={loading || !form.name.trim()} className="w-full">
+            <Button type="submit" disabled={loading || !form.name.trim()} className="w-full">
               Add to Need List
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -291,7 +294,7 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
           <DialogHeader>
             <DialogTitle>Mark as Done - {doneItem?.name}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (!loading && !(doneForm.logExpense && !doneForm.categoryId)) void handleDone(); }} className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30">
               <input
                 type="checkbox"
@@ -306,56 +309,28 @@ export function NeedListClient({ items, history, categories, hideHeader, baseSym
             </div>
 
             {doneForm.logExpense && (
-              <>
-                <div className="space-y-1.5">
-                  <Label>Category <span className="text-destructive">*</span></Label>
-                  <Select value={doneForm.categoryId} onValueChange={(v) => setDoneForm((f) => ({ ...f, categoryId: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>
-                      Amount ({baseSymbol})
-                      {doneItem?.estimatedCost && (
-                        <span className="text-muted-foreground ml-1 font-normal">est. {fmt(doneItem.estimatedCost)}</span>
-                      )}
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder={doneItem?.estimatedCost ? String(doneItem.estimatedCost / 100) : "0"}
-                      value={doneForm.actualAmount}
-                      onChange={(e) => setDoneForm((f) => ({ ...f, actualAmount: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={doneForm.date}
-                      onChange={(e) => setDoneForm((f) => ({ ...f, date: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </>
+              <PurchaseFields
+                categories={categories}
+                categoryId={doneForm.categoryId}
+                onCategoryChange={(v) => setDoneForm((f) => ({ ...f, categoryId: v }))}
+                amount={doneForm.actualAmount}
+                onAmountChange={(v) => setDoneForm((f) => ({ ...f, actualAmount: v }))}
+                date={doneForm.date}
+                onDateChange={(d) => setDoneForm((f) => ({ ...f, date: d }))}
+                symbol={baseSymbol}
+                estimateText={doneItem?.estimatedCost ? fmt(doneItem.estimatedCost) : null}
+              />
             )}
 
             <Button
-              onClick={handleDone}
+              type="submit"
               disabled={loading || (doneForm.logExpense && !doneForm.categoryId)}
               className="w-full"
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />
               {doneForm.logExpense ? "Done - Log Expense" : "Mark as Done"}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -378,7 +353,7 @@ function NeedCard({ item, cfg, onDone, onSkip, onDelete, baseSymbol }: {
   onDelete: () => void;
   baseSymbol: string;
 }) {
-  const fmt = (n: number) => fmtWith(n, baseSymbol);
+  const fmt = (n: number) => formatMoney(n, baseSymbol);
   return (
     <div className={cn("flex items-start gap-3 px-4 py-3 rounded-xl border bg-card", cfg.border)}>
       <div className="flex-1 min-w-0 space-y-1.5">
@@ -424,7 +399,7 @@ function NeedCard({ item, cfg, onDone, onSkip, onDelete, baseSymbol }: {
 }
 
 function HistoryCard({ item, onDelete, baseSymbol }: { item: NeedListItem; onDelete: () => void; baseSymbol: string }) {
-  const fmt = (n: number) => fmtWith(n, baseSymbol);
+  const fmt = (n: number) => formatMoney(n, baseSymbol);
   const isDone = item.status === "DONE";
   return (
     <div className={cn(

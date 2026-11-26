@@ -306,31 +306,6 @@ export async function deleteLoanPayment(paymentId: string): Promise<ActionResult
   }
 }
 
-export async function markLoanPaid(loanId: string): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const loan = await prisma.loan.findFirst({ where: { id: loanId, userId } });
-    if (!loan) return { success: false, error: "Not found" };
-    const hasWriteOff = (await prisma.loanPayment.count({ where: { loanId, kind: "WRITE_OFF" } })) > 0;
-
-    await prisma.$transaction([
-      prisma.loanPayment.create({
-        data: { loanId, amount: loan.remainingAmount, date: new Date(), notes: "Marked as fully paid" },
-      }),
-      prisma.loan.update({
-        where: { id: loanId },
-        data: { remainingAmount: 0, status: loanStatusFor(0, loan.principalAmount, hasWriteOff) },
-      }),
-    ]);
-
-    revalidatePath("/loans");
-    return { success: true };
-  } catch (e) {
-    console.error("[markLoanPaid]", e);
-    return { success: false, error: "Failed to mark as paid" };
-  }
-}
-
 export async function deleteLoan(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId();

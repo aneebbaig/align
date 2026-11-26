@@ -15,6 +15,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_icon_box.dart';
 import '../../../../core/widgets/app_list_row.dart';
+import '../../../../core/widgets/undo_delete.dart';
 import '../../data/repositories/expense_repository_impl.dart';
 import '../../domain/entities/expense_entity.dart';
 import '../../../savings/presentation/providers/savings_provider.dart';
@@ -58,20 +59,33 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
     );
   }
 
-  Future<void> _delete(ExpenseEntity item) async {
-    try {
-      await ref.read(expenseRepositoryProvider).deleteExpense(item.id);
-      if (!mounted) return;
-      ref.invalidate(expensesListProvider);
-      ref.invalidate(budgetProvider);
-      ref.invalidate(fundingContextProvider);
-      ref.invalidate(savingsProvider); // a pot-funded expense gives its money back
-      ref.read(toastServiceProvider).success(context, 'Expense deleted');
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e is AppException ? e.message : 'Could not delete expense';
-      ref.read(toastServiceProvider).error(context, msg);
-    }
+  // Swiped away but not yet deleted on the server (Undo is still possible).
+  final _pendingDelete = <String>{};
+
+  void _swipeDelete(ExpenseEntity item) {
+    final repo = ref.read(expenseRepositoryProvider);
+    final container = ProviderScope.containerOf(context);
+    final toast = ref.read(toastServiceProvider);
+    final ctx = context;
+    setState(() => _pendingDelete.add(item.id));
+    deferDelete(
+      context,
+      message: 'Deleted · ${item.description}',
+      onUndo: () {
+        if (mounted) setState(() => _pendingDelete.remove(item.id));
+      },
+      commit: () async {
+        await repo.deleteExpense(item.id);
+        container.invalidate(expensesListProvider);
+        container.invalidate(budgetProvider);
+        container.invalidate(fundingContextProvider);
+        container.invalidate(savingsProvider); // a pot-funded expense gives its money back
+        if (mounted) setState(() => _pendingDelete.remove(item.id));
+      },
+      onError: (e) {
+        if (ctx.mounted) toast.error(ctx, e is AppException ? e.message : 'Could not delete expense');
+      },
+    );
   }
 
   @override
@@ -106,7 +120,9 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
               ),
             ),
             async.when(
-              data: (state) => state.items.isEmpty
+              data: (full) {
+                final state = full.copyWith(items: full.items.where((e) => !_pendingDelete.contains(e.id)).toList());
+                return state.items.isEmpty
                   ? const SliverFillRemaining(
                       child: AppEmptyState(
                         title: 'No expenses this period',
@@ -151,10 +167,16 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
                                   ),
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
-                                  child: _ExpenseRow(
-                                    item: item,
-                                    onTap: () => _edit(item),
-                                    onDelete: () => _delete(item),
+                                  child: Dismissible(
+                                    key: ValueKey(item.id),
+                                    direction: DismissDirection.endToStart,
+                                    background: const SwipeBackground(
+                                      alignment: Alignment.centerRight,
+                                      color: AppColors.destructive,
+                                      icon: Icons.delete_outline,
+                                    ),
+                                    onDismissed: (_) => _swipeDelete(item),
+                                    child: _ExpenseRow(item: item, onTap: () => _edit(item)),
                                   ),
                                 ),
                               ],
@@ -163,7 +185,8 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
                           childCount: state.items.length + 1,
                         ),
                       ),
-                    ),
+                    );
+              },
               loading: () => const SliverFillRemaining(
                 child: Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
@@ -185,9 +208,8 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage> {
 }
 
 class _ExpenseRow extends StatelessWidget {
-  const _ExpenseRow({required this.item, this.onDelete, this.onTap});
+  const _ExpenseRow({required this.item, this.onTap});
   final ExpenseEntity item;
-  final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   @override
@@ -196,31 +218,9 @@ class _ExpenseRow extends StatelessWidget {
         title: item.description,
         subtitle: item.category.name,
         onTap: onTap,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              item.amountPaisas.formatPKR(),
-              style: AppTextStyles.currencySmall.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (onDelete != null) ...[
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: onDelete,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 16,
-                    color: AppColors.destructive.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-            ],
-          ],
+        trailing: Text(
+          item.amountPaisas.formatPKR(),
+          style: AppTextStyles.currencySmall.copyWith(fontWeight: FontWeight.w600),
         ),
       );
 }

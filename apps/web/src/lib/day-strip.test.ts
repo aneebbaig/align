@@ -12,14 +12,17 @@ describe("buildDayChips", () => {
     expect(c[2]).toMatchObject({ value: "2026-11-24", label: "Tue 24" });
     expect(c[13].value).toBe("2026-11-13");
   });
-  it("puts an out-of-strip pick first, then a last-used chip", () => {
+  it("puts the last-used chip first, then an out-of-strip pick", () => {
     const c = buildDayChips({ today, selected: "2026-10-02", lastUsed: "2026-11-01" });
-    expect(c[0]).toMatchObject({ kind: "picked", label: "2 Oct" });
-    expect(c[1]).toMatchObject({ kind: "last", label: "Last: 1 Nov" });
+    expect(c[0]).toMatchObject({ kind: "last", label: "Last: 1 Nov" });
+    expect(c[1]).toMatchObject({ kind: "picked", label: "2 Oct" });
     expect(c).toHaveLength(16);
   });
-  it("skips last-used when it is already in the strip", () => {
-    expect(buildDayChips({ today, selected: "2026-11-26", lastUsed: "2026-11-24" })).toHaveLength(14);
+  it("shows last-used first even when it is in the strip, but not when already selected", () => {
+    const c = buildDayChips({ today, selected: "2026-11-26", lastUsed: "2026-11-24" });
+    expect(c).toHaveLength(15);
+    expect(c[0]).toMatchObject({ kind: "last", label: "Last: 24 Nov" });
+    expect(buildDayChips({ today, selected: "2026-11-24", lastUsed: "2026-11-24" })).toHaveLength(14);
     expect(isInStrip("2026-11-12", today)).toBe(false);
   });
 });
@@ -40,7 +43,8 @@ describe("readLastUsed", () => {
     expect(readLastUsed(saved("2026-11-20", 10), today)).toBe("2026-11-20");
   });
   it("ignores old, today and junk values", () => {
-    expect(readLastUsed(saved("2026-11-20", 45), today)).toBeNull();
+    expect(readLastUsed(saved("2026-11-20", 150), today)).toBe("2026-11-20");
+    expect(readLastUsed(saved("2026-11-20", 200), today)).toBeNull();
     expect(readLastUsed(saved("2026-11-26", 5), today)).toBeNull();
     expect(readLastUsed("nope", today)).toBeNull();
     expect(readLastUsed(null, today)).toBeNull();

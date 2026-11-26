@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, ListTodo, GripVertical } from "lucide-react";
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -12,7 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskForm } from "@/components/tasks/task-form";
 import { EmptyState } from "@/components/shared/empty-state";
-import { updateTaskOrder } from "@/actions/tasks";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { updateTaskOrder, createTask } from "@/actions/tasks";
+import { DueDateChips } from "@/components/shared/due-date-chips";
+import { useAddShortcut } from "@/lib/use-add-shortcut";
 import { PageHeader } from "@/components/shared/page-header";
 
 interface Task {
@@ -85,15 +89,51 @@ export function TasksClient({ tasks: initialTasks }: { tasks: Task[] }) {
   const [open, setOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<"DAILY" | "ONE_TIME">("ONE_TIME");
 
-  const [daily, setDaily] = useState(() => initialTasks.filter((t) => t.type === "DAILY"));
-  const [pending, setPending] = useState(() => initialTasks.filter((t) => t.type === "ONE_TIME" && t.status !== "DONE"));
-  const [done, setDone] = useState(() => initialTasks.filter((t) => t.type === "ONE_TIME" && t.status === "DONE"));
+  const [tab, setTab] = useState("one-time");
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickDue, setQuickDue] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const quickRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setDaily(initialTasks.filter((t) => t.type === "DAILY"));
-    setPending(initialTasks.filter((t) => t.type === "ONE_TIME" && t.status !== "DONE"));
-    setDone(initialTasks.filter((t) => t.type === "ONE_TIME" && t.status === "DONE"));
-  }, [initialTasks]);
+  const split = (tasks: Task[]) => ({
+    daily: tasks.filter((t) => t.type === "DAILY"),
+    pending: tasks.filter((t) => t.type === "ONE_TIME" && t.status !== "DONE"),
+    done: tasks.filter((t) => t.type === "ONE_TIME" && t.status === "DONE"),
+  });
+  const [lists, setLists] = useState(() => split(initialTasks));
+  const [seen, setSeen] = useState(initialTasks);
+  if (seen !== initialTasks) {
+    setSeen(initialTasks);
+    setLists(split(initialTasks));
+  }
+  const { daily, pending, done } = lists;
+  const setDaily = (d: Task[]) => setLists((l) => ({ ...l, daily: d }));
+  const setPending = (p: Task[]) => setLists((l) => ({ ...l, pending: p }));
+
+  const focusQuick = useCallback(() => quickRef.current?.focus(), []);
+  useAddShortcut(open, focusQuick);
+
+  async function quickAdd() {
+    const title = quickTitle.trim();
+    if (!title || adding) return;
+    setAdding(true);
+    const isDaily = tab === "daily";
+    const result = await createTask({
+      title,
+      type: isDaily ? "DAILY" : "ONE_TIME",
+      priority: "MEDIUM",
+      dueDate: !isDaily && quickDue ? quickDue : undefined,
+    });
+    setAdding(false);
+    if (result.success) {
+      setQuickTitle("");
+      setQuickDue(null);
+      router.refresh();
+    } else {
+      toast.error(result.error ?? "Failed to add task");
+    }
+    quickRef.current?.focus();
+  }
 
   function handleSuccess() {
     setOpen(false);
@@ -113,7 +153,19 @@ export function TasksClient({ tasks: initialTasks }: { tasks: Task[] }) {
         }
       />
 
-      <Tabs defaultValue="one-time">
+      <div className="mb-4 space-y-2">
+        <Input
+          ref={quickRef}
+          value={quickTitle}
+          onChange={(e) => setQuickTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void quickAdd(); } }}
+          placeholder={tab === "daily" ? "Add a daily task and press Enter (N)" : "Add a task and press Enter (N)"}
+          aria-label="Quick add task"
+        />
+        {tab !== "daily" && <DueDateChips value={quickDue} onChange={setQuickDue} compact />}
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full grid grid-cols-2">
           <TabsTrigger value="daily">Daily ({daily.length})</TabsTrigger>
           <TabsTrigger value="one-time">One-Time ({pending.length + done.length})</TabsTrigger>

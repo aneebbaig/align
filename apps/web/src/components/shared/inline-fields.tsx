@@ -58,11 +58,17 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
   disabled?: boolean; hint?: string;
   onSave: (majorOrNull: number | null) => void;
 }) {
-  const fmt = (p: number | null) => (p === null ? "" : String(p / 100));
+  // Editing shows the plain number; at rest it's grouped ("400,000"), and zero shows as empty.
+  const fmt = (p: number | null) => (p === null || p === 0 ? "" : String(p / 100));
+  const display = (p: number | null) => (p === null || p === 0 ? "" : (p / 100).toLocaleString(undefined, { maximumFractionDigits: 2 }));
   const [text, setText] = useState(fmt(valuePaisas));
+  const [focused, setFocused] = useState(false);
+
   const [invalid, setInvalid] = useState(false);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // eslint-disable-next-line react-hooks/refs -- dirty only changes alongside a re-rendering setText
+  const shown = focused || invalid || dirty.current ? text : display(valuePaisas);
   const latest = useRef({ text, onSave, valuePaisas });
   useEffect(() => { latest.current = { text, onSave, valuePaisas }; });
 
@@ -105,10 +111,11 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
           inputMode="decimal"
           autoComplete="off"
           disabled={disabled}
-          value={text}
-          placeholder={optional ? "—" : "0"}
+          value={shown}
+          onFocus={() => setFocused(true)}
+          placeholder="—"
           onChange={onChange}
-          onBlur={flush}
+          onBlur={() => { setFocused(false); flush(); }}
           onKeyDown={onKeyDown}
           className="w-full min-w-0 bg-transparent outline-none text-sm font-medium text-foreground text-right tabular-nums whitespace-nowrap placeholder:text-muted-foreground/40 placeholder:font-normal"
         />
@@ -126,7 +133,8 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
           inputMode="decimal"
           autoComplete="off"
           disabled={disabled}
-          value={text}
+          value={shown}
+          onFocus={() => setFocused(true)}
           placeholder={optional ? "not yet" : "0"}
           onChange={(e) => {
             setText(e.target.value);
@@ -134,7 +142,7 @@ export function InlineAmount({ label, symbol, valuePaisas, optional, disabled, h
             if (timer.current) clearTimeout(timer.current);
             timer.current = setTimeout(flush, SAVE_DELAY_MS);
           }}
-          onBlur={flush}
+          onBlur={() => { setFocused(false); flush(); }}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
           className="w-full min-w-0 bg-transparent outline-none text-sm font-medium text-foreground tabular-nums placeholder:text-muted-foreground/40 placeholder:font-normal"
         />

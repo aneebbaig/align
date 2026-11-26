@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Vault" };
 
 export default async function VaultPage() {
   const session = await getServerUser();
-  if (session?.role !== "SUPER_ADMIN") redirect("/dashboard");
+  if (session?.role !== "SUPER_ADMIN") redirect("/expenses");
 
   const [surprises, currencies] = await Promise.all([getSurprises(), getCurrencies()]);
   const baseSymbol = currencies.find((c) => c.isBase)?.symbol ?? "Rs";

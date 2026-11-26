@@ -13,13 +13,14 @@ class MorePage extends ConsumerWidget {
 
   // `section` matches the web's hidden-sections keys. Settings is always shown.
   static const List<_MoreEntry> _items = [
+    (icon: Icons.dashboard_outlined, label: 'Home', subtitle: 'Overview of your month', path: '/dashboard', section: 'dashboard'),
+    (icon: Icons.checklist_outlined, label: 'Tasks', subtitle: 'To-dos and reminders', path: '/tasks', section: 'tasks'),
     (icon: Icons.pie_chart_outline, label: 'Budget', subtitle: 'View allocations & spending', path: '/budget', section: 'budget'),
     (icon: Icons.handshake_outlined, label: 'Loans', subtitle: 'Track money given & received', path: '/loans', section: 'loans'),
     (icon: Icons.savings_outlined, label: 'Savings', subtitle: 'Pots & wealth', path: '/savings', section: 'savings'),
     (icon: Icons.show_chart, label: 'Investments', subtitle: 'Investments, plan & contributions', path: '/investments', section: 'investments'),
     (icon: Icons.table_chart_outlined, label: 'Forecast', subtitle: 'Your cash month by month – separate from your real money', path: '/planner', section: 'forecast'),
     (icon: Icons.alarm, label: 'Routines', subtitle: 'Daily routine with timed reminders', path: '/routines', section: 'routines'),
-    (icon: Icons.checklist_rtl, label: 'Plans', subtitle: 'Projects & itemized checklists', path: '/plans', section: 'plans'),
     (icon: Icons.settings_outlined, label: 'Settings', subtitle: 'Account & preferences', path: '/settings', section: ''),
   ];
 

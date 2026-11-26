@@ -160,30 +160,10 @@ export function doomSpendingEmail(count: number, total: number, symbol = "Rs") {
   return shell(`${count} expenses in 2 hours - ${symbol} ${(total / 100).toLocaleString()} total.`, body);
 }
 
-export function loanDueEmail(personName: string, amount: number, dueDate: Date, symbol = "Rs") {
-  const AMBER = "#B45309";
-  const dueDateStr = dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const body = `
-    <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.5px;color:${TEXT};margin:0 0 4px">Loan Due Soon</p>
-    <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:${MUTED};margin:0 0 20px">${personName} · due ${dueDateStr}</p>
-    ${card(AMBER, `
-      <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;color:${AMBER};margin:0 0 12px;text-transform:uppercase;letter-spacing:0.06em">💰 Repayment Due</p>
-      <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:14px;color:${TEXT};margin:0 0 14px;line-height:1.5">
-        <strong>${personName}</strong> owes you <strong>${symbol} ${(amount / 100).toLocaleString()}</strong>, due on <strong>${dueDateStr}</strong>.
-      </p>
-      <p style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:13px;color:${MUTED};margin:0">
-        Follow up soon to keep things on track.
-      </p>
-    `)}`;
-  return shell(`${personName} owes you ${symbol} ${(amount / 100).toLocaleString()} - due ${dueDateStr}.`, body);
-}
-
 // ─── Daily digest ─────────────────────────────────────────────────────────────
 
 export function dailyDigestEmail(data: {
   name: string;
-  todayEvents: { title: string; startTime: string | null; isAllDay: boolean }[];
-  tomorrowEvents: { title: string; startTime: string | null; isAllDay: boolean }[];
   overdueTasks: { title: string; dueDate: Date | null }[];
   todayTasks: { title: string; priority: string }[];
   loansComingDue: { personName: string; remainingAmount: number; dueDate: Date }[];
@@ -220,21 +200,6 @@ export function dailyDigestEmail(data: {
     `));
   }
 
-  // ── Today's schedule ──
-  if (data.todayEvents.length > 0) {
-    const items = data.todayEvents.map((e) => {
-      const time = e.isAllDay ? "All day" : (e.startTime ?? "");
-      return `<tr>
-        <td width="64" style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:12px;color:${MUTED};padding:6px 10px 6px 0;border-bottom:1px solid ${BORDER};vertical-align:top;white-space:nowrap">${time}</td>
-        <td style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:13px;color:${TEXT};padding:6px 0;border-bottom:1px solid ${BORDER};font-weight:500">${e.title}</td>
-      </tr>`;
-    }).join("");
-    sections.push(plainCard(`
-      ${sectionLabel("Today's schedule")}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table>
-    `));
-  }
-
   // ── Tasks due today ──
   if (data.todayTasks.length > 0) {
     const items = data.todayTasks.map((t) => {
@@ -245,21 +210,6 @@ export function dailyDigestEmail(data: {
     }).join("");
     sections.push(plainCard(`
       ${sectionLabel("Due today")}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table>
-    `));
-  }
-
-  // ── Tomorrow's events ──
-  if (data.tomorrowEvents.length > 0) {
-    const items = data.tomorrowEvents.map((e) => {
-      const time = e.isAllDay ? "All day" : (e.startTime ?? "");
-      return `<tr>
-        <td width="64" style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:12px;color:${MUTED};padding:6px 10px 6px 0;border-bottom:1px solid ${BORDER};white-space:nowrap">${time}</td>
-        <td style="font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:13px;color:${MUTED};padding:6px 0;border-bottom:1px solid ${BORDER}">${e.title}</td>
-      </tr>`;
-    }).join("");
-    sections.push(plainCard(`
-      ${sectionLabel("Tomorrow")}
       <table width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table>
     `));
   }

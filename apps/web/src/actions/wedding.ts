@@ -86,6 +86,7 @@ export async function updateWeddingPlan(id: string, data: Partial<{
     revalidatePath("/wedding");
     revalidatePath("/plans");
     revalidatePath(`/wedding/${id}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[updateWeddingPlan]", e);
@@ -141,6 +142,7 @@ export async function createWeddingEvent(weddingPlanId: string, data: {
       },
     });
     revalidatePath(`/wedding/${weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true, data: { id: created.id } };
   } catch (e) {
     console.error("[createWeddingEvent]", e);
@@ -176,6 +178,7 @@ export async function updateWeddingEvent(id: string, data: Partial<{
       },
     });
     revalidatePath(`/wedding/${event.weddingPlan.id}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[updateWeddingEvent]", e);
@@ -194,6 +197,7 @@ export async function deleteWeddingEvent(id: string): Promise<ActionResult> {
 
     await prisma.weddingEvent.delete({ where: { id } });
     revalidatePath(`/wedding/${event.weddingPlan.id}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[deleteWeddingEvent]", e);
@@ -254,6 +258,7 @@ export async function createWeddingExpense(weddingPlanId: string, data: Partial<
       },
     });
     revalidatePath(`/wedding/${weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[createWeddingExpense]", e);
@@ -292,6 +297,7 @@ export async function updateWeddingExpense(id: string, data: Partial<ExpenseInpu
       },
     });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[updateWeddingExpense]", e);
@@ -299,8 +305,11 @@ export async function updateWeddingExpense(id: string, data: Partial<ExpenseInpu
   }
 }
 
-/** Settle in full: paid = the cost, and the cost becomes real (actual = estimate if no actual yet). */
-export async function markWeddingExpensePaid(id: string): Promise<ActionResult> {
+/**
+ * Settle in full: paid = the cost, and the cost becomes real (actual = estimate if no actual yet).
+ * Returns the previous actual/paid (major units) so the caller can offer Undo via restoreWeddingExpensePayment.
+ */
+export async function markWeddingExpensePaid(id: string): Promise<ActionResult<{ previousActual: number | null; previousPaid: number }>> {
   try {
     const userId = await getUserId();
     const expense = await ownedExpense(id, userId);
@@ -308,11 +317,71 @@ export async function markWeddingExpensePaid(id: string): Promise<ActionResult> 
     const cost = expense.actualAmount ?? expense.estimatedAmount;
     await prisma.weddingExpense.update({ where: { id }, data: { actualAmount: cost, paidAmount: cost } });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
-    return { success: true };
+    revalidatePath("/wedding");
+    return {
+      success: true,
+      data: {
+        previousActual: expense.actualAmount === null ? null : expense.actualAmount / 100,
+        previousPaid: expense.paidAmount / 100,
+      },
+    };
   } catch (e) {
     console.error("[markWeddingExpensePaid]", e);
     return { success: false, error: "Failed to mark as paid" };
   }
+}
+
+/** Undo for markWeddingExpensePaid: put actual (null = unknown) and paid back. Major units. */
+export async function restoreWeddingExpensePayment(id: string, previous: { actual: number | null; paid: number }): Promise<ActionResult> {
+  try {
+    const userId = await getUserId();
+    const expense = await ownedExpense(id, userId);
+    if (!expense) return { success: false, error: "Not found" };
+    await prisma.weddingExpense.update({
+      where: { id },
+      data: {
+        actualAmount: previous.actual === null ? null : toPaisas(previous.actual),
+        paidAmount: Math.max(0, toPaisas(previous.paid)),
+      },
+    });
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
+    return { success: true };
+  } catch (e) {
+    console.error("[restoreWeddingExpensePayment]", e);
+    return { success: false, error: "Failed to undo" };
+  }
+}
+
+/** Move an expense to another event of the same wedding (null = Whole wedding). Returns the event it came from. */
+export async function moveWeddingExpense(id: string, eventId: string | null): Promise<ActionResult<{ previousEventId: string | null }>> {
+  try {
+    const userId = await getUserId();
+    const expense = await prisma.weddingExpense.findFirst({
+      where: { id, weddingPlan: { userId } },
+      select: { id: true, weddingPlanId: true, eventId: true },
+    });
+    if (!expense) return { success: false, error: "Not found" };
+    if (eventId) {
+      const event = await prisma.weddingEvent.findFirst({ where: { id: eventId, weddingPlanId: expense.weddingPlanId }, select: { id: true } });
+      if (!event) return { success: false, error: "Event not found" };
+    }
+    await prisma.weddingExpense.update({ where: { id }, data: { eventId: eventId || null } });
+    revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
+    return { success: true, data: { previousEventId: expense.eventId } };
+  } catch (e) {
+    console.error("[moveWeddingExpense]", e);
+    return { success: false, error: "Failed to move expense" };
+  }
+}
+
+/**
+ * Inline edit of the two money fields (major units). `actual: null` clears the real cost.
+ * A chosen quote owns the estimate, so `estimated` is ignored while one is chosen.
+ */
+export async function updateWeddingExpenseAmounts(id: string, data: { estimated?: number; actual?: number | null }): Promise<ActionResult> {
+  return updateWeddingExpense(id, data);
 }
 
 export async function deleteWeddingExpense(id: string): Promise<ActionResult> {
@@ -323,6 +392,7 @@ export async function deleteWeddingExpense(id: string): Promise<ActionResult> {
 
     await prisma.weddingExpense.delete({ where: { id } });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[deleteWeddingExpense]", e);
@@ -355,6 +425,7 @@ export async function addWeddingQuote(expenseId: string, data: {
       },
     });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[addWeddingQuote]", e);
@@ -408,6 +479,7 @@ export async function updateWeddingQuote(id: string, data: Partial<{
       }
     });
     revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[updateWeddingQuote]", e);
@@ -435,6 +507,7 @@ export async function chooseWeddingQuote(id: string): Promise<ActionResult> {
       });
     });
     revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[chooseWeddingQuote]", e);
@@ -454,6 +527,7 @@ export async function clearWeddingQuoteChoice(expenseId: string): Promise<Action
       await tx.weddingExpense.update({ where: { id: expenseId }, data: { vendorName: null, vendorPhone: null, vendorInstagram: null } });
     });
     revalidatePath(`/wedding/${expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[clearWeddingQuoteChoice]", e);
@@ -474,6 +548,7 @@ export async function deleteWeddingQuote(id: string): Promise<ActionResult> {
       }
     });
     revalidatePath(`/wedding/${quote.expense.weddingPlanId}`);
+    revalidatePath("/wedding");
     return { success: true };
   } catch (e) {
     console.error("[deleteWeddingQuote]", e);

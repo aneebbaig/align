@@ -51,12 +51,12 @@ void main() {
 
   group('lastChipDate', () {
     final now = DateTime(2026, 11, 26, 12, 0);
-    test('offered within 30 minutes when not today', () {
+    test('offered within 3 hours when not today', () {
       final last = LastEntry(date: DateTime(2026, 11, 20), savedAt: now.subtract(const Duration(minutes: 10)));
       expect(lastChipDate(last, now), DateTime(2026, 11, 20));
     });
-    test('not after 30 minutes', () {
-      final last = LastEntry(date: DateTime(2026, 11, 20), savedAt: now.subtract(const Duration(minutes: 31)));
+    test('not after 3 hours', () {
+      final last = LastEntry(date: DateTime(2026, 11, 20), savedAt: now.subtract(const Duration(hours: 3, minutes: 1)));
       expect(lastChipDate(last, now), isNull);
     });
     test('not when the date is today, or nothing stored', () {

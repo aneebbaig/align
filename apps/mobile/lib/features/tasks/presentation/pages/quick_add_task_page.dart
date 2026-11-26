@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
-import '../../../../core/extensions/lucide_ext.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/priority_color.dart';
+import '../../../../core/widgets/due_date_chips.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../data/datasources/tasks_datasource.dart';
 import '../providers/tasks_provider.dart';
@@ -44,34 +45,13 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      context.go('/dashboard');
+      context.go('/money');
     }
   }
 
   bool get _canSubmit => _titleCtrl.text.trim().isNotEmpty;
 
-  Future<void> _pickDate() async {
-    _titleFocus.unfocus();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _dueDate = picked);
-  }
-
-  Future<void> _submit() async {
+  Future<void> _submit({bool another = false}) async {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) return;
     _titleFocus.unfocus();
@@ -89,7 +69,16 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
       ref.invalidate(tasksProvider);
       ref.read(toastServiceProvider).success(context, 'Task added');
       HapticFeedback.lightImpact();
-      _close();
+      if (another) {
+        // Keep priority and due date: a batch of tasks usually shares them.
+        setState(() {
+          _loading = false;
+          _titleCtrl.clear();
+        });
+        _titleFocus.requestFocus();
+      } else {
+        _close();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -101,9 +90,6 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
   @override
   Widget build(BuildContext context) {
     final creating = _loading;
-    final dateLabel = _dueDate != null
-        ? DateFormat('EEE, d MMM y').format(_dueDate!)
-        : null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -114,32 +100,14 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
         title: const Text('Add Task', style: AppTextStyles.headlineSmall),
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.foreground),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _close,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !creating ? _submit : null,
-              child: creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(
-                      'Add',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit ? AppColors.primary : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: 'Add task',
+        loading: creating,
+        onPrimary: _canSubmit ? _submit : null,
+        onAddAnother: _canSubmit ? () => _submit(another: true) : null,
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -190,7 +158,7 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
                       child: _PriorityChip(
                         label: p[0] + p.substring(1).toLowerCase(),
                         selected: _priority == p,
-                        color: _priorityColor(p),
+                        color: priorityColor(p),
                         onTap: () {
                           HapticFeedback.selectionClick();
                           setState(() => _priority = p);
@@ -203,49 +171,17 @@ class _QuickAddTaskPageState extends ConsumerState<QuickAddTaskPage> {
 
             const SizedBox(height: 16),
 
-            GestureDetector(
-              onTap: _pickDate,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                ),
-                child: Row(
-                  children: [
-                    Icon('CalendarDays'.lucideIcon, size: 16, color: AppColors.mutedForeground),
-                    const SizedBox(width: 10),
-                    Text(
-                      dateLabel ?? 'No due date',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: dateLabel != null ? AppColors.foreground : AppColors.mutedForeground,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (_dueDate != null)
-                      GestureDetector(
-                        onTap: () => setState(() => _dueDate = null),
-                        child: const Icon(Icons.close, size: 16, color: AppColors.mutedForeground),
-                      )
-                    else
-                      Icon('ChevronDown'.lucideIcon, size: 14, color: AppColors.mutedForeground),
-                  ],
-                ),
-              ),
+            Text(
+              'Due',
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground),
             ),
+            const SizedBox(height: 8),
+            DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
           ],
         ),
       ),
     );
   }
-
-  Color _priorityColor(String p) => switch (p) {
-        'URGENT' => const Color(0xFFEF4444),
-        'HIGH' => const Color(0xFFF97316),
-        'MEDIUM' => AppColors.primary,
-        _ => AppColors.mutedForeground,
-      };
 }
 
 class _PriorityChip extends StatelessWidget {

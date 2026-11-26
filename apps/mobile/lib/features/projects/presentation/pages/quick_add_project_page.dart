@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/due_date_chips.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../data/datasources/projects_datasource.dart';
 import '../providers/projects_provider.dart';
 
@@ -59,28 +59,7 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
 
   bool get _canSubmit => _nameCtrl.text.trim().isNotEmpty;
 
-  Future<void> _pickDate() async {
-    _nameFocus.unfocus();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-            onSurface: AppColors.foreground,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _dueDate = picked);
-  }
-
-  Future<void> _submit() async {
+  Future<void> _submit({bool another = false}) async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     _nameFocus.unfocus();
@@ -98,7 +77,17 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
       ref.invalidate(projectsProvider);
       ref.read(toastServiceProvider).success(context, 'Project created');
       HapticFeedback.lightImpact();
-      _close();
+      if (another) {
+        // Keep colour and due date for the next one.
+        setState(() {
+          _loading = false;
+          _nameCtrl.clear();
+          _clientCtrl.clear();
+        });
+        _nameFocus.requestFocus();
+      } else {
+        _close();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -109,8 +98,6 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = _dueDate != null ? DateFormat('EEE, d MMM y').format(_dueDate!) : null;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: true,
@@ -122,27 +109,12 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton(
-              onPressed: _canSubmit && !_loading ? _submit : null,
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                    )
-                  : Text(
-                      'Create',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: _canSubmit ? AppColors.primary : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
+      ),
+      bottomNavigationBar: QuickAddActions(
+        primaryLabel: 'Create project',
+        loading: _loading,
+        onPrimary: _canSubmit ? _submit : null,
+        onAddAnother: _canSubmit ? () => _submit(another: true) : null,
       ),
       body: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -197,31 +169,10 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
               ],
             ),
             const SizedBox(height: 20),
-            GestureDetector(
-              onTap: _pickDate,
-              child: AppCard(
-                radius: 8,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                child: Row(
-                  children: [
-                    const Icon(Icons.event_outlined, size: 16, color: AppColors.mutedForeground),
-                    const SizedBox(width: 10),
-                    Text(
-                      dateLabel ?? 'No due date',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: dateLabel != null ? AppColors.foreground : AppColors.mutedForeground,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (_dueDate != null)
-                      GestureDetector(
-                        onTap: () => setState(() => _dueDate = null),
-                        child: const Icon(Icons.close, size: 16, color: AppColors.mutedForeground),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            Text('Due date',
+                style: AppTextStyles.labelMedium.copyWith(color: AppColors.mutedForeground)),
+            const SizedBox(height: 8),
+            DueDateChips(value: _dueDate, onChanged: (d) => setState(() => _dueDate = d)),
           ],
         ),
       ),

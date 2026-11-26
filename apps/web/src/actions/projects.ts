@@ -349,28 +349,6 @@ export async function createTag(data: { name: string; color?: string }): Promise
   }
 }
 
-export async function updateTag(id: string, data: { name?: string; color?: string }): Promise<ActionResult> {
-  try {
-    const userId = await getUserId();
-    const name = data.name?.trim();
-    if (data.name !== undefined && !name) return { success: false, error: "Tag name is required" };
-    if (name) {
-      const dupe = await prisma.tag.findFirst({ where: { userId, name, NOT: { id } } });
-      if (dupe) return { success: false, error: "A tag with this name already exists" };
-    }
-    const { count } = await prisma.tag.updateMany({
-      where: { id, userId },
-      data: { ...(name !== undefined && { name }), ...(data.color !== undefined && { color: data.color }) },
-    });
-    if (count === 0) return { success: false, error: "Tag not found" };
-    revalidatePath("/projects");
-    return { success: true };
-  } catch (e) {
-    console.error("[updateTag]", e);
-    return { success: false, error: "Failed to update tag" };
-  }
-}
-
 export async function deleteTag(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId();

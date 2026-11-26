@@ -14,6 +14,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_icon_box.dart';
 import '../../../../core/widgets/app_list_row.dart';
+import '../../../../core/widgets/undo_delete.dart';
 import '../../../expenses/domain/entities/expense_entity.dart';
 import '../../data/datasources/income_datasource.dart';
 import '../providers/income_list_provider.dart';
@@ -56,18 +57,31 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
     );
   }
 
-  Future<void> _delete(ExpenseEntity item) async {
-    try {
-      await ref.read(incomeDatasourceProvider).deleteIncome(item.id);
-      if (!mounted) return;
-      ref.invalidate(incomeListProvider);
-      ref.invalidate(fundingContextProvider);
-      ref.read(toastServiceProvider).success(context, 'Income deleted');
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e is AppException ? e.message : 'Could not delete income';
-      ref.read(toastServiceProvider).error(context, msg);
-    }
+  // Swiped away but not yet deleted on the server (Undo is still possible).
+  final _pendingDelete = <String>{};
+
+  void _swipeDelete(ExpenseEntity item) {
+    final ds = ref.read(incomeDatasourceProvider);
+    final container = ProviderScope.containerOf(context);
+    final toast = ref.read(toastServiceProvider);
+    final ctx = context;
+    setState(() => _pendingDelete.add(item.id));
+    deferDelete(
+      context,
+      message: 'Deleted · ${item.description}',
+      onUndo: () {
+        if (mounted) setState(() => _pendingDelete.remove(item.id));
+      },
+      commit: () async {
+        await ds.deleteIncome(item.id);
+        container.invalidate(incomeListProvider);
+        container.invalidate(fundingContextProvider);
+        if (mounted) setState(() => _pendingDelete.remove(item.id));
+      },
+      onError: (e) {
+        if (ctx.mounted) toast.error(ctx, e is AppException ? e.message : 'Could not delete income');
+      },
+    );
   }
 
   @override
@@ -101,7 +115,9 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
               ),
             ),
             async.when(
-              data: (state) => state.items.isEmpty
+              data: (full) {
+                final state = full.copyWith(items: full.items.where((e) => !_pendingDelete.contains(e.id)).toList());
+                return state.items.isEmpty
                   ? const SliverFillRemaining(
                       child: AppEmptyState(
                         title: 'No income this period',
@@ -146,10 +162,16 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
                                   ),
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
-                                  child: _IncomeRow(
-                                    item: item,
-                                    onTap: () => _edit(item),
-                                    onDelete: () => _delete(item),
+                                  child: Dismissible(
+                                    key: ValueKey(item.id),
+                                    direction: DismissDirection.endToStart,
+                                    background: const SwipeBackground(
+                                      alignment: Alignment.centerRight,
+                                      color: AppColors.destructive,
+                                      icon: Icons.delete_outline,
+                                    ),
+                                    onDismissed: (_) => _swipeDelete(item),
+                                    child: _IncomeRow(item: item, onTap: () => _edit(item)),
                                   ),
                                 ),
                               ],
@@ -158,7 +180,8 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
                           childCount: state.items.length + 1,
                         ),
                       ),
-                    ),
+                    );
+              },
               loading: () => const SliverFillRemaining(
                 child: Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
@@ -180,9 +203,8 @@ class _IncomeListPageState extends ConsumerState<IncomeListPage> {
 }
 
 class _IncomeRow extends StatelessWidget {
-  const _IncomeRow({required this.item, this.onDelete, this.onTap});
+  const _IncomeRow({required this.item, this.onTap});
   final ExpenseEntity item;
-  final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   @override
@@ -191,32 +213,9 @@ class _IncomeRow extends StatelessWidget {
         title: item.description,
         subtitle: item.category.name,
         onTap: onTap,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '+${item.amountPaisas.formatPKR()}',
-              style: AppTextStyles.currencySmall.copyWith(
-                color: const Color(0xFF4CAF50),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (onDelete != null) ...[
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: onDelete,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 16,
-                    color: AppColors.destructive.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-            ],
-          ],
+        trailing: Text(
+          '+${item.amountPaisas.formatPKR()}',
+          style: AppTextStyles.currencySmall.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
         ),
       );
 }
