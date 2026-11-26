@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrencies } from "@/lib/currency-helpers";
+import { incomePkrForTransaction } from "@/lib/expenses/funding";
 
 export interface CurrencyIncomeIntegrity {
   currencyId: string;
@@ -36,9 +37,9 @@ export async function fetchMonthIncomeIntegrityData(
       where: { userId, type: "INCOME", budgetMonth: month, budgetYear: year },
       _sum: { amount: true },
     }),
-    prisma.transaction.aggregate({
-      where: { userId, type: "EXPENSE", fundingSource: "INCOME", budgetMonth: month, budgetYear: year },
-      _sum: { amount: true },
+    prisma.transaction.findMany({
+      where: { userId, type: "EXPENSE", budgetMonth: month, budgetYear: year },
+      select: { amount: true, fundingSource: true, fundingSources: { select: { source: true, pkrAmount: true } } },
     }),
     prisma.savingsPotEntry.findMany({
       where: { potId: { in: userPotIds }, sourceType: "INCOME", budgetMonth: month, budgetYear: year },
@@ -56,7 +57,7 @@ export async function fetchMonthIncomeIntegrityData(
       return {
         currencyId: c.id, code: c.code, symbol: c.symbol, isBase: true,
         totalIncome: allMonthIncome._sum.amount ?? 0,
-        expenses: incomeFundedExpenses._sum.amount ?? 0,
+        expenses: incomeFundedExpenses.reduce((s, t) => s + incomePkrForTransaction(t), 0),
         potDeposits,
       };
     }

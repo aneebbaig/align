@@ -117,7 +117,7 @@ class _QuickAddProjectPageState extends ConsumerState<QuickAddProjectPage> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('New Project', style: AppTextStyles.headlineSmall),
+        title: const Text('New project', style: AppTextStyles.headlineSmall),
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.foreground),
           onPressed: _close,

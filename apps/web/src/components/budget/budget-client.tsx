@@ -40,6 +40,7 @@ interface BudgetData {
   budget: { id: string; totalBudget: number } | null;
   totalSpent: number;
   totalIncome: number;
+  carriedOver: number;
   unbudgetedExpenses: UnbudgetedExpense[];
   unbudgetedTotal: number;
   spendingByCategory: Record<string, number>;
@@ -100,9 +101,10 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
   // Live ready-to-assign based on current inputs (in paisas)
   const liveAssigned = Object.values(allocations).reduce((sum, v) => sum + (parseFloat(v) || 0) * 100, 0);
   const liveSavings = Object.values(savingsAllocs).reduce((sum, v) => sum + (parseFloat(v) || 0) * 100, 0);
-  const liveReadyToAssign = budgetData.totalIncome - liveAssigned - liveSavings;
+  const liveReadyToAssign = budgetData.totalIncome + budgetData.carriedOver - liveAssigned - liveSavings;
 
   const hasIncome = budgetData.totalIncome > 0;
+  const showReadyToAssign = hasIncome || budgetData.carriedOver !== 0;
 
   useDebouncedSave(async () => {
     setIsSaving(true);
@@ -140,10 +142,10 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
     startTransition(async () => {
       const result = await startNewBudgetPeriod();
       if (result.success && result.period) {
-        const surplus = result.reconciledSurplus ?? 0;
+        const carried = result.carriedOver ?? 0;
         toast.success(
           `Started ${getMonthName(result.period.month)} ${result.period.year}` +
-          (surplus > 0 ? ` · ${baseSymbol} ${fmt(surplus)} leftover, now counted as accumulated savings` : ""),
+          (carried > 0 ? ` · ${baseSymbol} ${fmt(carried)} carried over from earlier months` : ""),
         );
         setConfirmNewMonth(false);
         router.push(`/budget?month=${result.period.month}&year=${result.period.year}`);
@@ -181,7 +183,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
       </div>
 
       {/* ── Ready to Assign ── */}
-      {hasIncome && (
+      {showReadyToAssign && (
         <div className={cn(
           "rounded-xl border px-5 py-4",
           rtaNegative ? "bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-700" :
@@ -202,6 +204,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
               </div>
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                 <span>Income {baseSymbol} {fmt(budgetData.totalIncome)}</span>
+                {budgetData.carriedOver !== 0 && <><span>·</span><span>Carried over {baseSymbol} {fmt(budgetData.carriedOver)}</span></>}
                 <span>·</span>
                 <span>Categories {baseSymbol} {fmt(liveAssigned)}</span>
                 {liveSavings > 0 && <><span>·</span><span>Savings {baseSymbol} {fmt(liveSavings)}</span></>}
@@ -315,7 +318,7 @@ export function BudgetClient({ budgetData, categories, currencies, month, year }
           <span className="text-xs text-muted-foreground">Auto-saves as you type</span>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Assign income to spending categories. <span className="font-medium">Available</span> = last month&apos;s leftover + assigned − spent.
+          Assign income to spending categories. <span className="font-medium">Available</span> = assigned − spent. Unspent income carries into next month&apos;s Ready to Assign.
         </p>
         {liveAssigned > 0 && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/15 rounded-lg px-4 py-2.5 mb-4">

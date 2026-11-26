@@ -59,10 +59,13 @@ class PlansDatasource {
     String? name,
     String? status,
     int? estimatedTotalPaisas,
+    bool setDescription = false,
+    String? description,
   }) async {
     try {
       await _dio.patch(ApiConstants.planById(id), data: {
         if (name != null) 'name': name,
+        if (setDescription) 'description': description,
         if (status != null) 'status': status,
         if (estimatedTotalPaisas != null) 'estimatedTotalPaisas': estimatedTotalPaisas,
       });
@@ -107,9 +110,12 @@ class PlansDatasource {
     DateTime? dueDate,
     bool setNotes = false,
     String? notes,
+    bool setGroup = false,
+    String? groupName,
   }) async {
     try {
       await _dio.patch(ApiConstants.planItem(planId, itemId), data: {
+        if (setGroup) 'groupName': groupName,
         if (name != null) 'name': name,
         if (estimatedCostPaisas != null) 'estimatedCostPaisas': estimatedCostPaisas,
         if (setActual) 'actualCostPaisas': actualCostPaisas,
@@ -182,6 +188,7 @@ class PlansDatasource {
         status: m['status'] as String,
         notes: m['notes'] as String?,
         dueDate: m['dueDate'] != null ? DateTime.parse(m['dueDate'] as String) : null,
+        groupName: m['groupName'] as String?,
       );
 
   static PlanDetailEntity _parseDetail(Map<String, dynamic> m) {
@@ -194,6 +201,8 @@ class PlansDatasource {
       totalEstimatedPaisas: m['totalEstimatedPaisas'] as int,
       totalPaidPaisas: m['totalPaidPaisas'] as int,
       remainingPaisas: m['remainingPaisas'] as int,
+      description: m['description'] as String?,
+      completedAt: m['completedAt'] != null ? DateTime.parse(m['completedAt'] as String) : null,
       targetDate: m['targetDate'] != null ? DateTime.parse(m['targetDate'] as String) : null,
       items: (m['items'] as List<dynamic>).map((e) => _parseItem(e as Map<String, dynamic>)).toList(),
       affordability: PlanAffordability(

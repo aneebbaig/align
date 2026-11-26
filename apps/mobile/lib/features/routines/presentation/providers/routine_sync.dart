@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app.dart';
 import '../../data/datasources/routines_datasource.dart';
+import '../../data/log_nudge.dart';
 import '../../data/reminder_service.dart';
 import '../../data/tick_queue.dart';
 import '../../domain/entities/routine_entity.dart';
@@ -37,11 +38,14 @@ class RoutineSyncHost extends ConsumerStatefulWidget {
 }
 
 class _RoutineSyncHostState extends ConsumerState<RoutineSyncHost> with WidgetsBindingObserver {
+  bool _checkedLaunch = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ReminderService.instance.onOpen = () => ref.read(goRouterProvider).go('/routines');
+    ReminderService.instance.onNudgeTap = () => ref.read(goRouterProvider).push('/quick-add');
     _sync();
   }
 
@@ -49,6 +53,7 @@ class _RoutineSyncHostState extends ConsumerState<RoutineSyncHost> with WidgetsB
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     ReminderService.instance.onOpen = null;
+    ReminderService.instance.onNudgeTap = null;
     super.dispose();
   }
 
@@ -60,6 +65,13 @@ class _RoutineSyncHostState extends ConsumerState<RoutineSyncHost> with WidgetsB
   Future<void> _sync() async {
     try {
       await ReminderService.instance.init();
+      if (!_checkedLaunch) {
+        _checkedLaunch = true;
+        if (await ReminderService.instance.launchedFromNudge() && mounted) {
+          ref.read(goRouterProvider).push('/quick-add');
+        }
+      }
+      await LogNudge.reschedule();
       await syncRoutines(ref);
     } catch (e) {
       debugPrint('Routine sync failed: $e');

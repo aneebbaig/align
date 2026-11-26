@@ -26,6 +26,7 @@ class ApiConstants {
   static const String expenses = '/expenses';
   static const String expenseFundingContext = '/expenses/funding-context';
   static const String income = '/income';
+  static const String quickPicks = '/quick-picks';
   static const String budget = '/budget';
   static const String savings = '/savings';
   static const String loans = '/loans';
@@ -59,6 +60,9 @@ class ApiConstants {
   static String investmentContributions(String id) => '/investments/$id/contributions';
   static String investmentContributionById(String id, String cid) =>
       '/investments/$id/contributions/$cid';
+  static const String preferences = '/preferences';
+  static String investmentPlanCategoryById(String categoryId) =>
+      '/investment-plan/categories/$categoryId';
   static String investmentPlanCategoryContributions(String categoryId) =>
       '/investment-plan/categories/$categoryId/contributions';
 

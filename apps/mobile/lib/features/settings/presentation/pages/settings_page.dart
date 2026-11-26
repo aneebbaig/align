@@ -3,12 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/server_url.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_row.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../routines/data/log_nudge.dart';
+import '../../../routines/data/reminder_service.dart';
+import '../../domain/menu_sections.dart';
+import '../providers/menu_prefs_provider.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -72,6 +78,9 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ),
 
+                // Menu section
+                const _MenuSettings(),
+
                 // Server section
                 const _SectionLabel('Server'),
                 AppCard(
@@ -88,6 +97,9 @@ class SettingsPage extends ConsumerWidget {
                     onTap: () => context.push('/setup?change=1'),
                   ),
                 ),
+
+                const _SectionLabel('Reminders'),
+                const _NudgeSettings(),
 
                 // About section
                 const _SectionLabel('About'),
@@ -179,4 +191,145 @@ class _SectionLabel extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// The daily "log your spending" reminder. Stored on this phone only.
+class _NudgeSettings extends StatefulWidget {
+  const _NudgeSettings();
+
+  @override
+  State<_NudgeSettings> createState() => _NudgeSettingsState();
+}
+
+class _NudgeSettingsState extends State<_NudgeSettings> {
+  bool _enabled = true;
+  int _minutes = nudgeDefaultMinutes;
+  bool _permitted = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await LogNudge.isEnabled();
+    final minutes = await LogNudge.minutes();
+    final permitted = await ReminderService.instance.notificationsEnabled();
+    if (mounted) setState(() { _enabled = enabled; _minutes = minutes; _permitted = permitted; });
+  }
+
+  Future<void> _requestPermission() async {
+    await ReminderService.instance.requestPermissions();
+    await LogNudge.reschedule();
+    await _load();
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _minutes ~/ 60, minute: _minutes % 60),
+    );
+    if (picked == null) return;
+    final m = picked.hour * 60 + picked.minute;
+    setState(() => _minutes = m);
+    await LogNudge.setMinutes(m);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = TimeOfDay(hour: _minutes ~/ 60, minute: _minutes % 60).format(context);
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          SwitchListTile(
+            value: _enabled,
+            activeThumbColor: AppColors.primary,
+            secondary: const Icon(Icons.notifications_outlined, color: AppColors.mutedForeground, size: 20),
+            title: const Text('Daily reminder to log spending', style: AppTextStyles.bodyMedium),
+            onChanged: (v) async {
+              setState(() => _enabled = v);
+              await LogNudge.setEnabled(v);
+            },
+          ),
+          if (_enabled)
+            AppListRow(
+              leading: const Icon(Icons.schedule, color: AppColors.mutedForeground, size: 20),
+              title: 'Reminder time',
+              subtitle: time,
+              trailing: const Icon(Icons.chevron_right, color: AppColors.mutedForeground, size: 20),
+              showBorder: false,
+              onTap: _pickTime,
+            ),
+          if (_enabled && !_permitted)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('Notifications are off for Align',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
+                  ),
+                  TextButton(onPressed: _requestPermission, child: const Text('Turn on')),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Show in menu" switches, shared with the web app. Older servers have no
+/// preferences endpoint, so the whole card disappears instead of erroring.
+class _MenuSettings extends ConsumerWidget {
+  const _MenuSettings();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(menuPrefsProvider);
+    if (!prefs.supported) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionLabel('Menu'),
+        AppCard(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                child: Text(
+                  'Hide sections you do not use. Only changes your own menu.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
+              for (final section in phoneSections)
+                SwitchListTile(
+                  value: !prefs.hidden.contains(section.key),
+                  activeThumbColor: AppColors.primary,
+                  title: Text(section.label, style: AppTextStyles.bodyMedium),
+                  onChanged: (shown) async {
+                    try {
+                      await ref.read(menuPrefsProvider.notifier).setHidden(section.key, !shown);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ref.read(toastServiceProvider).error(
+                              context,
+                              e is AppException ? e.message : 'Failed to save',
+                            );
+                      }
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

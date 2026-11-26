@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
   Plus, LineChart, RefreshCw, Trash2, ChevronDown, ChevronUp, Wallet, MoreHorizontal,
-  Landmark, TrendingUp, Gem, Bitcoin, PiggyBank, Layers, Minus,
+  Eraser, Landmark, TrendingUp, Gem, Bitcoin, PiggyBank, Layers, Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
 import { getExpenseFundingContext } from "@/actions/expenses";
-import { BudgetPeriodOverride, monthYearFromDateStr } from "@/components/shared/budget-period-override";
+import { monthYearFromDateStr } from "@/components/shared/budget-period-override";
+import { EntryDate, useLastUsedDate } from "@/components/shared/entry-date";
+import { rememberEntryDate } from "@/lib/day-strip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { investmentGain, withdrawnTotal } from "@/lib/investment-math";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import {
-  updateInvestment, deleteInvestment,
+  updateInvestment, deleteInvestment, deleteInvestmentCategory,
   addInvestmentContribution, deleteInvestmentContribution, withdrawFromInvestment,
   addMoneyToCategory, upsertInvestmentPlan,
   type InvestmentSuggestion,
@@ -248,6 +250,7 @@ export function InvestmentsClient({
     ...investments.filter((i) => !i.planCategoryId || !categoryIds.has(i.planCategoryId)).map((investment) => ({ kind: "uncategorized" as const, investment })),
   ];
 
+  const lastUsedDate = useLastUsedDate();
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(BLANK_ADD_FORM);
   const [editItem, setEditItem] = useState<Investment | null>(null);
@@ -258,7 +261,8 @@ export function InvestmentsClient({
     name: string;
     currentValue?: number;
   } | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null); // clear money & history
+  const [deleteTarget, setDeleteTarget] = useState<{ investmentId?: string; categoryId?: string; name: string } | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [editFields, setEditFields] = useState<CustomFields>({});
@@ -339,6 +343,7 @@ export function InvestmentsClient({
         : await addMoneyToCategory(contributeTarget.categoryId as string, payload);
     if (result.success) {
       toast.success(contributeTarget.mode === "WITHDRAWAL" ? "Withdrawal recorded" : "Money added");
+      rememberEntryDate(contributionForm.date, new Date());
       setContributeTarget(null);
       setContributionForm(BLANK_CONTRIBUTION);
     } else toast.error(result.error ?? "Failed");
@@ -357,6 +362,16 @@ export function InvestmentsClient({
     if (result.success) toast.success("Deleted");
     else toast.error(result.error ?? "Failed");
     setDeleteId(null);
+  }
+
+  async function handleDeleteInvestment() {
+    if (!deleteTarget) return;
+    const result = deleteTarget.categoryId
+      ? await deleteInvestmentCategory(deleteTarget.categoryId)
+      : await deleteInvestment(deleteTarget.investmentId as string);
+    if (result.success) toast.success("Investment deleted");
+    else toast.error(result.error ?? "Failed");
+    setDeleteTarget(null);
   }
 
   function openEdit(inv: Investment) {
@@ -383,7 +398,7 @@ export function InvestmentsClient({
       />
 
       <div className="space-y-6">
-      {/* Plan card = target split (what you intend to invest). SIP list below = actual contributions. */}
+      {/* Plan card = target split (what you intend to invest). investment list below = actual contributions. */}
       <InvestmentPlanCard plan={plan} suggestion={suggestion} baseSymbol={baseSymbol} />
 
       <div className="rounded-xl border border-border bg-background p-5 space-y-4">
@@ -403,7 +418,7 @@ export function InvestmentsClient({
         </div>
         {investments.length > 0 && (
           <p className="text-xs text-muted-foreground -mt-2">
-            {baseSymbol} {(totalInvested / 100).toLocaleString()} invested across {investments.length} SIP{investments.length !== 1 ? "s" : ""}
+            {baseSymbol} {(totalInvested / 100).toLocaleString()} invested across {investments.length} investment{investments.length !== 1 ? "s" : ""}
           </p>
         )}
 
@@ -498,26 +513,37 @@ export function InvestmentsClient({
                         History
                       </Button>
                     )}
-                    {inv && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground" aria-label="More actions">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground" aria-label="More actions">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {inv && (
                           <DropdownMenuItem onClick={() => openEdit(inv)}>
                             <RefreshCw className="h-3.5 w-3.5" />
                             Update value
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(inv.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                            {row.kind === "category" ? "Clear money & history" : "Delete SIP"}
+                        )}
+                        {inv && row.kind === "category" && (
+                          <DropdownMenuItem onClick={() => setDeleteId(inv.id)}>
+                            <Eraser className="h-3.5 w-3.5" />
+                            Clear money &amp; history
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteTarget(row.kind === "category"
+                            ? { categoryId: row.category.id, name }
+                            : { investmentId: row.investment.id, name })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete investment
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {isExpanded && inv && (
@@ -612,10 +638,15 @@ export function InvestmentsClient({
                 </p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <Input type="date" value={contributionForm.date} onChange={(e) => setContributionForm((f) => ({ ...f, date: e.target.value }))} />
-            </div>
+            <EntryDate
+              date={contributionForm.date}
+              onDateChange={(d) => setContributionForm((f) => ({ ...f, date: d }))}
+              homePeriod={contributionForm.book ? currentPeriod : undefined}
+              checked={contributionForm.fileUnderDate}
+              onCheckedChange={contributionForm.book ? (v) => setContributionForm((f) => ({ ...f, fileUnderDate: v })) : undefined}
+              affectsFunding={contributeTarget?.mode === "DEPOSIT"}
+              lastUsed={lastUsedDate}
+            />
             <div className="space-y-1.5">
               <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
               <Textarea rows={2} value={contributionForm.notes} onChange={(e) => setContributionForm((f) => ({ ...f, notes: e.target.value }))} />
@@ -636,12 +667,6 @@ export function InvestmentsClient({
             </div>
             {contributionForm.book && (
               <>
-                <BudgetPeriodOverride
-                  date={contributionForm.date}
-                  checked={contributionForm.fileUnderDate}
-                  onChange={(v) => setContributionForm((f) => ({ ...f, fileUnderDate: v }))}
-                  affectsFunding={contributeTarget?.mode === "DEPOSIT"}
-                />
                 {contributeTarget?.mode === "DEPOSIT" && availableIncome != null && (
                   <p className={cn("text-xs", availableIncome >= 0 ? "text-muted-foreground" : "text-red-500")}>
                     Paid from income · {baseSymbol} {(availableIncome / 100).toLocaleString()} available
@@ -687,6 +712,14 @@ export function InvestmentsClient({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Delete investment?"
+        description={`Delete ${deleteTarget?.name ?? "this investment"}? Its money and history are removed. Expenses or income it booked are removed too.${deleteTarget?.categoryId ? " It is also removed from your investment plan; the other percentages stay as they are." : ""}`}
+        onConfirm={handleDeleteInvestment}
+      />
 
       <ConfirmDialog
         open={!!deleteId}

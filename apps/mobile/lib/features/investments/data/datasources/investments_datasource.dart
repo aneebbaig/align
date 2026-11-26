@@ -61,6 +61,15 @@ class InvestmentsDatasource {
     }
   }
 
+  /// Removes a plan category (and its money/history) from the plan.
+  Future<void> deletePlanCategory(String id) async {
+    try {
+      await _dio.delete(ApiConstants.investmentPlanCategoryById(id));
+    } catch (e) {
+      throw ErrorHandler.handle(e);
+    }
+  }
+
   Future<void> addMoneyToCategory({
     required String planCategoryId,
     required int amountPaisas,

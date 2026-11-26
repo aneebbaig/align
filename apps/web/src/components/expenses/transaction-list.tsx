@@ -76,11 +76,11 @@ export function TransactionList({
 
   return (
     <>
-      <div className="space-y-8 stagger">
+      <div className="space-y-4 stagger">
         {Object.entries(groups).map(([date, txs]) => (
           <div key={date}>
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-[0.14em] shrink-0">
+            <div className="flex items-center gap-3 mb-1 mt-4 px-1">
+              <span className="text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-[0.14em] shrink-0">
                 {date}
               </span>
               <div className="flex-1 h-px bg-border/50" />
@@ -94,7 +94,7 @@ export function TransactionList({
                   <div
                     key={tx.id}
                     className={cn(
-                      "flex items-center gap-3 py-3.5 group first:pt-0 last:pb-0",
+                      "flex items-center gap-3 py-2 group",
                       isOverBudget && "bg-red-50/30 dark:bg-red-950/10 -mx-2 px-2 rounded-lg"
                     )}
                   >

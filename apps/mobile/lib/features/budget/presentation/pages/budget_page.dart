@@ -50,6 +50,10 @@ class BudgetPage extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
+                    if (d.readyToAssignPaisas != null) ...[
+                      _ReadyToAssignCard(data: d),
+                      const SizedBox(height: 12),
+                    ],
                     if (d.hasBudget) ...[
                       _OverviewCard(data: d),
                       const SizedBox(height: 20),
@@ -91,6 +95,42 @@ class BudgetPage extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ReadyToAssignCard extends StatelessWidget {
+  const _ReadyToAssignCard({required this.data});
+  final BudgetData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final rta = data.readyToAssignPaisas!;
+    final carried = data.carriedOverPaisas ?? 0;
+    final income = data.totalIncomePaisas;
+    final parts = <String>[
+      if (income != null) 'Income ${income.formatPKR()}',
+      if (carried != 0) 'Carried over ${carried.formatPKR()}',
+    ];
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Ready to assign', style: AppTextStyles.labelSmall.copyWith(color: AppColors.mutedForeground)),
+          const SizedBox(height: 4),
+          Text(
+            rta.formatPKR(),
+            style: AppTextStyles.currencySmall.copyWith(
+              fontSize: 24,
+              color: rta < 0 ? AppColors.destructive : AppColors.foreground,
+            ),
+          ),
+          if (parts.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(parts.join(' · '), style: AppTextStyles.bodySmall),
+          ],
+        ],
       ),
     );
   }

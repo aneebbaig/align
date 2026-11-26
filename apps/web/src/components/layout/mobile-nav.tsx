@@ -10,6 +10,7 @@ import {
   FlaskConical, ClipboardList, FolderKanban, Table2, AlarmClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isHrefHidden } from "@/lib/hidden-sections";
 
 const PRIMARY_NAV = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
@@ -31,7 +32,7 @@ const MORE_GROUPS = [
   {
     label: "Planning",
     items: [
-      { href: "/planner", label: "Planner", icon: Table2 },
+      { href: "/forecast", label: "Forecast", icon: Table2 },
       { href: "/plans", label: "Plans", icon: CalendarDays },
       { href: "/want-list", label: "Want List", icon: ShoppingCart },
       { href: "/need-list", label: "Need List", icon: ClipboardList },
@@ -50,14 +51,14 @@ const MORE_GROUPS = [
   },
 ];
 
-export function MobileNav({ role }: { role?: string }) {
+export function MobileNav({ role, hiddenSections = [] }: { role?: string; hiddenSections?: string[] }) {
   const pathname = usePathname();
   const [showMore, setShowMore] = useState(false);
   const isSuperAdmin = role === "SUPER_ADMIN";
 
   const visibleGroups = MORE_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter(({ href }) => href !== "/vault" || isSuperAdmin),
+    items: group.items.filter(({ href }) => (href !== "/vault" || isSuperAdmin) && !isHrefHidden(href, hiddenSections)),
   })).filter((group) => group.items.length > 0);
 
   const isMoreActive = visibleGroups
@@ -119,7 +120,7 @@ export function MobileNav({ role }: { role?: string }) {
       )}
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border flex items-center justify-around h-16 px-1">
-        {PRIMARY_NAV.map(({ href, label, icon: Icon }) => {
+        {PRIMARY_NAV.filter(({ href }) => !isHrefHidden(href, hiddenSections)).map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(href + "/");
           return (

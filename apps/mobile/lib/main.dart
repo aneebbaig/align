@@ -6,6 +6,8 @@ import 'package:home_widget/home_widget.dart';
 import 'app.dart';
 import 'core/network/server_url.dart';
 import 'core/services/storage_service.dart';
+import 'features/settings/data/menu_prefs_store.dart';
+import 'features/settings/presentation/providers/menu_prefs_provider.dart';
 
 @pragma('vm:entry-point')
 void backgroundCallback(Uri? uri) {
@@ -34,12 +36,15 @@ void main() async {
   // whether this install has been pointed at a server.
   final storage = StorageService();
   final serverUrl = await storage.getServerUrl();
+  // Cached menu choices, so hidden sections stay hidden on the first frame.
+  final menuPrefs = await MenuPrefsStore.read();
 
   runApp(
     ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(storage),
         initialServerUrlProvider.overrideWithValue(serverUrl),
+        initialMenuPrefsProvider.overrideWithValue(menuPrefs),
       ],
       child: const AlignApp(),
     ),

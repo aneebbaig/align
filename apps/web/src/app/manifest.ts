@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: `${APP_NAME} - Personal Finance`,
     short_name: APP_NAME,
     description: "Your private personal finance manager",
-    start_url: "/dashboard",
+    start_url: "/expenses",
     display: "standalone",
     background_color: "#171410",
     theme_color: "#171410",

@@ -1,15 +1,16 @@
 "use server";
 
-// PRIVACY CRITICAL: All queries MUST filter by session userId. Never return another user's data.
+// PRIVACY CRITICAL: The Vault is personal (secret gifts for the partner). All queries MUST filter by the
+// real login id (getLoginUserId), NOT the household id. Never return another login's surprises.
 
 import { revalidatePath } from "next/cache";
-import { getUserId } from "@/lib/session";
+import { getLoginUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { toPaisas } from "@/lib/utils";
 import { ActionResult } from "@/types";
 
 export async function getSurprises() {
-  const userId = await getUserId();
+  const userId = await getLoginUserId();
   return prisma.surprise.findMany({
     where: { userId },
     include: { items: true },
@@ -18,7 +19,7 @@ export async function getSurprises() {
 }
 
 export async function getSurprise(id: string) {
-  const userId = await getUserId();
+  const userId = await getLoginUserId();
   return prisma.surprise.findFirst({
     where: { id, userId },
     include: { items: true },
@@ -34,7 +35,7 @@ export async function createSurprise(data: {
   estimatedBudget: number;
 }): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     await prisma.surprise.create({
       data: {
         ...data,
@@ -55,7 +56,7 @@ export async function updateSurprise(id: string, data: Partial<{
   name: string; description: string; status: string; estimatedBudget: number;
 }>): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     await prisma.surprise.updateMany({
       where: { id, userId },
       data: {
@@ -86,7 +87,7 @@ export async function createSurpriseItem(surpriseId: string, data: {
   notes?: string;
 }): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     const surprise = await prisma.surprise.findFirst({ where: { id: surpriseId, userId } });
     if (!surprise) return { success: false, error: "Not found" };
 
@@ -108,7 +109,7 @@ export async function updateSurpriseItem(surpriseId: string, itemId: string, dat
   name: string; status: string; estimatedCost: number; actualCost: number; purchaseLink: string; notes: string;
 }>): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     const surprise = await prisma.surprise.findFirst({ where: { id: surpriseId, userId } });
     if (!surprise) return { success: false, error: "Not found" };
 
@@ -133,7 +134,7 @@ export async function updateSurpriseItem(surpriseId: string, itemId: string, dat
 
 export async function deleteSurpriseItem(surpriseId: string, itemId: string): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     const surprise = await prisma.surprise.findFirst({ where: { id: surpriseId, userId } });
     if (!surprise) return { success: false, error: "Not found" };
 
@@ -150,7 +151,7 @@ export async function deleteSurpriseItem(surpriseId: string, itemId: string): Pr
 
 export async function deleteSurprise(id: string): Promise<ActionResult> {
   try {
-    const userId = await getUserId();
+    const userId = await getLoginUserId();
     await prisma.surprise.deleteMany({ where: { id, userId } });
     revalidatePath("/vault");
     return { success: true };

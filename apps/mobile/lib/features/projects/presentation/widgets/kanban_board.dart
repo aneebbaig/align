@@ -213,11 +213,13 @@ class _AddTaskFieldState extends State<_AddTaskField> {
     final title = _ctrl.text.trim();
     if (title.isEmpty) return;
     setState(() => _busy = true);
-    _focus.unfocus(); // close the keyboard after adding
     await widget.onAdd(title);
     if (mounted) {
+      // Keep the field open, cleared and focused so several tasks can be
+      // entered in a row; dismissing the keyboard ends it.
       _ctrl.clear();
       setState(() => _busy = false);
+      _focus.requestFocus();
     }
   }
 

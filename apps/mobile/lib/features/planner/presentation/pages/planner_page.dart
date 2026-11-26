@@ -32,7 +32,13 @@ class PlannerPage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('Planner', style: AppTextStyles.headlineSmall),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Forecast', style: AppTextStyles.headlineSmall),
+            Text('Your cash month by month – separate from your real money.', style: AppTextStyles.bodySmall),
+          ],
+        ),
         actions: [
           if (data != null) ...[
             IconButton(
@@ -49,7 +55,7 @@ class PlannerPage extends ConsumerWidget {
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'lines', child: Text('Manage lines', style: AppTextStyles.bodyMedium)),
-                PopupMenuItem(value: 'settings', child: Text('Planner settings', style: AppTextStyles.bodyMedium)),
+                PopupMenuItem(value: 'settings', child: Text('Forecast settings', style: AppTextStyles.bodyMedium)),
               ],
             ),
           ],
@@ -62,7 +68,7 @@ class PlannerPage extends ConsumerWidget {
         child: async.when(
           data: (p) => _Content(data: p),
           loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-          error: (_, __) => const Center(child: Text('Could not load the planner', style: AppTextStyles.bodyMedium)),
+          error: (_, __) => const Center(child: Text('Could not load the forecast', style: AppTextStyles.bodyMedium)),
         ),
       ),
     );

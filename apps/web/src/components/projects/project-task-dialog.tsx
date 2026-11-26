@@ -9,10 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { updateProjectTask } from "@/actions/projects";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { updateProjectTask, deleteProjectTask } from "@/actions/projects";
 import {
   PROJECT_TASK_STATUSES, PROJECT_TASK_STATUS_LABELS,
-  PROJECT_TASK_PRIORITIES,
+  PROJECT_TASK_PRIORITIES, PROJECT_TASK_PRIORITY_LABELS,
 } from "@/lib/constants";
 import type { ProjectTaskData } from "@/components/projects/project-task-card";
 import { TagPicker, type TagOption } from "@/components/projects/tag-picker";
@@ -36,6 +37,33 @@ export function ProjectTaskDialog({
   );
   const [tagIds, setTagIds] = useState<string[]>(task.tags?.map((t) => t.id) ?? []);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const initialDue = task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "";
+  const initialTagIds = task.tags?.map((t) => t.id) ?? [];
+  const dirty =
+    title !== task.title ||
+    description !== (task.description ?? "") ||
+    status !== task.status ||
+    priority !== task.priority ||
+    dueDate !== initialDue ||
+    tagIds.length !== initialTagIds.length ||
+    tagIds.some((id) => !initialTagIds.includes(id));
+
+  async function handleDelete() {
+    setDeleting(true);
+    const result = await deleteProjectTask(task.id);
+    setDeleting(false);
+    if (result.success) {
+      toast.success("Task deleted");
+      setConfirmOpen(false);
+      onOpenChange(false);
+      onSaved();
+    } else {
+      toast.error(result.error ?? "Failed to delete");
+    }
+  }
 
   async function save() {
     if (!title.trim()) return;
@@ -60,7 +88,12 @@ export function ProjectTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onEscapeKeyDown={(e) => { if (dirty) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (dirty) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (dirty) e.preventDefault(); }}
+      >
         <DialogHeader>
           <DialogTitle>Task</DialogTitle>
         </DialogHeader>
@@ -99,7 +132,7 @@ export function ProjectTaskDialog({
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PROJECT_TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p} className="capitalize">{p.toLowerCase()}</SelectItem>
+                    <SelectItem key={p} value={p} >{PROJECT_TASK_PRIORITY_LABELS[p]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -119,8 +152,25 @@ export function ProjectTaskDialog({
           <Button onClick={save} className="w-full" disabled={saving || !title.trim()}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-red-600 hover:text-red-600 dark:text-red-400 dark:hover:text-red-400"
+            onClick={() => setConfirmOpen(true)}
+            disabled={saving}
+          >
+            Delete task
+          </Button>
         </div>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete task?"
+        description="This cannot be undone."
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </Dialog>
   );
 }

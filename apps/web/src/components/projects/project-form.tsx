@@ -79,7 +79,7 @@ export function ProjectForm({ project, onSuccess }: Props) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1">
-        <Label>Project Name</Label>
+        <Label>Project name</Label>
         <Input placeholder="e.g. Acme website redesign" {...register("name", { required: true })} />
       </div>
 
@@ -133,7 +133,7 @@ export function ProjectForm({ project, onSuccess }: Props) {
       </div>
 
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : project ? "Save Changes" : "Create Project"}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : project ? "Save Changes" : "Create project"}
       </Button>
     </form>
   );

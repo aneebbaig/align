@@ -30,11 +30,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       data: {
         id: plan.id,
         name: plan.name,
+        description: plan.description,
         icon: plan.icon,
         coverColor: plan.coverColor,
         planType: plan.planType,
         status: plan.status,
         targetDate: plan.targetDate ? plan.targetDate.toISOString() : null,
+        completedAt: plan.completedAt ? plan.completedAt.toISOString() : null,
         totalEstimatedPaisas: totals.estimated,
         totalPaidPaisas: totals.paid,
         remainingPaisas: remaining,
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  description: z.string().max(1000).nullable().optional(),
   status: z.enum(["PLANNING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).optional(),
   targetDate: z.string().nullable().optional(),
   coverColor: z.string().max(32).optional(),
@@ -88,7 +91,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const d = parsed.data;
     const update: Prisma.PlanUncheckedUpdateManyInput = {};
     if (d.name != null) update.name = d.name;
-    if (d.status != null) update.status = d.status;
+    if (d.description !== undefined) update.description = d.description?.trim() || null;
+    if (d.status != null) {
+      update.status = d.status;
+      // Same rule as the web: completing stamps the date, any other status clears it.
+      update.completedAt = d.status === "COMPLETED" ? new Date() : null;
+    }
     if (d.coverColor != null) update.coverColor = d.coverColor;
     if (d.targetDate !== undefined) update.targetDate = d.targetDate ? new Date(d.targetDate) : null;
     if (d.estimatedTotalPaisas != null) update.estimatedTotalCost = d.estimatedTotalPaisas;

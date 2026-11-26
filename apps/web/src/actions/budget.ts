@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { ActionResult } from "@/types";
 import { getCurrentPeriod, nextPeriod } from "@/lib/month";
 import { toPaisas } from "@/lib/utils";
+import { getIncomeCarry } from "@/lib/expenses/funding";
 
 export async function getBudget(month: number, year: number) {
   await getUserId();
@@ -134,8 +135,9 @@ export async function getReadyToAssign(month: number, year: number) {
   const totalIncome = incomeTransactions.reduce((s, t) => s + t.amount, 0);
   const totalAssigned = budget?.budgetCategories.reduce((s, bc) => s + bc.allocatedAmount, 0) ?? 0;
   const totalPlannedSavings = budget?.savingsAllocations.reduce((s, sa) => s + sa.amount, 0) ?? 0;
+  const carriedOver = (await getIncomeCarry(userId, month, year)).carryIn;
 
-  return { totalIncome, readyToAssign: totalIncome - totalAssigned - totalPlannedSavings };
+  return { totalIncome, carriedOver, readyToAssign: totalIncome + carriedOver - totalAssigned - totalPlannedSavings };
 }
 
 export async function getBudgetWithSpending(month: number, year: number) {
@@ -179,7 +181,8 @@ export async function getBudgetWithSpending(month: number, year: number) {
 
   const totalAssigned = budget?.budgetCategories.reduce((s, bc) => s + bc.allocatedAmount, 0) ?? 0;
   const totalPlannedSavings = budget?.savingsAllocations.reduce((s, sa) => s + sa.amount, 0) ?? 0;
-  const readyToAssign = totalIncome - totalAssigned - totalPlannedSavings;
+  const carriedOver = (await getIncomeCarry(user.id, month, year)).carryIn;
+  const readyToAssign = totalIncome + carriedOver - totalAssigned - totalPlannedSavings;
 
   const budgetedCategoryIds = new Set(budget?.budgetCategories.map((bc) => bc.categoryId) ?? []);
   const unbudgetedExpenses = expenseTransactions.filter((t) => !budgetedCategoryIds.has(t.categoryId));
@@ -189,6 +192,7 @@ export async function getBudgetWithSpending(month: number, year: number) {
     budget,
     totalSpent,
     totalIncome,
+    carriedOver,
     unbudgetedExpenses,
     unbudgetedTotal,
     spendingByCategory,
@@ -226,43 +230,32 @@ export async function getOpenBudgetPeriod(): Promise<{ month: number; year: numb
 
 /**
  * Advance (or set) the open budget period. With no args, advances to the period after the
- * current open one - the typical "my salary arrived, start next month" action.
+ * current open one - the typical "my salary arrived, start next month" action. Nothing is
+ * moved: unspent income of earlier periods carries forward into the new period's Ready to
+ * Assign (see src/lib/budget/carryover.ts), and `carriedOver` reports how much.
  */
-/**
- * Read-only: a closed period's surplus (income − expenses, both by budgetMonth/budgetYear).
- * Nothing is moved anywhere - leftover savings live in `getFinancialPosition()`'s
- * `liquidAvailable`, computed live from the ledger every time it's read.
- */
-async function computePeriodSurplus(month: number, year: number): Promise<number> {
-  const txns = await prisma.transaction.findMany({ where: { budgetMonth: month, budgetYear: year }, select: { amount: true, type: true } });
-  const income = txns.filter((t) => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
-  const expenses = txns.filter((t) => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
-  return Math.max(0, income - expenses);
-}
-
 export async function startNewBudgetPeriod(
   target?: { month: number; year: number },
-): Promise<ActionResult & { period?: { month: number; year: number }; reconciledSurplus?: number }> {
+): Promise<ActionResult & { period?: { month: number; year: number }; carriedOver?: number }> {
   try {
     const user = await getAuthenticatedUser({ currentBudgetMonth: true, currentBudgetYear: true });
     const current = getCurrentPeriod(user.currentBudgetMonth as number | null, user.currentBudgetYear as number | null);
     const next = target ?? nextPeriod(current.month, current.year);
 
-    // Informational only - the closed period's leftover isn't moved anywhere,
-    // it's just counted from here on as part of accumulated (liquid) savings.
-    const reconciledSurplus = await computePeriodSurplus(current.month, current.year);
-
+    // The open period is the household's: it lives on the owner row (user.id).
     await prisma.user.update({
       where: { id: user.id },
       data: { currentBudgetMonth: next.month, currentBudgetYear: next.year },
     });
+
+    const carriedOver = (await getIncomeCarry(user.id, next.month, next.year)).carryIn;
 
     revalidatePath("/budget");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/income");
     revalidatePath("/savings");
-    return { success: true, period: next, reconciledSurplus };
+    return { success: true, period: next, carriedOver };
   } catch (e) {
     console.error("[startNewBudgetPeriod]", e);
     return { success: false, error: "Failed to start new budget period" };

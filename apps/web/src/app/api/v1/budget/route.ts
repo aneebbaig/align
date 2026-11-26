@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 import { getCurrentPeriod } from "@/lib/month";
+import { getIncomeCarry } from "@/lib/expenses/funding";
 
 export async function GET(req: NextRequest) {
   const auth = await requireBearerAuth(req);
@@ -16,18 +17,23 @@ export async function GET(req: NextRequest) {
 
     const { month, year } = getCurrentPeriod(user.currentBudgetMonth, user.currentBudgetYear);
 
-    const [budget, expenseTxns] = await Promise.all([
+    const [budget, expenseTxns, incomeAgg] = await Promise.all([
       prisma.budget.findUnique({
         where: { month_year: { month, year } },
         include: {
           budgetCategories: {
             include: { category: { select: { id: true, name: true, icon: true, color: true } } },
           },
+          savingsAllocations: { select: { amount: true } },
         },
       }),
       prisma.transaction.findMany({
         where: { userId: auth.id, type: "EXPENSE", budgetMonth: month, budgetYear: year },
         select: { categoryId: true, amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { userId: auth.id, type: "INCOME", budgetMonth: month, budgetYear: year },
+        _sum: { amount: true },
       }),
     ]);
 
@@ -35,6 +41,12 @@ export async function GET(req: NextRequest) {
     for (const t of expenseTxns) {
       spendingByCategory[t.categoryId] = (spendingByCategory[t.categoryId] ?? 0) + t.amount;
     }
+
+    const totalIncomePaisas = incomeAgg._sum.amount ?? 0;
+    const carriedOverPaisas = (await getIncomeCarry(auth.id, month, year)).carryIn;
+    const totalAssigned = budget?.budgetCategories.reduce((sum, bc) => sum + bc.allocatedAmount, 0) ?? 0;
+    const totalPlannedSavings = budget?.savingsAllocations.reduce((sum, sa) => sum + sa.amount, 0) ?? 0;
+    const readyToAssignPaisas = totalIncomePaisas + carriedOverPaisas - totalAssigned - totalPlannedSavings;
 
     const totalSpentPaisas = expenseTxns.reduce((s, t) => s + t.amount, 0);
     const monthLabel = new Date(year, month - 1).toLocaleString("en-US", {
@@ -47,6 +59,9 @@ export async function GET(req: NextRequest) {
         period: { month, year, label: monthLabel },
         totalBudgetPaisas: budget?.totalBudget ?? null,
         totalSpentPaisas,
+        totalIncomePaisas,
+        carriedOverPaisas,
+        readyToAssignPaisas,
         remainingPaisas: budget ? budget.totalBudget - totalSpentPaisas : null,
         categories: (budget?.budgetCategories ?? []).map((bc) => {
           const spent = spendingByCategory[bc.categoryId] ?? 0;

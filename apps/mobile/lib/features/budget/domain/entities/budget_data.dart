@@ -29,6 +29,9 @@ class BudgetData {
     required this.totalSpentPaisas,
     required this.remainingPaisas,
     required this.categories,
+    this.totalIncomePaisas,
+    this.carriedOverPaisas,
+    this.readyToAssignPaisas,
   });
 
   final int month;
@@ -38,6 +41,9 @@ class BudgetData {
   final int totalSpentPaisas;
   final int? remainingPaisas;
   final List<BudgetCategoryData> categories;
+  final int? totalIncomePaisas;
+  final int? carriedOverPaisas;
+  final int? readyToAssignPaisas;
 
   bool get hasBudget => totalBudgetPaisas != null;
 }

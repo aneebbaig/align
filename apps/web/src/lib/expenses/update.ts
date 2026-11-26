@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { toLocalDate } from "@/lib/utils";
 import { creditPot, debitPot, type PotEntryPeriod } from "@/lib/pot-helpers";
 import { getBaseCurrency } from "@/lib/currency-helpers";
-import { fetchMonthIncomeIntegrityData, baseIntegrity } from "@/lib/income-helpers";
+import { fetchMonthIncomeIntegrityData } from "@/lib/income-helpers";
+import { getPeriodNets, validateFundingSources, getPotUnits, type FundingSource } from "@/lib/expenses/funding";
+import { incomeChangeDeficit, periodKey } from "@/lib/budget/carryover";
 import { MAX_FUNDING_SOURCES } from "@/lib/constants";
-import { validateFundingSources, getPotUnits, type FundingSource } from "@/lib/expenses/funding";
 
 // Editing a transaction, shared by the web server action and the v1 (mobile)
 // PATCH routes. Every figure the transaction feeds - the month's budget spend,
@@ -99,15 +100,19 @@ export async function updateTransactionCore(userId: string, id: string, input: T
     const newNative = nativeEdited ? input.nativeAmountPaisas! : existing.nativeAmount;
     if (nativeEdited && newNative! <= 0) return { error: "Amount must be positive" };
 
-    // The month it leaves (or shrinks in) must still cover what was spent from it.
+    // The income can't shrink or move later if spending from this month onward would be left unfunded.
     const oldInt = await fetchMonthIncomeIntegrityData(userId, oldPeriod.budgetMonth, oldPeriod.budgetYear);
-    const oldBase = baseIntegrity(oldInt);
-    const keptBase = samePeriod ? amount : 0;
-    if (keptBase < existing.amount) {
-      const left = oldBase.totalIncome - existing.amount + keptBase;
-      if (left < oldBase.expenses + oldBase.potDeposits) {
-        const deficit = oldBase.expenses + oldBase.potDeposits - left;
-        return { error: `Cannot reduce or move this income - ${base.symbol} ${(deficit / 100).toLocaleString()} in expenses/savings that month would be left unfunded.` };
+    const oldKey = periodKey({ month: oldPeriod.budgetMonth, year: oldPeriod.budgetYear });
+    const newKey = periodKey({ month: newPeriod.budgetMonth, year: newPeriod.budgetYear });
+    if (amount < existing.amount || newKey > oldKey) {
+      const before = await getPeriodNets(userId);
+      const after = await getPeriodNets(userId, { excludeTransactionId: id });
+      const target = after.find((n) => n.key === newKey);
+      if (target) target.net += amount;
+      else after.push({ key: newKey, net: amount });
+      const deficit = incomeChangeDeficit(before, after, Math.min(oldKey, newKey));
+      if (deficit > 0) {
+        return { error: `Cannot reduce or move this income - ${base.symbol} ${(deficit / 100).toLocaleString()} in expenses/savings (this month or later) would be left unfunded.` };
       }
     }
     if (existing.nativeCurrencyId && (existing.nativeAmount ?? 0) > 0) {

@@ -275,7 +275,7 @@ class _InvestedSavingsHeader extends StatelessWidget {
               Text('Invested Savings', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
             ]),
             const SizedBox(height: 4),
-            Text('${data.totalInvestedPaisas.formatPKR()} in · ${data.investments.length} SIP${data.investments.length == 1 ? '' : 's'}',
+            Text('${data.totalInvestedPaisas.formatPKR()} in · ${data.investments.length} investment${data.investments.length == 1 ? '' : 's'}',
                 style: AppTextStyles.bodySmall),
           ],
         ),
@@ -392,13 +392,11 @@ class _SipCard extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (inv != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => _showActions(context, ref),
-                  icon: const Icon(Icons.more_horiz, color: AppColors.mutedForeground),
-                ),
-              ],
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () => _showActions(context, ref),
+                icon: const Icon(Icons.more_horiz, color: AppColors.mutedForeground),
+              ),
             ],
           ),
         ],
@@ -416,10 +414,6 @@ class _SipCard extends ConsumerWidget {
 
   void _showActions(BuildContext context, WidgetRef ref) {
     final inv = row.investment;
-    if (inv == null) {
-      _addMoney(context, ref);
-      return;
-    }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.popover,
@@ -438,7 +432,7 @@ class _SipCard extends ConsumerWidget {
                 _addMoney(context, ref);
               },
             ),
-            if (inv.currentValuePaisas > 0)
+            if (inv != null && inv.currentValuePaisas > 0)
               _SheetAction(
                 icon: Icons.remove,
                 label: 'Withdraw',
@@ -447,7 +441,8 @@ class _SipCard extends ConsumerWidget {
                   showWithdrawSheet(context, ref, inv);
                 },
               ),
-            _SheetAction(
+            if (inv != null)
+              _SheetAction(
               icon: Icons.refresh,
               label: 'Update value',
               onTap: () {
@@ -455,7 +450,7 @@ class _SipCard extends ConsumerWidget {
                 showUpdateValueSheet(context, ref, inv);
               },
             ),
-            if (inv.contributions.isNotEmpty)
+            if (inv != null && inv.contributions.isNotEmpty)
               _SheetAction(
                 icon: Icons.history,
                 label: 'History (${inv.contributions.length})',
@@ -464,13 +459,23 @@ class _SipCard extends ConsumerWidget {
                   showHistorySheet(context, ref, inv);
                 },
               ),
+            if (row.category != null && inv != null)
+              _SheetAction(
+                icon: Icons.layers_clear_outlined,
+                label: 'Clear money & history',
+                destructive: true,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmClear(context, ref, inv);
+                },
+              ),
             _SheetAction(
               icon: Icons.delete_outline,
-              label: row.category != null ? 'Clear money & history' : 'Delete SIP',
+              label: 'Delete investment',
               destructive: true,
               onTap: () {
                 Navigator.pop(ctx);
-                _confirmDelete(context, ref, inv);
+                _confirmDelete(context, ref);
               },
             ),
           ],
@@ -479,41 +484,74 @@ class _SipCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, InvestmentEntity inv) async {
-    final keepsCategory = row.category != null;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(keepsCategory ? 'Clear money & history?' : 'Delete SIP?', style: AppTextStyles.bodyLarge),
-        content: Text(
-          keepsCategory
-              ? 'This removes all logged contributions and value for ${inv.name}. The plan investment stays - you can add money into it again any time.'
-              : 'This removes ${inv.name} and its full contribution history.',
-          style: AppTextStyles.bodySmall,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(keepsCategory ? 'Clear' : 'Delete', style: const TextStyle(color: AppColors.destructive)),
-          ),
-        ],
-      ),
+  Future<void> _confirmClear(BuildContext context, WidgetRef ref, InvestmentEntity inv) async {
+    final ok = await _confirm(
+      context,
+      title: 'Clear money & history?',
+      message:
+          'This removes all logged contributions and value for ${inv.name}. The plan investment stays - you can add money into it again any time.',
+      action: 'Clear',
     );
     if (ok != true || !context.mounted) return;
+    await _run(context, ref, () => ref.read(investmentsDatasourceProvider).deleteSip(inv.id), 'Cleared');
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final isCategory = row.category != null;
+    final ok = await _confirm(
+      context,
+      title: 'Delete investment?',
+      message: deleteInvestmentMessage(_name, isCategory: isCategory),
+      action: 'Delete',
+    );
+    if (ok != true || !context.mounted) return;
+    final ds = ref.read(investmentsDatasourceProvider);
+    await _run(
+      context,
+      ref,
+      () => isCategory ? ds.deletePlanCategory(row.category!.id) : ds.deleteSip(row.investment!.id),
+      'Deleted',
+    );
+  }
+
+  Future<bool?> _confirm(BuildContext context,
+          {required String title, required String message, required String action}) =>
+      showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: Text(title, style: AppTextStyles.bodyLarge),
+          content: Text(message, style: AppTextStyles.bodySmall),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(action, style: const TextStyle(color: AppColors.destructive)),
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _run(BuildContext context, WidgetRef ref, Future<void> Function() op, String done) async {
     try {
       HapticFeedback.mediumImpact();
-      await ref.read(investmentsDatasourceProvider).deleteSip(inv.id);
+      await op();
       ref.invalidate(investmentsProvider);
-      if (context.mounted) ref.read(toastServiceProvider).success(context, 'Deleted');
+      if (context.mounted) ref.read(toastServiceProvider).success(context, done);
     } catch (e) {
       if (context.mounted) {
-        ref.read(toastServiceProvider).error(
-            context, e is AppException ? e.message : 'Failed to delete');
+        ref.read(toastServiceProvider).error(context, e is AppException ? e.message : 'Failed to delete');
       }
     }
   }
+}
+
+/// Confirm copy for "Delete investment". Plan categories also leave the plan.
+String deleteInvestmentMessage(String name, {required bool isCategory}) {
+  final base = 'Delete $name? Its money and history are removed. Expenses or income it booked are removed too.';
+  return isCategory
+      ? '$base It is also removed from your investment plan; the other percentages stay as they are.'
+      : base;
 }
 
 class _SheetAction extends StatelessWidget {

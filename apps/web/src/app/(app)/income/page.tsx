@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { getCurrentPeriod, prevPeriod } from "@/lib/month";
-import { getTransactions, getMonthlySummary, getExpenseFundingContext } from "@/actions/expenses";
+import { getTransactions, getMonthlySummary, getExpenseFundingContext, getQuickPicks } from "@/actions/expenses";
 import { getCategories, getUserSettings } from "@/actions/settings";
 import { getCurrencies } from "@/lib/currency-helpers";
 import { IncomeClient } from "@/components/income/income-client";
@@ -17,9 +17,10 @@ export default async function IncomePage() {
   const { month, year } = getCurrentPeriod(settings?.currentBudgetMonth, settings?.currentBudgetYear);
   const last = prevPeriod(month, year);
 
-  const [monthlySummary, fundingCtx] = await Promise.all([
+  const [monthlySummary, fundingCtx, quickPicks] = await Promise.all([
     getMonthlySummary(month, year),
     getExpenseFundingContext(month, year),
+    getQuickPicks("INCOME"),
   ]);
 
   return (
@@ -28,6 +29,7 @@ export default async function IncomePage() {
         transactions={transactions}
         categories={categories}
         currencies={currencies}
+        quickPicks={quickPicks}
         dateFormat={settings?.dateFormat ?? "dd/MM/yyyy"}
         thisMonthIncome={monthlySummary.totalIncome}
         monthlyAvailable={fundingCtx.monthlyIncomeAvailable}

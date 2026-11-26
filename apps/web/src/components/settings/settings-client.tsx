@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ShowInMenuCard } from "@/components/settings/show-in-menu-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -92,6 +93,7 @@ export function SettingsClient({
   users,
   role,
   emailConfigured,
+  hiddenSections = [],
 }: {
   settings: UserSettings | null;
   categories: Category[];
@@ -100,6 +102,7 @@ export function SettingsClient({
   users: AppUser[];
   role: string;
   emailConfigured: boolean;
+  hiddenSections?: string[];
 }) {
   const isSuperAdmin = role === "SUPER_ADMIN";
   const [isPending, startTransition] = useTransition();
@@ -358,7 +361,7 @@ export function SettingsClient({
       </TabsList>
 
       {/* Profile Tab */}
-      <TabsContent value="profile" className="mt-4">
+      <TabsContent value="profile" className="mt-4 space-y-4">
         <Card>
           <CardHeader>
             <CardTitle>Profile & Preferences</CardTitle>
@@ -411,6 +414,7 @@ export function SettingsClient({
             </Button>
           </CardContent>
         </Card>
+        <ShowInMenuCard initialHidden={hiddenSections} />
       </TabsContent>
 
       {/* Security Tab */}

@@ -10,6 +10,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/book_transaction_field.dart';
 import '../../../../core/widgets/budget_period_field.dart';
+import '../../../../core/widgets/day_strip.dart';
+import '../../../budget/presentation/providers/budget_provider.dart';
+import '../../../expenses/presentation/widgets/quick_add_helpers.dart';
 import '../../../../core/widgets/form_section.dart';
 import '../../../../core/extensions/async_value_ext.dart';
 import '../../../../core/extensions/currency_ext.dart';
@@ -80,6 +83,14 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
   bool get _canSubmit =>
       _nameCtrl.text.trim().isNotEmpty && _amountPaisas != null;
 
+  bool get _showBudgetChoice {
+    final open = ref.read(budgetProvider).asData?.value;
+    return needsBudgetChoice(_date, openMonth: open?.month, openYear: open?.year);
+  }
+
+  bool get _fileUnder => _showBudgetChoice && _fileUnderDateBudget;
+
+  /// Only the optional due date still uses the calendar; the loan date is a day strip.
   Future<void> _pickDate(bool isDue) async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -99,13 +110,7 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
       ),
     );
     if (picked == null) return;
-    setState(() {
-      if (isDue) {
-        _dueDate = picked;
-      } else {
-        _date = picked;
-      }
-    });
+    setState(() => _dueDate = picked);
   }
 
   Future<void> _submit() async {
@@ -153,8 +158,8 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
                 ? _descCtrl.text.trim()
                 : null,
             dueDate: _dueDate,
-            budgetMonth: _fileUnderDateBudget ? _date.month : null,
-            budgetYear: _fileUnderDateBudget ? _date.year : null,
+            budgetMonth: _fileUnder ? _date.month : null,
+            budgetYear: _fileUnder ? _date.year : null,
             skipTransaction: !_bookTransaction,
           );
 
@@ -176,10 +181,6 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
     // Keep the loans list loaded for the same-person check in _submit.
     ref.watch(loansProvider);
     final creating = _loading;
-    final dateLabel = DateFormat('d MMM y').format(_date);
-    final isToday = _date.year == DateTime.now().year &&
-        _date.month == DateTime.now().month &&
-        _date.day == DateTime.now().day;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -298,15 +299,17 @@ class _QuickAddLoanPageState extends ConsumerState<QuickAddLoanPage> {
             FormSection(
               title: 'When',
               children: [
-                _DateButton(
-                  label: isToday ? 'Today' : dateLabel,
-                  onTap: () => _pickDate(false),
+                DayStrip(
+                  selected: _date,
+                  onChanged: (d) => setState(() => _date = DateTime(d.year, d.month, d.day, _date.hour, _date.minute)),
                 ),
-                BudgetPeriodField(
-                  date: _date,
-                  checked: _fileUnderDateBudget,
-                  onChanged: (v) => setState(() => _fileUnderDateBudget = v),
-                ),
+                if (_showBudgetChoice)
+                  BudgetPeriodField(
+                    date: _date,
+                    countIt: true,
+                    checked: _fileUnderDateBudget,
+                    onChanged: (v) => setState(() => _fileUnderDateBudget = v),
+                  ),
               ],
             ),
 

@@ -13,7 +13,7 @@ export default async function LoginPage({
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
   const user = await getServerUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect("/expenses");
 
   const { callbackUrl } = await searchParams;
 
@@ -34,10 +34,10 @@ export default async function LoginPage({
           <div className="mb-5">
             <h2 className="text-sm font-semibold text-foreground">Welcome back</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Sign in to access your dashboard
+              Sign in to continue
             </p>
           </div>
-          <LoginForm callbackUrl={callbackUrl || "/dashboard"} />
+          <LoginForm callbackUrl={callbackUrl || "/expenses"} />
         </div>
       </div>
     </div>

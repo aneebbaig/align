@@ -38,7 +38,8 @@ interface Plan {
   categories: { id: string; name: string; investmentType: string | null; percentage: number }[];
 }
 
-const fmt = (n: number) => n.toLocaleString();
+// Whole rupees: allocations never show paisas (no ".67").
+const fmt = (n: number) => Math.round(n).toLocaleString();
 
 // Stepped opacity so the shared `primary` hue reads as one deliberate family
 // across allocation segments, instead of a rainbow of competing colors.
@@ -84,7 +85,7 @@ export function InvestmentPlanCard({
   }
 
   // A category with money already logged against it (matched by id in the
-  // live suggestion) needs a confirm before its SIP + history get cascaded
+  // live suggestion) needs a confirm before its investment + history get cascaded
   // away on save - everything else removes immediately.
   function removeCategory(i: number) {
     const cat = categories[i];
@@ -135,13 +136,13 @@ export function InvestmentPlanCard({
         {!suggestion.hasPlan ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
             Set a monthly contribution split (money-market buffer, equity, gold, direct stocks) to get a suggested
-            amount each pay cycle and track planned vs. actual per category.
+            amount each month and track planned vs. actual per category.
           </p>
         ) : (
           <div className="space-y-5">
-            {/* Hero — the one number worth acting on this cycle */}
+            {/* Hero — the one number worth acting on this month */}
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Suggested to invest this cycle</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Suggested to invest this month</p>
               <p className="text-3xl font-bold tabnum text-emerald-500 mt-1">{baseSymbol} {fmt(suggestion.suggestedTotal / 100)}</p>
               <p className="text-xs text-muted-foreground tabnum mt-1.5">
                 {baseSymbol} {fmt(suggestion.monthlyIncome / 100)} income − {baseSymbol} {fmt(suggestion.obligationsDue / 100)} obligations
@@ -257,7 +258,7 @@ export function InvestmentPlanCard({
         open={removeConfirmIndex != null}
         onOpenChange={(o) => !o && setRemoveConfirmIndex(null)}
         title="Remove this investment from the plan?"
-        description="It already has money logged against it - removing it on save also clears its SIP and full contribution history."
+        description="It already has money logged against it - removing it on save also clears its investment and full contribution history."
         onConfirm={confirmRemove}
       />
     </>

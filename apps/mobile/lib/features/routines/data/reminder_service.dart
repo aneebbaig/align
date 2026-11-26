@@ -36,6 +36,25 @@ class ReminderService {
   /// Called when the user taps the notification body (opens the checklist).
   void Function()? onOpen;
 
+  /// Called when the user taps the evening "log spending" nudge.
+  void Function()? onNudgeTap;
+
+  /// Shared with the daily log nudge so there is one plugin, one init.
+  FlutterLocalNotificationsPlugin get plugin => _plugin;
+
+  Future<bool> notificationsEnabled() async {
+    await init();
+    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.areNotificationsEnabled() ?? false;
+  }
+
+  /// Whether the app was opened by tapping the nudge (cold start).
+  Future<bool> launchedFromNudge() async {
+    await init();
+    final d = await _plugin.getNotificationAppLaunchDetails();
+    return d?.didNotificationLaunchApp == true && d?.notificationResponse?.payload == 'log_nudge';
+  }
+
   static Future<void> _initTimezone() async {
     tzdata.initializeTimeZones();
     try {
@@ -52,7 +71,11 @@ class ReminderService {
       settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
       onDidReceiveNotificationResponse: (r) async {
         if (r.actionId == null) {
-          onOpen?.call();
+          if (r.payload == 'log_nudge') {
+            onNudgeTap?.call();
+          } else {
+            onOpen?.call();
+          }
         } else {
           await handleAction(r);
         }

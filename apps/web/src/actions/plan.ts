@@ -38,11 +38,11 @@ export async function createPlanner(data: {
   planType?: string; // FIXED | ITEMIZED
   targetDate?: string;
   estimatedTotalCost?: number; // FIXED plans: a single target cost
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ id: string }>> {
   try {
     const userId = await getUserId();
     const { estimatedTotalCost, ...rest } = data;
-    await prisma.plan.create({
+    const created = await prisma.plan.create({
       data: {
         ...rest,
         type: data.type ?? "GENERAL",
@@ -54,7 +54,7 @@ export async function createPlanner(data: {
       },
     });
     revalidatePath("/plans");
-    return { success: true };
+    return { success: true, data: { id: created.id } };
   } catch (e) {
     console.error("[createPlanner]", e);
     return { success: false, error: "Failed to create plan" };
@@ -81,7 +81,7 @@ export async function updatePlannerStatus(id: string, status: string): Promise<A
 }
 
 export async function updatePlanner(id: string, data: Partial<{
-  name: string; description: string; status: string; estimatedTotalCost: number;
+  name: string; description: string | null; status: string; estimatedTotalCost: number; targetDate: string | null;
 }>): Promise<ActionResult> {
   try {
     const userId = await getUserId();
@@ -89,6 +89,8 @@ export async function updatePlanner(id: string, data: Partial<{
       where: { id, userId },
       data: {
         ...data,
+        ...(data.description !== undefined ? { description: data.description || null } : {}),
+        ...(data.targetDate !== undefined ? { targetDate: data.targetDate ? new Date(data.targetDate) : null } : {}),
         estimatedTotalCost: data.estimatedTotalCost !== undefined ? toPaisas(data.estimatedTotalCost) : undefined,
       },
     });

@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { getServerUser } from "@/lib/session";
 import { getUserSettings, getCategories, getRecurringTransactions } from "@/actions/settings";
+import { getHiddenSections } from "@/actions/preferences";
 import { getUsers } from "@/actions/users";
 import { getCurrencies } from "@/lib/currency-helpers";
 import { SettingsClient } from "@/components/settings/settings-client";
@@ -11,12 +12,13 @@ export default async function SettingsPage() {
   const session = await getServerUser();
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
 
-  const [settings, categories, currencies, recurringTransactions, users] = await Promise.all([
+  const [settings, categories, currencies, recurringTransactions, users, hiddenSections] = await Promise.all([
     getUserSettings(),
     getCategories(),
     getCurrencies(),
     getRecurringTransactions(),
     isSuperAdmin ? getUsers() : Promise.resolve([]),
+    getHiddenSections(),
   ]);
 
   return (
@@ -31,6 +33,7 @@ export default async function SettingsPage() {
         currencies={currencies}
         recurringTransactions={recurringTransactions}
         users={users}
+        hiddenSections={hiddenSections}
         role={session?.role ?? "ADMIN"}
         emailConfigured={!!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD)}
       />

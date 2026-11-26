@@ -114,8 +114,8 @@ export async function GET(req: NextRequest) {
 
   if (users.length === 0) return NextResponse.json({ ok: true, skipped: "no users" });
 
-  // Surplus reconciliation is event-driven: it runs in startNewBudgetPeriod() when a period
-  // is closed (budget.ts), not on the calendar 1st - periods no longer align with calendar months.
+  // Nothing is reconciled here: unspent income carries forward between budget periods
+  // automatically (src/lib/budget/carryover.ts).
   const autoReconciledSurplus = 0;
 
   // Compute shared metrics

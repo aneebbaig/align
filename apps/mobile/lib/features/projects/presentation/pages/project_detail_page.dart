@@ -308,7 +308,25 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('Work', style: AppTextStyles.headlineSmall),
+        title: projectAsync.when(
+          data: (project) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(project.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headlineSmall),
+              if (project.client != null && project.client!.isNotEmpty)
+                Text(project.client!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall
+                        .copyWith(color: AppColors.mutedForeground)),
+            ],
+          ),
+          loading: () => const Text('Project', style: AppTextStyles.headlineSmall),
+          error: (_, __) => const Text('Project', style: AppTextStyles.headlineSmall),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: AppColors.mutedForeground),
