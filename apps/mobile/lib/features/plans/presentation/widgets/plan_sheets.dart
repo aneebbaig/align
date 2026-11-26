@@ -303,6 +303,7 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
   late final _est = TextEditingController(text: _asText(widget.item.estimatedPaisas));
   late final _act = TextEditingController(text: _actText(widget.item.actualPaisas));
   late final _notes = TextEditingController(text: widget.item.notes ?? '');
+  late final _group = TextEditingController(text: widget.item.groupName ?? '');
   late DateTime? _due = widget.item.dueDate;
   bool _busy = false;
 
@@ -314,6 +315,7 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
     _est.dispose();
     _act.dispose();
     _notes.dispose();
+    _group.dispose();
     super.dispose();
   }
 
@@ -325,6 +327,7 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
       _est.text != _asText(item.estimatedPaisas) ||
       _act.text != _actText(item.actualPaisas) ||
       _notes.text != (item.notes ?? '') ||
+      _group.text != (item.groupName ?? '') ||
       !_sameDay(_due, item.dueDate);
 
   Future<void> _pickDue() async {
@@ -390,6 +393,8 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
             dueDate: _due,
             setNotes: true,
             notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+            setGroup: true,
+            groupName: _group.text.trim().isEmpty ? null : _group.text.trim(),
           ),
       'Saved',
     );
@@ -450,7 +455,11 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          _labeled(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _labeled(
             'Due date',
             GestureDetector(
               onTap: _pickDue,
@@ -482,6 +491,13 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 ]),
               ),
             ),
+          ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _labeled('Group', _Field(controller: _group, hint: 'e.g. Phase 1', onChanged: () => setState(() {}))),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           _labeled('Notes', _Field(controller: _notes, hint: 'Quotes, who to call...', maxLines: 3, onChanged: () => setState(() {}))),
@@ -532,11 +548,13 @@ class _EditPlanSheet extends ConsumerStatefulWidget {
 
 class _EditPlanSheetState extends ConsumerState<_EditPlanSheet> {
   late final _name = TextEditingController(text: widget.plan.name);
+  late final _desc = TextEditingController(text: widget.plan.description ?? '');
   bool _loading = false;
 
   @override
   void dispose() {
     _name.dispose();
+    _desc.dispose();
     super.dispose();
   }
 
@@ -545,7 +563,12 @@ class _EditPlanSheetState extends ConsumerState<_EditPlanSheet> {
     setState(() => _loading = true);
     try {
       HapticFeedback.mediumImpact();
-      await ref.read(plansDatasourceProvider).updatePlan(id: widget.plan.id, name: _name.text.trim());
+      await ref.read(plansDatasourceProvider).updatePlan(
+            id: widget.plan.id,
+            name: _name.text.trim(),
+            setDescription: true,
+            description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+          );
       ref.invalidate(planDetailProvider(widget.plan.id));
       ref.invalidate(plansProvider);
       if (mounted) {
@@ -571,6 +594,8 @@ class _EditPlanSheetState extends ConsumerState<_EditPlanSheet> {
           _Header(title: 'Edit Plan', onSubmit: _submit, canSubmit: _name.text.trim().isNotEmpty, loading: _loading),
           const SizedBox(height: 16),
           _Field(controller: _name, hint: 'Plan name', onChanged: () => setState(() {})),
+          const SizedBox(height: 12),
+          _Field(controller: _desc, hint: 'Description (optional)', maxLines: 3),
         ],
       ),
     );

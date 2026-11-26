@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/extensions/currency_ext.dart';
@@ -113,9 +114,16 @@ class _ContentState extends ConsumerState<_Content> {
     if (old.plan != widget.plan) _local = null;
   }
 
-  Future<void> _reorder(int from, int to) async {
-    final items = [...(_local ?? plan.items)];
-    items.insert(to, items.removeAt(from));
+  /// Reorders one group's rows. The new sequence is spliced into the slots
+  /// those items already occupy, so other groups stay put.
+  Future<void> _reorder(List<PlanItemEntity> group, int from, int to) async {
+    final moved = [...group];
+    moved.insert(to, moved.removeAt(from));
+    final inGroup = group.map((i) => i.id).toSet();
+    var next = 0;
+    final items = [
+      for (final i in (_local ?? plan.items)) inGroup.contains(i.id) ? moved[next++] : i,
+    ];
     setState(() => _local = items);
     HapticFeedback.selectionClick();
     try {
@@ -127,6 +135,55 @@ class _ContentState extends ConsumerState<_Content> {
       ref.read(toastServiceProvider).error(context, e is AppException ? e.message : 'Failed to reorder');
     }
   }
+
+  Widget _groupCard(String? title, List<PlanItemEntity> group) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 8),
+                      Text('${group.where((i) => i.isBought).length} of ${group.length} bought', style: AppTextStyles.labelSmall),
+                    ],
+                  ),
+                ),
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                itemCount: group.length,
+                onReorderItem: (from, to) => _reorder(group, from, to),
+                proxyDecorator: (child, _, __) => Material(color: Colors.transparent, child: child),
+                itemBuilder: (context, index) {
+                  final item = group[index];
+                  return _ItemRow(
+                    key: ValueKey(item.id),
+                    item: item,
+                    dragHandle: ReorderableDragStartListener(
+                      index: index,
+                      child: const Padding(
+                        padding: EdgeInsets.fromLTRB(10, 12, 4, 12),
+                        child: Icon(Icons.drag_indicator, size: 18, color: AppColors.mutedForeground),
+                      ),
+                    ),
+                    onToggle: () => _toggle(item),
+                    onOpen: () => showItemSheet(context, ref, plan.id, item),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
 
   Future<void> _toggle(PlanItemEntity item) async {
     try {
@@ -149,9 +206,21 @@ class _ContentState extends ConsumerState<_Content> {
   Widget build(BuildContext context) {
     final items = _local ?? plan.items;
     final meta = [
+      if ((plan.description ?? '').trim().isNotEmpty) plan.description!.trim(),
       if (plan.targetDate != null) 'Target ${plan.targetDate!.toShortDate}',
       _statusLabels[plan.status] ?? plan.status,
+      if (plan.completedAt != null) 'Completed on ${DateFormat('d MMMM y').format(plan.completedAt!)}',
     ].join(' · ');
+    final grouped = <String, List<PlanItemEntity>>{};
+    final ungrouped = <PlanItemEntity>[];
+    for (final i in items) {
+      final g = (i.groupName ?? '').trim();
+      if (g.isEmpty) {
+        ungrouped.add(i);
+      } else {
+        (grouped[g] ??= []).add(i);
+      }
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
       children: [
@@ -181,34 +250,10 @@ class _ContentState extends ConsumerState<_Content> {
               style: AppTextStyles.bodySmall,
             ),
           )
-        else
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: false,
-              itemCount: items.length,
-              onReorderItem: _reorder,
-              proxyDecorator: (child, _, __) => Material(color: Colors.transparent, child: child),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return _ItemRow(
-                  key: ValueKey(item.id),
-                  item: item,
-                  dragHandle: ReorderableDragStartListener(
-                    index: index,
-                    child: const Padding(
-                      padding: EdgeInsets.fromLTRB(10, 12, 4, 12),
-                      child: Icon(Icons.drag_indicator, size: 18, color: AppColors.mutedForeground),
-                    ),
-                  ),
-                  onToggle: () => _toggle(item),
-                  onOpen: () => showItemSheet(context, ref, plan.id, item),
-                );
-              },
-            ),
-          ),
+        else ...[
+          for (final e in grouped.entries) _groupCard(e.key, e.value),
+          if (ungrouped.isNotEmpty) _groupCard(grouped.isNotEmpty ? 'Other' : null, ungrouped),
+        ],
       ],
     );
   }

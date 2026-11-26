@@ -37,17 +37,20 @@ class PlanItemEntity {
     this.actualPaisas,
     this.notes,
     this.dueDate,
+    this.groupName,
   });
 
   final String id;
   final String name;
   final int estimatedPaisas;
+
   /// The real (market) cost. Estimates are planning-only; a bought item is
   /// worth this. A pending item may already carry one (a quote).
   final int? actualPaisas;
   final String status; // PENDING | BOOKED | PAID | SKIPPED
   final String? notes;
   final DateTime? dueDate;
+  final String? groupName;
 
   bool get isBought => status == 'PAID';
 }
@@ -80,6 +83,8 @@ class PlanDetailEntity {
     required this.items,
     required this.affordability,
     this.targetDate,
+    this.description,
+    this.completedAt,
   });
 
   final String id;
@@ -92,4 +97,6 @@ class PlanDetailEntity {
   final List<PlanItemEntity> items;
   final PlanAffordability affordability;
   final DateTime? targetDate;
+  final String? description;
+  final DateTime? completedAt;
 }

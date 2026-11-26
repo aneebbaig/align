@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth } from "@/lib/v1-auth";
 
-// Edit a plan item: status (undo → PENDING), name, estimated/actual cost, due date, notes. Booking an
+// Edit a plan item: status (undo → PENDING), name, estimated/actual cost, due date, notes, group. Booking an
 // expense goes through the /buy sub-route.
 const patchSchema = z.object({
   status: z.enum(["PENDING", "BOOKED", "PAID", "SKIPPED"]).optional(),
@@ -13,6 +13,8 @@ const patchSchema = z.object({
   // The real (market) cost; null clears it. Independent of status - a pending item can carry a quote.
   actualCostPaisas: z.number().int().nonnegative().nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  // The item's group (a phase or section of the plan); null or "" clears it.
+  groupName: z.string().max(100).nullable().optional(),
 });
 
 export async function PATCH(
@@ -35,6 +37,7 @@ export async function PATCH(
     if (d.notes !== undefined) data.notes = d.notes;
     if (d.actualCostPaisas !== undefined) data.actualCost = d.actualCostPaisas;
     if (d.dueDate !== undefined) data.dueDate = d.dueDate ? new Date(d.dueDate) : null;
+    if (d.groupName !== undefined) data.eventGroup = d.groupName?.trim() || null;
     if (d.status != null) {
       data.status = d.status;
       // Buying always records an actual cost: the quote if there is one, else the estimate.
