@@ -106,6 +106,45 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
     super.dispose();
   }
 
+  bool get _dirty {
+    final t = widget.task;
+    final desc = _description.text.trim();
+    return _title.text.trim() != t.title ||
+        desc != (t.description ?? '') ||
+        _status != t.status ||
+        _priority != t.priority ||
+        _dueDate != t.dueDate ||
+        !_selectedTagIds.containsAll(t.tags.map((x) => x.id)) ||
+        _selectedTagIds.length != t.tags.length;
+  }
+
+  Future<bool> _confirm(String title, String body, String action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(title,
+            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+        content: Text(body,
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedForeground)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _save() async {
     final title = _title.text.trim();
     if (title.isEmpty) return;
@@ -161,7 +200,17 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return PopScope(
+      canPop: !_dirty || _saving,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final discard = await _confirm(
+            'Discard changes?', 'Your edits to this task will be lost.', 'Discard');
+        if (!discard) return;
+        if (!context.mounted) return;
+        Navigator.pop(context);
+      },
+      child: SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -344,6 +393,10 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
               width: double.infinity,
               child: TextButton.icon(
                 onPressed: () async {
+                  final ok = await _confirm(
+                      'Delete task?', 'This cannot be undone.', 'Delete');
+                  if (!ok) return;
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                   await widget.onDelete();
                 },
@@ -355,6 +408,7 @@ class _TaskEditSheetState extends State<_TaskEditSheet> {
           ],
         ),
       ),
+    ),
     );
   }
 

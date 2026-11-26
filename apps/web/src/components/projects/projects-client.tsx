@@ -55,7 +55,7 @@ export function ProjectsClient({ projects }: { projects: ProjectCardData[] }) {
         action={
           <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
-            New Project
+            New project
           </Button>
         }
       />
@@ -100,7 +100,7 @@ export function ProjectsClient({ projects }: { projects: ProjectCardData[] }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
+            <DialogTitle>New project</DialogTitle>
           </DialogHeader>
           <ProjectForm onSuccess={handleSuccess} />
         </DialogContent>

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Plus, Pencil, Trash2, CalendarClock, User, PanelRight, X,
+  ArrowLeft, Plus, Pencil, Trash2, CalendarClock, MoreHorizontal, User, PanelRight, X,
 } from "lucide-react";
 import {
   DndContext, DragOverlay, closestCorners, DragEndEvent, DragOverEvent,
@@ -15,6 +15,9 @@ import {
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -29,7 +32,7 @@ import {
 } from "@/actions/projects";
 import {
   PROJECT_STATUSES, PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS,
-  PROJECT_TASK_STATUSES, PROJECT_TASK_STATUS_LABELS, PROJECT_TASK_PRIORITIES,
+  PROJECT_TASK_STATUSES, PROJECT_TASK_STATUS_LABELS, PROJECT_TASK_PRIORITIES, PROJECT_TASK_PRIORITY_LABELS,
 } from "@/lib/constants";
 import { cn, isOverdue } from "@/lib/utils";
 
@@ -68,6 +71,7 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   async function submit() {
     const title = value.trim();
@@ -76,6 +80,7 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
     await onAdd(title);
     setBusy(false);
     setValue("");
+    inputRef.current?.focus();
   }
 
   if (!open) {
@@ -92,10 +97,12 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
   return (
     <div className="rounded-lg border border-border bg-card p-2">
       <textarea
+        ref={inputRef}
         autoFocus
         rows={2}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        onBlur={() => { if (!value.trim() && !busy) { setOpen(false); setValue(""); } }}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); submit(); }
           if (e.key === "Escape") { setOpen(false); setValue(""); }
@@ -124,7 +131,7 @@ function KanbanColumn({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <div className="flex w-72 shrink-0 flex-col">
+    <div className="flex w-72 shrink-0 flex-col lg:w-auto lg:min-w-0">
       <div className="mb-2 flex items-center gap-2 px-1">
         {tasks.length > 0 && (
           <Checkbox
@@ -316,10 +323,10 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <Link href="/projects" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-5 transition-colors">
         <ArrowLeft className="h-4 w-4" />
-        Projects
+        Work
       </Link>
 
       {/* Header */}
@@ -342,12 +349,24 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
                 <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">{project.links.length}</span>
               )}
             </Button>
-            <button onClick={() => setEditOpen(true)} className="text-muted-foreground hover:text-foreground p-2 transition-colors" aria-label="Edit project">
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button onClick={() => setDeleteOpen(true)} className="text-muted-foreground hover:text-red-500 p-2 transition-colors" aria-label="Delete project">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="More">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => setDeleteOpen(true)}
+                  className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -383,7 +402,7 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 items-start">
+        <div className="flex gap-3 overflow-x-auto pb-4 items-start lg:grid lg:grid-cols-4 lg:overflow-x-visible">
           {PROJECT_TASK_STATUSES.map((columnStatus) => {
             const tasks = columns[columnStatus];
             const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id));
@@ -429,7 +448,7 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Project</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit project</DialogTitle></DialogHeader>
           <ProjectForm
             project={project}
             onSuccess={() => { setEditOpen(false); refresh(); }}
@@ -468,7 +487,7 @@ export function ProjectDetailClient({ project, allTags: initialTags }: ProjectDe
             <SelectTrigger className="h-8 w-auto gap-1.5 text-sm">Priority</SelectTrigger>
             <SelectContent>
               {PROJECT_TASK_PRIORITIES.map((p) => (
-                <SelectItem key={p} value={p} className="capitalize">{p.toLowerCase()}</SelectItem>
+                <SelectItem key={p} value={p} >{PROJECT_TASK_PRIORITY_LABELS[p]}</SelectItem>
               ))}
             </SelectContent>
           </Select>

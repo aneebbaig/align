@@ -196,6 +196,8 @@ export function ProjectTaskCard({
       {!dragging && (
         <>
           <ProjectTaskDialog
+            // Remount on every open so the form starts from the task as it is now (e.g. after a drag to another column).
+            key={editOpen ? "open" : "closed"}
             task={task}
             open={editOpen}
             onOpenChange={setEditOpen}

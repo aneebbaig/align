@@ -74,6 +74,13 @@ export const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"] 
 export const PROJECT_TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 export const PROJECT_TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
+export const PROJECT_TASK_PRIORITY_LABELS: Record<string, string> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  URGENT: "Urgent",
+};
+
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Active",
   ON_HOLD: "On Hold",
